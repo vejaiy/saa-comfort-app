@@ -251,7 +251,9 @@ create index on payments (customer_id);
 -- HELPER VIEW
 -- ============================================================
 
-create view invoice_balances as
+create view invoice_balances
+with (security_invoker = true)
+as
 select
   i.id as invoice_id,
   i.amount_total,
