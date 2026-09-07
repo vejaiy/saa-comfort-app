@@ -35,7 +35,8 @@ create table technicians (
   role text not null check (role in ('technician','lead','admin')),
   phone text,
   active boolean not null default true,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  user_id uuid unique references auth.users(id) on delete set null
 );
 
 -- ============================================================
@@ -142,6 +143,7 @@ create table jobs (
 );
 create index on jobs (customer_id);
 create index on jobs (status);
+create index on jobs (assigned_technician_id);
 
 -- ============================================================
 -- QUOTES
@@ -166,6 +168,7 @@ create table quotes (
 );
 create index on quotes (customer_id);
 create index on quotes (job_id);
+create index on quotes (zone_id);
 
 create table quote_line_items (
   id uuid primary key default gen_random_uuid(),
@@ -183,6 +186,7 @@ create table quote_line_items (
   sort_order integer default 0
 );
 create index on quote_line_items (quote_id);
+create index on quote_line_items (material_catalog_id);
 
 -- ============================================================
 -- JOB COSTING — actual materials used vs. what was quoted
@@ -200,6 +204,7 @@ create table job_materials (
   created_at timestamptz not null default now()
 );
 create index on job_materials (job_id);
+create index on job_materials (material_catalog_id);
 
 -- ============================================================
 -- INVOICES & PAYMENTS
@@ -221,6 +226,7 @@ create table invoices (
 );
 create index on invoices (customer_id);
 create index on invoices (job_id);
+create index on invoices (quote_id);
 
 create table invoice_line_items (
   id uuid primary key default gen_random_uuid(),
@@ -285,3 +291,29 @@ alter table job_materials enable row level security;
 alter table invoices enable row level security;
 alter table invoice_line_items enable row level security;
 alter table payments enable row level security;
+
+-- ============================================================
+-- STAFF ACCESS POLICIES
+-- Any signed-in Supabase Auth user is trusted staff (there is no
+-- public sign-up page, and accounts are created one at a time by an
+-- admin in the Supabase dashboard) -- matches the trust model of the
+-- website's old single-shared-password gate. Logged-out / anon access
+-- stays fully blocked since no policy is created for that role.
+-- Add narrower per-role policies later if some staff should see less.
+-- ============================================================
+
+create policy "staff full access" on customers for all to authenticated using (true) with check (true);
+create policy "staff full access" on technicians for all to authenticated using (true) with check (true);
+create policy "staff full access" on membership_plans for all to authenticated using (true) with check (true);
+create policy "staff full access" on customer_memberships for all to authenticated using (true) with check (true);
+create policy "staff full access" on material_catalog for all to authenticated using (true) with check (true);
+create policy "staff full access" on equipment_tonnage_pricing for all to authenticated using (true) with check (true);
+create policy "staff full access" on furnace_tiers for all to authenticated using (true) with check (true);
+create policy "staff full access" on install_zones for all to authenticated using (true) with check (true);
+create policy "staff full access" on jobs for all to authenticated using (true) with check (true);
+create policy "staff full access" on quotes for all to authenticated using (true) with check (true);
+create policy "staff full access" on quote_line_items for all to authenticated using (true) with check (true);
+create policy "staff full access" on job_materials for all to authenticated using (true) with check (true);
+create policy "staff full access" on invoices for all to authenticated using (true) with check (true);
+create policy "staff full access" on invoice_line_items for all to authenticated using (true) with check (true);
+create policy "staff full access" on payments for all to authenticated using (true) with check (true);
