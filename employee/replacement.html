@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Replacement | Employee | SAA Comfort Air LLC</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+
+</head>
+<body class="emp-shell">
+<script src="../assets/js/auth.js"></script>
+<script>saaRequireAuth();</script>
+<header class="emp-header">
+  <div class="container">
+    <div>
+      <a class="brand" href="dashboard.html" style="font-size:1rem">
+        <span class="mark" style="width:30px;height:30px;font-size:.85rem">SA</span>
+        <span>Employee Tools</span>
+      </a>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select onchange="if(this.value) window.location.href=this.value" style="width:auto;min-width:170px">
+        <option value="">Jump to page&hellip;</option>
+        <option value="dashboard.html">Dashboard</option>
+        <option value="new-install.html">New Install</option>
+        <option value="replacement.html" selected>Replacement</option>
+        <option value="condenser-change.html">Condenser Change</option>
+        <option value="coil-change.html">Coil Change</option>
+        <option value="furnace-change.html">Furnace Change</option>
+        <option value="plenum-change.html">Plenum Change</option>
+        <option value="drainline-maintenance.html">Drainline Maintenance</option>
+        <option value="duct-cleaning.html">Duct Cleaning</option>
+        <option value="labor.html">Labor</option>
+        <option value="inspection.html">Inspection / QC</option>
+        <option value="maintenance-plan.html">Maintenance Plan</option>
+        <option value="custom-solutions.html">Custom HVAC Solutions</option>
+        <option value="jobs.html">Jobs</option>
+        <option value="instruction-manual.html">Instruction Manual</option>
+        <option value="tool-list.html">Tool List</option>
+        <option value="receipts.html">Receipts</option>
+      </select>
+      <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
+      <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
+    </div>
+  </div>
+</header>
+<main class="container" style="padding:26px 20px 60px">
+
+<div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Replacement</div>
+<div class="page-title-row"><h1>Replacement</h1></div>
+<div class="note-box blue">Full system replacement for an existing home. Toggle on what the job needs — worksheets open for detail and stay live as you edit.</div>
+
+<div class="card" style="margin-bottom:22px">
+  <div class="field-row">
+    <div class="field"><label>Customer name</label><input type="text" id="q-customer"></div>
+    <div class="field"><label>Job address</label><input type="text" id="q-address"></div>
+  </div>
+  <div class="field" style="max-width:220px"><label>Quote date</label><input type="text" id="q-date"></div>
+</div>
+
+<h2 style="font-size:1.05rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted)">Equipment Replacement</h2>
+
+<div class="toggle-row">
+  <div class="meta"><div class="name">Condenser Material + License Fee</div><div class="desc">Remove and dispose of the existing condenser; install a new manufacturer-matched unit, refrigerant charged to spec.</div></div>
+  <div class="price" id="price-condenser">$0.00 – $0.00</div>
+  <label class="switch"><input type="checkbox" id="tgl-condenser" checked><span class="slider"></span></label>
+</div>
+<details class="detail-panel" id="panel-condenser">
+  <summary>Condenser Change worksheet <span class="hint">click to open the worksheet</span></summary>
+  <div class="detail-body"><div id="detail-condenser"></div></div>
+</details>
+
+<div class="toggle-row">
+  <div class="meta"><div class="name">Coil Material</div><div class="desc">Remove and dispose of the existing coil; install a new matched coil. Price scales with the access/complexity zone below.</div></div>
+  <div class="price" id="price-coil">$0.00 – $0.00</div>
+  <label class="switch"><input type="checkbox" id="tgl-coil" checked><span class="slider"></span></label>
+</div>
+<details class="detail-panel" id="panel-coil">
+  <summary>Coil Change worksheet <span class="hint">click to open the worksheet</span></summary>
+  <div class="detail-body"><div id="detail-coil"></div></div>
+</details>
+<div class="field" style="max-width:480px;margin:-6px 0 16px 16px"><label>Installation access / complexity zone (affects coil price)</label>
+  <select id="zone-select"></select>
+  <div class="muted" id="zone-note" style="font-size:.82rem;margin-top:4px"></div>
+</div>
+
+<div class="toggle-row">
+  <div class="meta"><div class="name">Furnace Material</div><div class="desc">Remove and dispose of the existing furnace; install a new furnace at the tier selected in the worksheet.</div></div>
+  <div class="price" id="price-furnace">$0.00 – $0.00</div>
+  <label class="switch"><input type="checkbox" id="tgl-furnace" checked><span class="slider"></span></label>
+</div>
+<details class="detail-panel" id="panel-furnace">
+  <summary>Furnace Change worksheet <span class="hint">click to open the worksheet</span></summary>
+  <div class="detail-body"><div id="detail-furnace"></div></div>
+</details>
+
+<h2 style="font-size:1.05rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:28px">Labor &amp; Overhead</h2>
+<div id="labor-widget" style="margin-bottom:12px"></div>
+<div class="note-box" id="labor-double-note" style="display:none">Labor is automatically doubled because both Condenser and Coil are being replaced.</div>
+<div class="field" style="max-width:220px"><label>Overhead %</label><input type="number" id="overhead-pct" value="0" step="any"></div>
+
+<div class="totals-strip">
+  <div class="total-box"><div class="label">Equipment + Labor + Overhead</div><div class="value" id="subtotal-box" style="font-size:1.3rem">$0.00 – $0.00</div></div>
+</div>
+
+<h2 style="font-size:1.05rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:28px">Additional Changes</h2>
+
+<div class="toggle-row">
+  <div class="meta"><div class="name">Plenum Change</div><div class="desc">Replace both return and supply plenum; extend ducts to reach the new plenum location.</div></div>
+  <div class="price" id="price-plenum">$0.00 – $0.00</div>
+  <label class="switch"><input type="checkbox" id="tgl-plenum" ><span class="slider"></span></label>
+</div>
+<details class="detail-panel" id="panel-plenum">
+  <summary>Plenum Change worksheet <span class="hint">click to open the worksheet</span></summary>
+  <div class="detail-body"><div id="detail-plenum"></div></div>
+</details>
+
+<div class="toggle-row">
+  <div class="meta"><div class="name">Secondary Drainpan &amp; Float Switch</div><div class="desc">Install a new secondary drain pan with float switch; connect and flush the existing drain line.</div></div>
+  <div class="price" id="price-drainpan">$0.00 – $0.00</div>
+  <label class="switch"><input type="checkbox" id="tgl-drainpan" ><span class="slider"></span></label>
+</div>
+<details class="detail-panel" id="panel-drainpan">
+  <summary>Drainpan install worksheet <span class="hint">click to open the worksheet</span></summary>
+  <div class="detail-body"><div id="detail-drainpan"></div></div>
+</details>
+
+<div class="toggle-row">
+  <div class="meta"><div class="name">Relocate Furnace and Coil</div><div class="desc">Prepare and provide base support for a furnace/coil relocation.</div></div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="muted" style="font-size:.82rem">$</span>
+    <input type="number" id="low-relocate" value="500" style="width:80px" step="any">
+    <span class="muted" style="font-size:.82rem">to $</span>
+    <input type="number" id="high-relocate" value="750" style="width:80px" step="any">
+  </div>
+  <label class="switch"><input type="checkbox" id="tgl-relocate" ><span class="slider"></span></label>
+</div>
+
+<div class="toggle-row">
+  <div class="meta"><div class="name">UV Light Air Purifier</div><div class="desc">Supply and install a UV light air purifier.</div></div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="muted" style="font-size:.82rem">$</span>
+    <input type="number" id="low-uv" value="399" style="width:80px" step="any">
+    <span class="muted" style="font-size:.82rem">to $</span>
+    <input type="number" id="high-uv" value="499" style="width:80px" step="any">
+  </div>
+  <label class="switch"><input type="checkbox" id="tgl-uv" ><span class="slider"></span></label>
+</div>
+
+<h2 style="font-size:1.05rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:28px">Additional Service</h2>
+
+<div class="toggle-row">
+  <div class="meta"><div class="name">Duct Cleaning</div><div class="desc">Whole-system duct cleaning.</div></div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="muted" style="font-size:.82rem">$</span>
+    <input type="number" id="low-duct" value="500" style="width:80px" step="any">
+    <span class="muted" style="font-size:.82rem">to $</span>
+    <input type="number" id="high-duct" value="750" style="width:80px" step="any">
+  </div>
+  <label class="switch"><input type="checkbox" id="tgl-duct" ><span class="slider"></span></label>
+</div>
+
+<div class="totals-strip" style="margin-top:24px">
+  <div class="total-box grand"><div class="label">Quote Total</div><div class="value" id="grand-total">$0.00 – $0.00</div></div>
+</div>
+
+<div class="printable-summary" id="print-summary">
+  <h3>Warranties &amp; Terms</h3>
+  <p class="muted" style="margin-bottom:4px"><strong>Parts Warranty:</strong> 10-Year Manufacturer Limited Warranty (upon online equipment registration within 60 days).</p>
+  <p class="muted"><strong>Labor Warranty:</strong> 1-Year Installation Workmanship Warranty from SAA Comfort Air LLC.</p>
+  <div class="terms" id="payment-terms"></div>
+  <button class="btn btn-navy btn-sm" style="margin-top:14px" onclick="window.print()">Print Quote</button>
+</div>
+
+</main>
+<script src="../assets/js/pricing-data.js"></script>
+<script src="../assets/js/worksheet.js"></script>
+<script src="../assets/js/labor-widget.js"></script>
+<script src="../assets/js/plenum-widget.js"></script>
+<script>
+  document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
+
+  // ---- Zone selector ----
+  const zoneSelect = document.getElementById('zone-select');
+  zoneSelect.innerHTML = ZONES.map((z, i) => `<option value="${z.id}"${i === 0 ? " selected" : ""}>${z.label}</option>`).join('');
+  function currentZone() { return ZONES.find(z => z.id === parseInt(zoneSelect.value, 10)); }
+  zoneSelect.addEventListener('change', () => { document.getElementById('zone-note').textContent = currentZone().note; updateAll(); });
+  document.getElementById('zone-note').textContent = currentZone().note;
+
+  // ---- Equipment detail worksheets ----
+  const condenserDetail = renderLineItemTable(document.getElementById('detail-condenser'), CONDENSER_MATERIALS, { linkedOptions: CONDENSER_TONNAGE, linkedKind: 'tonnage' });
+  const coilDetail = renderLineItemTable(document.getElementById('detail-coil'), COIL_MATERIALS, { linkedOptions: COIL_TONNAGE, linkedKind: 'tonnage' });
+  const furnaceDetail = renderLineItemTable(document.getElementById('detail-furnace'), FURNACE_MATERIALS, { linkedOptions: FURNACE_TIERS, linkedKind: 'tier' });
+
+  // ---- Additional-change detail worksheets ----
+  const plenumWidget = initPlenumWidget(document.getElementById('detail-plenum'));
+  const drainpanRows = DRAINPAN_MATERIALS.concat([
+    { category: "Labor", item: "Installation labor (1 technician)", unit: "HR",
+      qty: DRAINPAN_LABOR.techs * DRAINPAN_LABOR.hours, low: DRAINPAN_LABOR.rateLow, high: DRAINPAN_LABOR.rateHigh }
+  ]);
+  const drainpanDetail = renderLineItemTable(document.getElementById('detail-drainpan'), drainpanRows, { showGroupSubtotals: false });
+
+  // ---- Labor widget ----
+  const laborWidget = initLaborWidget(document.getElementById('labor-widget'));
+
+  function rangeText(low, high) { return `${fmtMoney(low)} – ${fmtMoney(high)}`; }
+
+  function updateAll() {
+    const condenserOn = document.getElementById('tgl-condenser').checked;
+    const coilOn = document.getElementById('tgl-coil').checked;
+    const furnaceOn = document.getElementById('tgl-furnace').checked;
+    const plenumOn = document.getElementById('tgl-plenum').checked;
+    const drainpanOn = document.getElementById('tgl-drainpan').checked;
+    const relocateOn = document.getElementById('tgl-relocate').checked;
+    const uvOn = document.getElementById('tgl-uv').checked;
+    const ductOn = document.getElementById('tgl-duct').checked;
+
+    document.getElementById('panel-condenser').style.display = condenserOn ? '' : 'none';
+    document.getElementById('panel-coil').style.display = coilOn ? '' : 'none';
+    document.getElementById('panel-furnace').style.display = furnaceOn ? '' : 'none';
+    document.getElementById('panel-plenum').style.display = plenumOn ? '' : 'none';
+    document.getElementById('panel-drainpan').style.display = drainpanOn ? '' : 'none';
+
+    const zoneMult = currentZone().multiplier;
+    const condTotals = condenserDetail.getTotals();
+    const coilTotalsRaw = coilDetail.getTotals();
+    const coilTotals = { low: coilTotalsRaw.low * zoneMult, high: coilTotalsRaw.high * zoneMult };
+    const furnaceTotals = furnaceDetail.getTotals();
+
+    document.getElementById('price-condenser').textContent = rangeText(condTotals.low, condTotals.high);
+    document.getElementById('price-coil').textContent = rangeText(coilTotals.low, coilTotals.high);
+    document.getElementById('price-furnace').textContent = rangeText(furnaceTotals.low, furnaceTotals.high);
+
+    let laborTotals = laborWidget.getTotal();
+    const doubleLabor = condenserOn && coilOn;
+    document.getElementById('labor-double-note').style.display = doubleLabor ? '' : 'none';
+    if (doubleLabor) laborTotals = { low: laborTotals.low * 2, high: laborTotals.high * 2 };
+
+    const overheadPct = (parseFloat(document.getElementById('overhead-pct').value) || 0) / 100;
+    const overheadLow = laborTotals.low * overheadPct;
+    const overheadHigh = laborTotals.high * overheadPct;
+
+    const equipLow = (condenserOn ? condTotals.low : 0) + (coilOn ? coilTotals.low : 0) + (furnaceOn ? furnaceTotals.low : 0) + laborTotals.low + overheadLow;
+    const equipHigh = (condenserOn ? condTotals.high : 0) + (coilOn ? coilTotals.high : 0) + (furnaceOn ? furnaceTotals.high : 0) + laborTotals.high + overheadHigh;
+    document.getElementById('subtotal-box').textContent = rangeText(equipLow, equipHigh);
+
+    const plenumTotal = plenumWidget.getTotal();
+    document.getElementById('price-plenum').textContent = rangeText(plenumTotal, plenumTotal);
+    const drainpanTotals = drainpanDetail.getTotals();
+    document.getElementById('price-drainpan').textContent = rangeText(drainpanTotals.low, drainpanTotals.high);
+
+    const relocateLow = parseFloat(document.getElementById('low-relocate').value) || 0;
+    const relocateHigh = parseFloat(document.getElementById('high-relocate').value) || 0;
+    const uvLow = parseFloat(document.getElementById('low-uv').value) || 0;
+    const uvHigh = parseFloat(document.getElementById('high-uv').value) || 0;
+    const ductLow = parseFloat(document.getElementById('low-duct').value) || 0;
+    const ductHigh = parseFloat(document.getElementById('high-duct').value) || 0;
+
+    let grandLow = equipLow, grandHigh = equipHigh;
+    if (plenumOn) { grandLow += plenumTotal; grandHigh += plenumTotal; }
+    if (drainpanOn) { grandLow += drainpanTotals.low; grandHigh += drainpanTotals.high; }
+    if (relocateOn) { grandLow += relocateLow; grandHigh += relocateHigh; }
+    if (uvOn) { grandLow += uvLow; grandHigh += uvHigh; }
+    if (ductOn) { grandLow += ductLow; grandHigh += ductHigh; }
+
+    document.getElementById('grand-total').textContent = rangeText(grandLow, grandHigh);
+    document.getElementById('payment-terms').textContent =
+      `Payment Terms: 50% deposit required upon signing (${fmtMoney(grandLow / 2)}); remaining 50% due upon satisfactory project completion.`;
+  }
+
+  document.querySelector('main').addEventListener('input', updateAll);
+  document.querySelector('main').addEventListener('change', updateAll);
+  updateAll();
+</script>
+</body>
+</html>

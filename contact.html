@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contact Us | SAA Comfort Air LLC</title>
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="container">
+    <a class="brand" href="index.html">
+      <span class="mark">SA</span>
+      <span>SAA Comfort Air LLC<span class="sub">Houston Metro HVAC Sales &amp; Service</span></span>
+    </a>
+    <nav class="mainnav">
+      <a href="index.html">Home</a>
+      <a href="about.html">About Us</a>
+      <a href="services.html">Services</a>
+      <a href="contact.html" class="active">Contact Us</a>
+      <a class="emp" href="employee/login.html">Employee</a>
+    </nav>
+  </div>
+</header>
+
+<section class="tight">
+  <div class="container">
+    <div class="section-head">
+      <h1>Contact Us</h1>
+      <p>Request an estimate or ask a question — we'll get back to you promptly.</p>
+    </div>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>Get in touch</h3>
+        <p class="muted"><strong>Phone:</strong> [Add business phone number]<br>
+        <strong>Email:</strong> [Add business email]<br>
+        <strong>Service area:</strong> Katy, TX &amp; Houston metro<br>
+        <strong>Hours:</strong> [Add business hours]</p>
+        <div class="note-box blue">This card has placeholder contact details — replace the bracketed lines with your real phone, email, and hours.</div>
+      </div>
+      <div class="card">
+        <h3>Request an estimate</h3>
+        <form action="mailto:info@saacomfortair.com" method="post" enctype="text/plain">
+          <div class="field-row">
+            <div class="field"><label for="name">Name</label><input type="text" id="name" name="Name" required></div>
+            <div class="field"><label for="phone">Phone</label><input type="tel" id="phone" name="Phone" required></div>
+          </div>
+          <div class="field"><label for="email">Email</label><input type="email" id="email" name="Email"></div>
+          <div class="field">
+            <label for="service">Service needed</label>
+            <select id="service" name="Service">
+              <option>New Installation</option>
+              <option>System Replacement</option>
+              <option>Condenser Change</option>
+              <option>Coil Change</option>
+              <option>Furnace Change</option>
+              <option>Plenum / Duct Work</option>
+              <option>Drainline Maintenance</option>
+              <option>Duct Cleaning</option>
+              <option>Maintenance Plan</option>
+              <option>Something else</option>
+            </select>
+          </div>
+          <div class="field"><label for="message">Tell us what's going on</label><textarea id="message" name="Message" rows="4"></textarea></div>
+          <button type="submit" class="btn btn-primary">Send Request</button>
+        </form>
+        <div class="note-box" style="margin-top:14px">This form currently opens the visitor's email app (mailto:) addressed to a placeholder inbox — swap in your real business email above. For a hosted site, wiring this to a form service (e.g. Formspree) is more reliable than mailto.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="site">
+  <div class="container">
+    <div>&copy; <span id="year"></span> SAA Comfort Air LLC &middot; Houston metro area, TX &middot; TACLA license #[add license #]</div>
+    <div><a href="contact.html">Contact</a> &middot; <a href="employee/login.html">Employee Login</a></div>
+  </div>
+</footer>
+<script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+
+</body>
+</html>

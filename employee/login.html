@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Employee Login | SAA Comfort Air LLC</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+<div class="login-shell">
+  <div class="login-card">
+    <div class="mark">SA</div>
+    <h2 style="margin-bottom:4px">Employee Access</h2>
+    <p class="muted" style="margin-bottom:18px">SAA Comfort Air LLC internal tools</p>
+    <form id="login-form">
+      <div class="field" style="text-align:left">
+        <label for="pw">Password</label>
+        <input type="password" id="pw" autofocus required>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%">Log In</button>
+      <div class="login-error" id="err"></div>
+    </form>
+    <p style="margin-top:18px"><a href="../index.html">&larr; Back to public site</a></p>
+  </div>
+</div>
+<script src="../assets/js/auth.js"></script>
+<script>
+  if (saaIsAuthed()) window.location.href = "dashboard.html";
+  document.getElementById("login-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    const pw = document.getElementById("pw").value;
+    if (saaLogin(pw)) {
+      window.location.href = "dashboard.html";
+    } else {
+      document.getElementById("err").textContent = "Incorrect password. Try again.";
+      document.getElementById("pw").value = "";
+      document.getElementById("pw").focus();
+    }
+  });
+</script>
+</body>
+</html>

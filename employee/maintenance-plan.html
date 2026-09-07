@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maintenance Plan | Employee | SAA Comfort Air LLC</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+
+</head>
+<body class="emp-shell">
+<script src="../assets/js/auth.js"></script>
+<script>saaRequireAuth();</script>
+<header class="emp-header">
+  <div class="container">
+    <div>
+      <a class="brand" href="dashboard.html" style="font-size:1rem">
+        <span class="mark" style="width:30px;height:30px;font-size:.85rem">SA</span>
+        <span>Employee Tools</span>
+      </a>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select onchange="if(this.value) window.location.href=this.value" style="width:auto;min-width:170px">
+        <option value="">Jump to page&hellip;</option>
+        <option value="dashboard.html">Dashboard</option>
+        <option value="new-install.html">New Install</option>
+        <option value="replacement.html">Replacement</option>
+        <option value="condenser-change.html">Condenser Change</option>
+        <option value="coil-change.html">Coil Change</option>
+        <option value="furnace-change.html">Furnace Change</option>
+        <option value="plenum-change.html">Plenum Change</option>
+        <option value="drainline-maintenance.html">Drainline Maintenance</option>
+        <option value="duct-cleaning.html">Duct Cleaning</option>
+        <option value="labor.html">Labor</option>
+        <option value="inspection.html">Inspection / QC</option>
+        <option value="maintenance-plan.html" selected>Maintenance Plan</option>
+        <option value="custom-solutions.html">Custom HVAC Solutions</option>
+        <option value="jobs.html">Jobs</option>
+        <option value="instruction-manual.html">Instruction Manual</option>
+        <option value="tool-list.html">Tool List</option>
+        <option value="receipts.html">Receipts</option>
+      </select>
+      <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
+      <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
+    </div>
+  </div>
+</header>
+<main class="container" style="padding:26px 20px 60px">
+
+<div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Maintenance Plan</div>
+<div class="page-title-row"><h1>HVAC Maintenance Plans</h1></div>
+<div class="note-box blue">Starter tiers — the original workbook didn't include a maintenance-plan sheet, so these prices/features are a reasonable template. Edit MAINTENANCE_PLANS in pricing-data.js to change them for good.</div>
+<div class="grid grid-3">
+      <div class="card" data-plan="0">
+        <span class="badge badge-orange" id="plan-name-0"></span>
+        <h3 style="margin-top:8px">$<span id="plan-price-0"></span>/yr</h3>
+        <p class="muted" id="plan-visits-0"></p>
+        <ul id="plan-features-0" style="padding-left:18px;color:var(--muted);font-size:.9rem"></ul>
+        <label style="margin-top:8px">Edit annual price</label>
+        <input type="number" class="plan-price-input" data-i="0" style="max-width:140px">
+      </div>
+      <div class="card" data-plan="1">
+        <span class="badge badge-orange" id="plan-name-1"></span>
+        <h3 style="margin-top:8px">$<span id="plan-price-1"></span>/yr</h3>
+        <p class="muted" id="plan-visits-1"></p>
+        <ul id="plan-features-1" style="padding-left:18px;color:var(--muted);font-size:.9rem"></ul>
+        <label style="margin-top:8px">Edit annual price</label>
+        <input type="number" class="plan-price-input" data-i="1" style="max-width:140px">
+      </div>
+      <div class="card" data-plan="2">
+        <span class="badge badge-orange" id="plan-name-2"></span>
+        <h3 style="margin-top:8px">$<span id="plan-price-2"></span>/yr</h3>
+        <p class="muted" id="plan-visits-2"></p>
+        <ul id="plan-features-2" style="padding-left:18px;color:var(--muted);font-size:.9rem"></ul>
+        <label style="margin-top:8px">Edit annual price</label>
+        <input type="number" class="plan-price-input" data-i="2" style="max-width:140px">
+      </div>
+</div>
+<div class="card" style="margin-top:20px;max-width:420px">
+  <label>Number of systems on this property</label>
+  <input type="number" id="plan-qty" value="1" min="1" style="max-width:100px">
+  <label style="margin-top:12px">Selected plan</label>
+  <select id="plan-select"></select>
+  <div class="totals-strip" style="margin-top:14px">
+    <div class="total-box grand"><div class="label">Annual Total</div><div class="value" id="plan-total">$0.00</div></div>
+  </div>
+</div>
+
+</main>
+<script src="../assets/js/pricing-data.js"></script>
+<script src="../assets/js/worksheet.js"></script>
+<script>
+  MAINTENANCE_PLANS.forEach((p, i) => {
+    document.getElementById(`plan-name-${i}`).textContent = p.name;
+    document.getElementById(`plan-price-${i}`).textContent = p.pricePerYear.toLocaleString();
+    document.getElementById(`plan-visits-${i}`).textContent = `${p.visitsPerYear} visit(s) / year`;
+    document.getElementById(`plan-features-${i}`).innerHTML = p.features.map(f => `<li>${f}</li>`).join('');
+    const input = document.querySelector(`.plan-price-input[data-i="${i}"]`);
+    input.value = p.pricePerYear;
+    input.addEventListener('input', () => { p.pricePerYear = parseFloat(input.value) || 0; document.getElementById(`plan-price-${i}`).textContent = p.pricePerYear.toLocaleString(); updatePlanTotal(); });
+  });
+  const sel = document.getElementById('plan-select');
+  sel.innerHTML = MAINTENANCE_PLANS.map((p, i) => `<option value="${i}">${p.name}</option>`).join('');
+  function updatePlanTotal() {
+    const i = parseInt(sel.value, 10);
+    const qty = parseFloat(document.getElementById('plan-qty').value) || 0;
+    const total = MAINTENANCE_PLANS[i].pricePerYear * qty;
+    document.getElementById('plan-total').textContent = fmtMoney(total);
+  }
+  sel.addEventListener('change', updatePlanTotal);
+  document.getElementById('plan-qty').addEventListener('input', updatePlanTotal);
+  updatePlanTotal();
+</script>
+</body>
+</html>

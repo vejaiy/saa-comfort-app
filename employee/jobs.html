@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jobs | Employee | SAA Comfort Air LLC</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+
+</head>
+<body class="emp-shell">
+<script src="../assets/js/auth.js"></script>
+<script>saaRequireAuth();</script>
+<header class="emp-header">
+  <div class="container">
+    <div>
+      <a class="brand" href="dashboard.html" style="font-size:1rem">
+        <span class="mark" style="width:30px;height:30px;font-size:.85rem">SA</span>
+        <span>Employee Tools</span>
+      </a>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select onchange="if(this.value) window.location.href=this.value" style="width:auto;min-width:170px">
+        <option value="">Jump to page&hellip;</option>
+        <option value="dashboard.html">Dashboard</option>
+        <option value="new-install.html">New Install</option>
+        <option value="replacement.html">Replacement</option>
+        <option value="condenser-change.html">Condenser Change</option>
+        <option value="coil-change.html">Coil Change</option>
+        <option value="furnace-change.html">Furnace Change</option>
+        <option value="plenum-change.html">Plenum Change</option>
+        <option value="drainline-maintenance.html">Drainline Maintenance</option>
+        <option value="duct-cleaning.html">Duct Cleaning</option>
+        <option value="labor.html">Labor</option>
+        <option value="inspection.html">Inspection / QC</option>
+        <option value="maintenance-plan.html">Maintenance Plan</option>
+        <option value="custom-solutions.html">Custom HVAC Solutions</option>
+        <option value="jobs.html" selected>Jobs</option>
+        <option value="instruction-manual.html">Instruction Manual</option>
+        <option value="tool-list.html">Tool List</option>
+        <option value="receipts.html">Receipts</option>
+      </select>
+      <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
+      <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
+    </div>
+  </div>
+</header>
+<main class="container" style="padding:26px 20px 60px">
+
+<div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Jobs</div>
+<h1>Jobs</h1>
+<div class="stub-note card" style="max-width:520px;margin:20px auto">
+  <div style="font-size:2rem">🚧</div>
+  <h3>Coming soon</h3>
+  <p class="muted">A job tracker (status, address, assigned tech, schedule) isn't built yet. When you're ready to track jobs digitally, this is the page to wire up first — likely to a simple database or a connected spreadsheet.</p>
+  <a class="btn btn-ghost" href="dashboard.html">&larr; Back to Dashboard</a>
+</div>
+
+</main>
+<script src="../assets/js/pricing-data.js"></script>
+<script src="../assets/js/worksheet.js"></script>
+
+</body>
+</html>

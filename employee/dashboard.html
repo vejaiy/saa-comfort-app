@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard | Employee | SAA Comfort Air LLC</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+
+</head>
+<body class="emp-shell">
+<script src="../assets/js/auth.js"></script>
+<script>saaRequireAuth();</script>
+<header class="emp-header">
+  <div class="container">
+    <div>
+      <a class="brand" href="dashboard.html" style="font-size:1rem">
+        <span class="mark" style="width:30px;height:30px;font-size:.85rem">SA</span>
+        <span>Employee Tools<div class="muted" style="color:#b7c4d1;font-size:.85rem">SAA Comfort Air LLC</div></span>
+      </a>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select onchange="if(this.value) window.location.href=this.value" style="width:auto;min-width:170px">
+        <option value="">Jump to page&hellip;</option>
+        <option value="dashboard.html" selected>Dashboard</option>
+        <option value="new-install.html">New Install</option>
+        <option value="replacement.html">Replacement</option>
+        <option value="condenser-change.html">Condenser Change</option>
+        <option value="coil-change.html">Coil Change</option>
+        <option value="furnace-change.html">Furnace Change</option>
+        <option value="plenum-change.html">Plenum Change</option>
+        <option value="drainline-maintenance.html">Drainline Maintenance</option>
+        <option value="duct-cleaning.html">Duct Cleaning</option>
+        <option value="labor.html">Labor</option>
+        <option value="inspection.html">Inspection / QC</option>
+        <option value="maintenance-plan.html">Maintenance Plan</option>
+        <option value="custom-solutions.html">Custom HVAC Solutions</option>
+        <option value="jobs.html">Jobs</option>
+        <option value="instruction-manual.html">Instruction Manual</option>
+        <option value="tool-list.html">Tool List</option>
+        <option value="receipts.html">Receipts</option>
+      </select>
+      <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
+      <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
+    </div>
+  </div>
+</header>
+<main class="container" style="padding:26px 20px 60px">
+
+<div class="page-title-row">
+  <div>
+    <h1 style="margin-bottom:4px">Employee Dashboard</h1>
+    <p class="muted">Pick a worksheet to build a quote, or jump to a resource below.</p>
+  </div>
+  <a class="btn btn-navy" href="https://www.manualjcalculator.com/#sample" target="_blank" rel="noopener">Manual J Calculator ↗</a>
+</div>
+
+<h2 style="font-size:1.1rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted)">Quotation Worksheets</h2>
+<div class="tool-grid" style="margin-bottom:32px">
+      <a class="tool-card" href="new-install.html" style="text-decoration:none">
+        <div class="icon">🏗️</div>
+        <h3 style="margin-bottom:0">New Installation</h3>
+        <p class="muted" style="margin:0">Full system build for new construction or homes without ductwork.</p>
+      </a>
+      <a class="tool-card" href="replacement.html" style="text-decoration:none">
+        <div class="icon">🔁</div>
+        <h3 style="margin-bottom:0">Replacement</h3>
+        <p class="muted" style="margin:0">Full condenser + coil + furnace system changeout.</p>
+      </a>
+      <a class="tool-card" href="condenser-change.html" style="text-decoration:none">
+        <div class="icon">🌀</div>
+        <h3 style="margin-bottom:0">Condenser Change</h3>
+        <p class="muted" style="margin:0">Outdoor condensing unit swap, priced by tonnage.</p>
+      </a>
+      <a class="tool-card" href="coil-change.html" style="text-decoration:none">
+        <div class="icon">❄️</div>
+        <h3 style="margin-bottom:0">Coil Change</h3>
+        <p class="muted" style="margin:0">Evaporator coil replacement worksheet.</p>
+      </a>
+      <a class="tool-card" href="furnace-change.html" style="text-decoration:none">
+        <div class="icon">🔥</div>
+        <h3 style="margin-bottom:0">Furnace Change</h3>
+        <p class="muted" style="margin:0">Furnace replacement across efficiency tiers.</p>
+      </a>
+      <a class="tool-card" href="plenum-change.html" style="text-decoration:none">
+        <div class="icon">📦</div>
+        <h3 style="margin-bottom:0">Plenum Change</h3>
+        <p class="muted" style="margin:0">Supply/return plenum + duct collar pricing.</p>
+      </a>
+      <a class="tool-card" href="drainline-maintenance.html" style="text-decoration:none">
+        <div class="icon">💧</div>
+        <h3 style="margin-bottom:0">Drainline Maintenance</h3>
+        <p class="muted" style="margin:0">Secondary drain pan install + routine drain cleaning.</p>
+      </a>
+      <a class="tool-card" href="duct-cleaning.html" style="text-decoration:none">
+        <div class="icon">🧹</div>
+        <h3 style="margin-bottom:0">Duct Cleaning</h3>
+        <p class="muted" style="margin:0">Whole-system duct cleaning line item.</p>
+      </a>
+      <a class="tool-card" href="inspection.html" style="text-decoration:none">
+        <div class="icon">✅</div>
+        <h3 style="margin-bottom:0">Inspection / QC</h3>
+        <p class="muted" style="margin:0">Field quality-control checklist.</p>
+      </a>
+      <a class="tool-card" href="labor.html" style="text-decoration:none">
+        <div class="icon">👷</div>
+        <h3 style="margin-bottom:0">Labor</h3>
+        <p class="muted" style="margin:0">Technician, lead, and transportation rate calculator.</p>
+      </a>
+      <a class="tool-card" href="maintenance-plan.html" style="text-decoration:none">
+        <div class="icon">🛠️</div>
+        <h3 style="margin-bottom:0">Maintenance Plan</h3>
+        <p class="muted" style="margin:0">Seasonal tune-up plan tiers.</p>
+      </a>
+      <a class="tool-card" href="custom-solutions.html" style="text-decoration:none">
+        <div class="icon">💡</div>
+        <h3 style="margin-bottom:0">Custom HVAC Solutions</h3>
+        <p class="muted" style="margin:0">Non-standard job notes &amp; scoping.</p>
+      </a>
+</div>
+
+<h2 style="font-size:1.1rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted)">Resources</h2>
+<div class="tool-grid">
+      <a class="tool-card stub" href="jobs.html" style="text-decoration:none">
+        <div class="icon">📋</div>
+        <h3 style="margin-bottom:0">Jobs</h3>
+        <p class="muted" style="margin:0">Job tracker — coming soon.</p>
+      </a>
+      <a class="tool-card stub" href="instruction-manual.html" style="text-decoration:none">
+        <div class="icon">📖</div>
+        <h3 style="margin-bottom:0">Instruction Manual</h3>
+        <p class="muted" style="margin:0">Equipment manuals — coming soon.</p>
+      </a>
+      <a class="tool-card stub" href="tool-list.html" style="text-decoration:none">
+        <div class="icon">🧰</div>
+        <h3 style="margin-bottom:0">Tool List</h3>
+        <p class="muted" style="margin:0">Owned tool inventory — coming soon.</p>
+      </a>
+      <a class="tool-card stub" href="receipts.html" style="text-decoration:none">
+        <div class="icon">🧾</div>
+        <h3 style="margin-bottom:0">Receipts</h3>
+        <p class="muted" style="margin:0">Receipt log — coming soon.</p>
+      </a>
+</div>
+
+</main>
+<script src="../assets/js/pricing-data.js"></script>
+<script src="../assets/js/worksheet.js"></script>
+
+</body>
+</html>
