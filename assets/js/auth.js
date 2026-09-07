@@ -1,35 +1,37 @@
 /* ============================================================
    SAA Comfort Air LLC — employee area access gate
-   NOTE: this is a simple front-door lock, not real security.
-   The password below lives in this file in plain text, so anyone
-   who views the page source can read it. It is meant to keep
-   casual visitors out of your pricing pages, not to protect
-   sensitive data on a public server. Don't put anything in the
-   employee pages you wouldn't want a determined visitor to see.
-
-   To change the password: edit the line below and save the file.
+   Real staff login via Supabase Auth (email + password). A visitor
+   needs an account created for them — there is no public sign-up
+   page — and every table behind this gate is locked down with Row
+   Level Security, so only a signed-in session can read or write
+   anything. See database/README.md for how to add a staff account.
    ============================================================ */
-const EMPLOYEE_PASSWORD = "SAAcomfort2026";
 
-function saaLogin(pw) {
-  if (pw === EMPLOYEE_PASSWORD) {
-    sessionStorage.setItem("saa_emp_auth", "1");
-    return true;
+const _saaClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+async function saaLogin(email, password) {
+  const { error } = await _saaClient.auth.signInWithPassword({ email, password });
+  if (error) {
+    return { ok: false, message: error.message };
   }
-  return false;
+  return { ok: true };
 }
 
-function saaRequireAuth() {
-  if (sessionStorage.getItem("saa_emp_auth") !== "1") {
+async function saaRequireAuth() {
+  const { data: { session } } = await _saaClient.auth.getSession();
+  if (!session) {
     window.location.href = "login.html";
+    return;
   }
+  document.body.style.visibility = "visible";
 }
 
-function saaLogout() {
-  sessionStorage.removeItem("saa_emp_auth");
+async function saaLogout() {
+  await _saaClient.auth.signOut();
   window.location.href = "login.html";
 }
 
-function saaIsAuthed() {
-  return sessionStorage.getItem("saa_emp_auth") === "1";
+async function saaIsAuthed() {
+  const { data: { session } } = await _saaClient.auth.getSession();
+  return !!session;
 }

@@ -15,27 +15,45 @@
     <p class="muted" style="margin-bottom:18px">SAA Comfort Air LLC internal tools</p>
     <form id="login-form">
       <div class="field" style="text-align:left">
-        <label for="pw">Password</label>
-        <input type="password" id="pw" autofocus required>
+        <label for="email">Email</label>
+        <input type="email" id="email" autocomplete="username" autofocus required>
       </div>
-      <button type="submit" class="btn btn-primary" style="width:100%">Log In</button>
+      <div class="field" style="text-align:left">
+        <label for="pw">Password</label>
+        <input type="password" id="pw" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%" id="login-btn">Log In</button>
       <div class="login-error" id="err"></div>
     </form>
     <p style="margin-top:18px"><a href="../index.html">&larr; Back to public site</a></p>
   </div>
 </div>
+<script src="../assets/js/vendor/supabase.js"></script>
+<script src="../assets/js/supabase-config.js"></script>
 <script src="../assets/js/auth.js"></script>
 <script>
-  if (saaIsAuthed()) window.location.href = "dashboard.html";
-  document.getElementById("login-form").addEventListener("submit", function (e) {
+  (async function () {
+    if (await saaIsAuthed()) window.location.href = "dashboard.html";
+  })();
+
+  document.getElementById("login-form").addEventListener("submit", async function (e) {
     e.preventDefault();
+    const email = document.getElementById("email").value.trim();
     const pw = document.getElementById("pw").value;
-    if (saaLogin(pw)) {
+    const btn = document.getElementById("login-btn");
+    const err = document.getElementById("err");
+    err.textContent = "";
+    btn.disabled = true;
+    btn.textContent = "Logging in…";
+    const result = await saaLogin(email, pw);
+    if (result.ok) {
       window.location.href = "dashboard.html";
     } else {
-      document.getElementById("err").textContent = "Incorrect password. Try again.";
+      err.textContent = "Login failed: " + result.message;
       document.getElementById("pw").value = "";
       document.getElementById("pw").focus();
+      btn.disabled = false;
+      btn.textContent = "Log In";
     }
   });
 </script>
