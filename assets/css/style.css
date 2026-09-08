@@ -138,7 +138,9 @@ table.worksheet .num { text-align: right; font-variant-numeric: tabular-nums; wh
 table.worksheet .spec { color: var(--muted); font-size: .82rem; max-width: 260px; }
 table.worksheet .item-name { font-weight: 600; }
 table.worksheet tfoot td { padding: 10px; font-weight: 700; border-top: 2px solid var(--navy); }
-.pill-optional { font-size: .68rem; padding: 2px 7px; border-radius: 100px; background: #eef2f5; color: var(--muted); }
+table.worksheet td.toggle-cell { text-align: center; }
+table.worksheet tbody tr.row-off td { opacity: .5; }
+table.worksheet tbody tr.row-off:hover td { opacity: .75; }
 
 .totals-strip { display: flex; gap: 14px; flex-wrap: wrap; margin: 16px 0; }
 .total-box { flex: 1; min-width: 190px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
@@ -159,6 +161,16 @@ table.worksheet tfoot td { padding: 10px; font-weight: 700; border-top: 2px soli
 .switch .slider::before { content: ""; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .15s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
 .switch input:checked + .slider { background: var(--ok); }
 .switch input:checked + .slider::before { transform: translateX(20px); }
+.switch.sm { width: 34px; height: 19px; }
+.switch.sm .slider::before { width: 13px; height: 13px; left: 3px; top: 3px; }
+.switch.sm input:checked + .slider::before { transform: translateX(15px); }
+
+/* ---------- editable inline name/desc inputs (custom "Other" line item) ---------- */
+.toggle-row .meta input.inline-input { display: block; border: none; border-bottom: 1px dashed var(--line); background: transparent; padding: 3px 0; width: 100%; font-family: inherit; color: inherit; }
+.toggle-row .meta input.name-input { font-weight: 700; color: var(--navy); font-size: .95rem; }
+.toggle-row .meta input.desc-input { font-size: .85rem; color: var(--muted); margin-top: 4px; }
+.toggle-row .meta input.inline-input:focus { outline: none; border-bottom-color: var(--orange-2); }
+.toggle-row .meta input.inline-input::placeholder { color: #a9b6bf; }
 
 details.detail-panel { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); margin-bottom: 16px; overflow: hidden; }
 details.detail-panel > summary { cursor: pointer; padding: 14px 16px; font-weight: 700; color: var(--navy); background: #f8fafb; list-style: none; display: flex; justify-content: space-between; align-items: center; }

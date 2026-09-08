@@ -10,13 +10,16 @@ function fmtMoney(n) {
 }
 
 /**
- * Renders a range-priced line-item table (Qty x Low/High unit cost).
- * rows: [{ group, category, item, unit, qty, low, high, spec, notes, optional, tonnageLinked/tierLinked }]
+ * Renders a single-priced line-item table (Qty x Unit price), with a
+ * toggle switch in the last column controlling whether the row counts
+ * toward the total (off = excluded, kept at $0 in the Ext. column).
+ * rows: [{ group, category, item, unit, qty, price, spec, notes, included, tonnageLinked/tierLinked }]
+ *   included defaults to true unless explicitly set to false.
  * opts: {
- *   linkedOptions: [{ tonnage|id, desc/label, low, high }]  // populates a picker for tonnageLinked/tierLinked rows
+ *   linkedOptions: [{ tonnage|id, desc/label, price }]  // populates a picker for tonnageLinked/tierLinked rows
  *   linkedKind: 'tonnage' | 'tier'
  *   showGroupSubtotals: bool (default true if >1 distinct group)
- *   onTotals: fn(totals) -> totals = { byGroup: {G:{low,high}}, low, high }
+ *   onTotals: fn(totals) -> totals = { byGroup: {G:{total}}, total }
  * }
  * returns { el, getTotals(), setLinkedValue(value) }
  */
@@ -30,7 +33,7 @@ function renderLineItemTable(mountEl, rows, opts) {
   if (linkedIdx > -1 && opts.linkedOptions) {
     const optHtml = opts.linkedOptions.map((o, i) => {
       const val = opts.linkedKind === "tier" ? o.id : o.tonnage;
-      const label = opts.linkedKind === "tier" ? o.label : `${o.tonnage} ton — ${o.desc} ($${o.low}–$${o.high})`;
+      const label = opts.linkedKind === "tier" ? o.label : `${o.tonnage} ton — ${o.desc} ($${o.price})`;
       return `<option value="${val}"${i === 0 ? " selected" : ""}>${label}</option>`;
     }).join("");
     const pickLabel = opts.linkedKind === "tier" ? "Furnace tier" : "System tonnage";
@@ -40,32 +43,29 @@ function renderLineItemTable(mountEl, rows, opts) {
 
   const rowsHtml = rows.map((r, i) => {
     const group = r.group || "MATERIALS";
-    const optionalPill = r.optional ? `<span class="pill-optional">${r.optional}</span>` : "";
     const isLinked = (r.tonnageLinked || r.tierLinked) ? " data-linked-row" : "";
+    const included = r.included !== false;
     const catCell = opts.editableText
       ? `<input type="text" class="cat-input" value="${r.category || ""}" style="width:100px">`
       : (showGroups ? `<span class="badge" style="margin-right:6px">${r.category || ""}</span>` : (r.category || ""));
     const itemCell = opts.editableText
       ? `<input type="text" class="item-input" value="${(r.item || "").replace(/"/g, "&quot;")}" style="width:100%;min-width:180px">`
       : `${r.item}${r.spec ? `<div class="spec">${r.spec}</div>` : ""}`;
-    return `<tr data-row data-group="${group}" data-idx="${i}"${isLinked}>
+    return `<tr data-row data-group="${group}" data-idx="${i}"${isLinked}${included ? "" : " class=\"row-off\""}>
       <td>${catCell}</td>
       <td class="item-name">${itemCell}</td>
       <td>${r.unit || ""}</td>
       <td><input type="number" step="any" class="qty" value="${r.qty}" aria-label="Quantity"></td>
-      <td class="num"><input type="number" step="any" class="low" value="${r.low}" aria-label="Low unit cost"></td>
-      <td class="num"><input type="number" step="any" class="high" value="${r.high}" aria-label="High unit cost"></td>
-      <td class="num ext-low">${fmtMoney(r.qty * r.low)}</td>
-      <td class="num ext-high">${fmtMoney(r.qty * r.high)}</td>
-      <td>${optionalPill}</td>
+      <td class="num"><input type="number" step="any" class="price" value="${r.price}" aria-label="Unit cost"></td>
+      <td class="num ext">${fmtMoney(included ? r.qty * r.price : 0)}</td>
+      <td class="toggle-cell"><label class="switch sm"><input type="checkbox" class="row-toggle" aria-label="Include this line item"${included ? " checked" : ""}><span class="slider"></span></label></td>
     </tr>`;
   }).join("");
 
   const groupSubtotalsHtml = showGroups ? `<div class="totals-strip">` + groups.map(g => `
       <div class="total-box">
         <div class="label">${g} subtotal</div>
-        <div class="value" style="font-size:1.1rem" data-subtotal-group="${g}" data-which="low">$0.00</div>
-        <div class="muted" style="font-size:.82rem">to <span data-subtotal-group="${g}" data-which="high">$0.00</span> high</div>
+        <div class="value" style="font-size:1.1rem" data-subtotal-group="${g}">$0.00</div>
       </div>`).join("") + `</div>` : "";
 
   const addRowBtn = opts.allowAddRow
@@ -78,13 +78,12 @@ function renderLineItemTable(mountEl, rows, opts) {
       <table class="worksheet">
         <thead><tr>
           <th>Category</th><th>Item</th><th>Unit</th><th>Qty</th>
-          <th>Low Unit $</th><th>High Unit $</th><th>Low Ext.</th><th>High Ext.</th><th></th>
+          <th>Unit $</th><th>Ext.</th><th>Included</th>
         </tr></thead>
         <tbody>${rowsHtml}</tbody>
         <tfoot><tr>
-          <td colspan="6">Subtotal</td>
-          <td class="num" data-total="low">$0.00</td>
-          <td class="num" data-total="high">$0.00</td>
+          <td colspan="5">Subtotal</td>
+          <td class="num" data-total="total">$0.00</td>
           <td></td>
         </tr></tfoot>
       </table>
@@ -95,47 +94,46 @@ function renderLineItemTable(mountEl, rows, opts) {
 
   if (opts.allowAddRow) {
     mountEl.querySelector(`#${mountEl.id}-addrow`).addEventListener("click", () => {
-      rows.push({ group: "MATERIALS", category: "", item: "New item — edit me", unit: "EA", qty: 1, low: 0, high: 0 });
+      rows.push({ group: "MATERIALS", category: "", item: "New item — edit me", unit: "EA", qty: 1, price: 0, included: true });
       renderLineItemTable(mountEl, rows, opts);
     });
   }
 
   function recalc() {
-    const totals = { byGroup: {}, low: 0, high: 0 };
+    const totals = { byGroup: {}, total: 0 };
     mountEl.querySelectorAll("tbody tr[data-row]").forEach(tr => {
       const qty = parseFloat(tr.querySelector(".qty").value) || 0;
-      const low = parseFloat(tr.querySelector(".low").value) || 0;
-      const high = parseFloat(tr.querySelector(".high").value) || 0;
-      const extLow = qty * low, extHigh = qty * high;
-      tr.querySelector(".ext-low").textContent = fmtMoney(extLow);
-      tr.querySelector(".ext-high").textContent = fmtMoney(extHigh);
+      const price = parseFloat(tr.querySelector(".price").value) || 0;
+      const on = tr.querySelector(".row-toggle").checked;
+      tr.classList.toggle("row-off", !on);
+      const ext = on ? qty * price : 0;
+      tr.querySelector(".ext").textContent = fmtMoney(ext);
       if (opts.editableText) {
         const idx = parseInt(tr.dataset.idx, 10);
         const itemInput = tr.querySelector(".item-input");
         const catInput = tr.querySelector(".cat-input");
         if (rows[idx] && itemInput) rows[idx].item = itemInput.value;
         if (rows[idx] && catInput) rows[idx].category = catInput.value;
-        if (rows[idx]) { rows[idx].qty = qty; rows[idx].low = low; rows[idx].high = high; }
+        if (rows[idx]) { rows[idx].qty = qty; rows[idx].price = price; rows[idx].included = on; }
       }
       const g = tr.dataset.group;
-      totals.byGroup[g] = totals.byGroup[g] || { low: 0, high: 0 };
-      totals.byGroup[g].low += extLow;
-      totals.byGroup[g].high += extHigh;
-      totals.low += extLow;
-      totals.high += extHigh;
+      totals.byGroup[g] = totals.byGroup[g] || { total: 0 };
+      totals.byGroup[g].total += ext;
+      totals.total += ext;
     });
     mountEl.querySelectorAll("[data-total]").forEach(el => {
-      el.textContent = fmtMoney(el.dataset.total === "high" ? totals.high : totals.low);
+      el.textContent = fmtMoney(totals.total);
     });
     mountEl.querySelectorAll("[data-subtotal-group]").forEach(el => {
-      const t = totals.byGroup[el.dataset.subtotalGroup] || { low: 0, high: 0 };
-      el.textContent = fmtMoney(el.dataset.which === "high" ? t.high : t.low);
+      const t = totals.byGroup[el.dataset.subtotalGroup] || { total: 0 };
+      el.textContent = fmtMoney(t.total);
     });
     if (opts.onTotals) opts.onTotals(totals);
     return totals;
   }
 
   mountEl.addEventListener("input", recalc);
+  mountEl.addEventListener("change", recalc);
 
   const linkedSelect = mountEl.querySelector(`#${mountEl.id}-linked`);
   if (linkedSelect && linkedIdx > -1) {
@@ -144,8 +142,7 @@ function renderLineItemTable(mountEl, rows, opts) {
       const opt = opts.linkedOptions.find(o => String(opts.linkedKind === "tier" ? o.id : o.tonnage) === val);
       if (!opt) return;
       const tr = mountEl.querySelector("tr[data-linked-row]");
-      tr.querySelector(".low").value = opt.low;
-      tr.querySelector(".high").value = opt.high;
+      tr.querySelector(".price").value = opt.price;
       recalc();
     });
   }
@@ -160,7 +157,7 @@ function renderLineItemTable(mountEl, rows, opts) {
 
 /**
  * Renders a flat-priced line-item table (Qty x single price) — used for the
- * Drainline "routine maintenance" tool/material list.
+ * Drainline "routine maintenance" tool/material list and Plenum duct collars.
  * rows: [{ item, unit, qty, price }]
  */
 function renderFlatPriceTable(mountEl, rows) {

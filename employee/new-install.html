@@ -43,6 +43,7 @@
         <option value="tool-list.html">Tool List</option>
         <option value="receipts.html">Receipts</option>
       </select>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Employee</a>
       <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
       <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
     </div>
@@ -66,7 +67,7 @@
 
 <div class="toggle-row">
   <div class="meta"><div class="name">Condenser Material + License Fee</div><div class="desc">Remove and dispose of the existing condenser; install a new manufacturer-matched unit, refrigerant charged to spec.</div></div>
-  <div class="price" id="price-condenser">$0.00 – $0.00</div>
+  <div class="price" id="price-condenser">$0.00</div>
   <label class="switch"><input type="checkbox" id="tgl-condenser" checked><span class="slider"></span></label>
 </div>
 <details class="detail-panel" id="panel-condenser">
@@ -76,7 +77,7 @@
 
 <div class="toggle-row">
   <div class="meta"><div class="name">Coil Material</div><div class="desc">Remove and dispose of the existing coil; install a new matched coil. Price scales with the access/complexity zone below.</div></div>
-  <div class="price" id="price-coil">$0.00 – $0.00</div>
+  <div class="price" id="price-coil">$0.00</div>
   <label class="switch"><input type="checkbox" id="tgl-coil" checked><span class="slider"></span></label>
 </div>
 <details class="detail-panel" id="panel-coil">
@@ -90,7 +91,7 @@
 
 <div class="toggle-row">
   <div class="meta"><div class="name">Furnace Material</div><div class="desc">Remove and dispose of the existing furnace; install a new furnace at the tier selected in the worksheet.</div></div>
-  <div class="price" id="price-furnace">$0.00 – $0.00</div>
+  <div class="price" id="price-furnace">$0.00</div>
   <label class="switch"><input type="checkbox" id="tgl-furnace" checked><span class="slider"></span></label>
 </div>
 <details class="detail-panel" id="panel-furnace">
@@ -104,14 +105,14 @@
 <div class="field" style="max-width:220px"><label>Overhead %</label><input type="number" id="overhead-pct" value="0" step="any"></div>
 
 <div class="totals-strip">
-  <div class="total-box"><div class="label">Equipment + Labor + Overhead</div><div class="value" id="subtotal-box" style="font-size:1.3rem">$0.00 – $0.00</div></div>
+  <div class="total-box"><div class="label">Equipment + Labor + Overhead</div><div class="value" id="subtotal-box" style="font-size:1.3rem">$0.00</div></div>
 </div>
 
 <h2 style="font-size:1.05rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:28px">Additional Changes</h2>
 
 <div class="toggle-row">
   <div class="meta"><div class="name">Plenum Change</div><div class="desc">Replace both return and supply plenum; extend ducts to reach the new plenum location.</div></div>
-  <div class="price" id="price-plenum">$0.00 – $0.00</div>
+  <div class="price" id="price-plenum">$0.00</div>
   <label class="switch"><input type="checkbox" id="tgl-plenum" ><span class="slider"></span></label>
 </div>
 <details class="detail-panel" id="panel-plenum">
@@ -121,7 +122,7 @@
 
 <div class="toggle-row">
   <div class="meta"><div class="name">Secondary Drainpan &amp; Float Switch</div><div class="desc">Install a new secondary drain pan with float switch; connect and flush the existing drain line.</div></div>
-  <div class="price" id="price-drainpan">$0.00 – $0.00</div>
+  <div class="price" id="price-drainpan">$0.00</div>
   <label class="switch"><input type="checkbox" id="tgl-drainpan" ><span class="slider"></span></label>
 </div>
 <details class="detail-panel" id="panel-drainpan">
@@ -133,9 +134,7 @@
   <div class="meta"><div class="name">Relocate Furnace and Coil</div><div class="desc">Prepare and provide base support for a furnace/coil relocation.</div></div>
   <div style="display:flex;gap:8px;align-items:center">
     <span class="muted" style="font-size:.82rem">$</span>
-    <input type="number" id="low-relocate" value="500" style="width:80px" step="any">
-    <span class="muted" style="font-size:.82rem">to $</span>
-    <input type="number" id="high-relocate" value="750" style="width:80px" step="any">
+    <input type="number" id="price-relocate" value="500" style="width:90px" step="any">
   </div>
   <label class="switch"><input type="checkbox" id="tgl-relocate" ><span class="slider"></span></label>
 </div>
@@ -144,11 +143,21 @@
   <div class="meta"><div class="name">UV Light Air Purifier</div><div class="desc">Supply and install a UV light air purifier.</div></div>
   <div style="display:flex;gap:8px;align-items:center">
     <span class="muted" style="font-size:.82rem">$</span>
-    <input type="number" id="low-uv" value="399" style="width:80px" step="any">
-    <span class="muted" style="font-size:.82rem">to $</span>
-    <input type="number" id="high-uv" value="499" style="width:80px" step="any">
+    <input type="number" id="price-uv" value="399" style="width:90px" step="any">
   </div>
   <label class="switch"><input type="checkbox" id="tgl-uv" ><span class="slider"></span></label>
+</div>
+
+<div class="toggle-row">
+  <div class="meta">
+    <input type="text" id="name-other" class="inline-input name-input" placeholder="Other item — name" aria-label="Custom item name">
+    <input type="text" id="desc-other" class="inline-input desc-input" placeholder="Description (optional)" aria-label="Custom item description">
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="muted" style="font-size:.82rem">$</span>
+    <input type="number" id="price-other" value="0" style="width:90px" step="any">
+  </div>
+  <label class="switch"><input type="checkbox" id="tgl-other"><span class="slider"></span></label>
 </div>
 
 <h2 style="font-size:1.05rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:28px">Additional Service</h2>
@@ -157,15 +166,13 @@
   <div class="meta"><div class="name">Duct Cleaning</div><div class="desc">Whole-system duct cleaning.</div></div>
   <div style="display:flex;gap:8px;align-items:center">
     <span class="muted" style="font-size:.82rem">$</span>
-    <input type="number" id="low-duct" value="500" style="width:80px" step="any">
-    <span class="muted" style="font-size:.82rem">to $</span>
-    <input type="number" id="high-duct" value="750" style="width:80px" step="any">
+    <input type="number" id="price-duct" value="500" style="width:90px" step="any">
   </div>
   <label class="switch"><input type="checkbox" id="tgl-duct" ><span class="slider"></span></label>
 </div>
 
 <div class="totals-strip" style="margin-top:24px">
-  <div class="total-box grand"><div class="label">Quote Total</div><div class="value" id="grand-total">$0.00 – $0.00</div></div>
+  <div class="total-box grand"><div class="label">Quote Total</div><div class="value" id="grand-total">$0.00</div></div>
 </div>
 
 <div class="printable-summary" id="print-summary">
@@ -173,7 +180,7 @@
   <p class="muted" style="margin-bottom:4px"><strong>Parts Warranty:</strong> 10-Year Manufacturer Limited Warranty (upon online equipment registration within 60 days).</p>
   <p class="muted"><strong>Labor Warranty:</strong> 1-Year Installation Workmanship Warranty from SAA Comfort Air LLC.</p>
   <div class="terms" id="payment-terms"></div>
-  <button class="btn btn-navy btn-sm" style="margin-top:14px" onclick="window.print()">Print Quote</button>
+  <button class="btn btn-navy btn-sm" style="margin-top:14px" id="print-quote-btn">Print Quote</button>
 </div>
 
 </main>
@@ -181,6 +188,7 @@
 <script src="../assets/js/worksheet.js"></script>
 <script src="../assets/js/labor-widget.js"></script>
 <script src="../assets/js/plenum-widget.js"></script>
+<script src="../assets/js/print-quote.js"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
 
@@ -200,14 +208,17 @@
   const plenumWidget = initPlenumWidget(document.getElementById('detail-plenum'));
   const drainpanRows = DRAINPAN_MATERIALS.concat([
     { category: "Labor", item: "Installation labor (1 technician)", unit: "HR",
-      qty: DRAINPAN_LABOR.techs * DRAINPAN_LABOR.hours, low: DRAINPAN_LABOR.rateLow, high: DRAINPAN_LABOR.rateHigh }
+      qty: DRAINPAN_LABOR.techs * DRAINPAN_LABOR.hours, price: DRAINPAN_LABOR.rate, included: true }
   ]);
   const drainpanDetail = renderLineItemTable(document.getElementById('detail-drainpan'), drainpanRows, { showGroupSubtotals: false });
 
   // ---- Labor widget ----
   const laborWidget = initLaborWidget(document.getElementById('labor-widget'));
 
-  function rangeText(low, high) { return `${fmtMoney(low)} – ${fmtMoney(high)}`; }
+  function tonnageLabel(select) {
+    const opt = select.options[select.selectedIndex];
+    return opt ? opt.textContent.split(' — ')[0] : '';
+  }
 
   function updateAll() {
     const condenserOn = document.getElementById('tgl-condenser').checked;
@@ -217,6 +228,7 @@
     const drainpanOn = document.getElementById('tgl-drainpan').checked;
     const relocateOn = document.getElementById('tgl-relocate').checked;
     const uvOn = document.getElementById('tgl-uv').checked;
+    const otherOn = document.getElementById('tgl-other').checked;
     const ductOn = document.getElementById('tgl-duct').checked;
 
     document.getElementById('panel-condenser').style.display = condenserOn ? '' : 'none';
@@ -226,51 +238,77 @@
     document.getElementById('panel-drainpan').style.display = drainpanOn ? '' : 'none';
 
     const zoneMult = currentZone().multiplier;
-    const condTotals = condenserDetail.getTotals();
-    const coilTotalsRaw = coilDetail.getTotals();
-    const coilTotals = { low: coilTotalsRaw.low * zoneMult, high: coilTotalsRaw.high * zoneMult };
-    const furnaceTotals = furnaceDetail.getTotals();
+    const condTotal = condenserDetail.getTotals().total;
+    const coilTotal = coilDetail.getTotals().total * zoneMult;
+    const furnaceTotal = furnaceDetail.getTotals().total;
 
-    document.getElementById('price-condenser').textContent = rangeText(condTotals.low, condTotals.high);
-    document.getElementById('price-coil').textContent = rangeText(coilTotals.low, coilTotals.high);
-    document.getElementById('price-furnace').textContent = rangeText(furnaceTotals.low, furnaceTotals.high);
+    document.getElementById('price-condenser').textContent = fmtMoney(condTotal);
+    document.getElementById('price-coil').textContent = fmtMoney(coilTotal);
+    document.getElementById('price-furnace').textContent = fmtMoney(furnaceTotal);
 
-    let laborTotals = laborWidget.getTotal();
+    let laborTotal = laborWidget.getTotal().total;
     const doubleLabor = condenserOn && coilOn;
     document.getElementById('labor-double-note').style.display = doubleLabor ? '' : 'none';
-    if (doubleLabor) laborTotals = { low: laborTotals.low * 2, high: laborTotals.high * 2 };
+    if (doubleLabor) laborTotal *= 2;
 
     const overheadPct = (parseFloat(document.getElementById('overhead-pct').value) || 0) / 100;
-    const overheadLow = laborTotals.low * overheadPct;
-    const overheadHigh = laborTotals.high * overheadPct;
+    const overhead = laborTotal * overheadPct;
 
-    const equipLow = (condenserOn ? condTotals.low : 0) + (coilOn ? coilTotals.low : 0) + (furnaceOn ? furnaceTotals.low : 0) + laborTotals.low + overheadLow;
-    const equipHigh = (condenserOn ? condTotals.high : 0) + (coilOn ? coilTotals.high : 0) + (furnaceOn ? furnaceTotals.high : 0) + laborTotals.high + overheadHigh;
-    document.getElementById('subtotal-box').textContent = rangeText(equipLow, equipHigh);
+    const equipTotal = (condenserOn ? condTotal : 0) + (coilOn ? coilTotal : 0) + (furnaceOn ? furnaceTotal : 0) + laborTotal + overhead;
+    document.getElementById('subtotal-box').textContent = fmtMoney(equipTotal);
 
     const plenumTotal = plenumWidget.getTotal();
-    document.getElementById('price-plenum').textContent = rangeText(plenumTotal, plenumTotal);
-    const drainpanTotals = drainpanDetail.getTotals();
-    document.getElementById('price-drainpan').textContent = rangeText(drainpanTotals.low, drainpanTotals.high);
+    document.getElementById('price-plenum').textContent = fmtMoney(plenumTotal);
+    const drainpanTotal = drainpanDetail.getTotals().total;
+    document.getElementById('price-drainpan').textContent = fmtMoney(drainpanTotal);
 
-    const relocateLow = parseFloat(document.getElementById('low-relocate').value) || 0;
-    const relocateHigh = parseFloat(document.getElementById('high-relocate').value) || 0;
-    const uvLow = parseFloat(document.getElementById('low-uv').value) || 0;
-    const uvHigh = parseFloat(document.getElementById('high-uv').value) || 0;
-    const ductLow = parseFloat(document.getElementById('low-duct').value) || 0;
-    const ductHigh = parseFloat(document.getElementById('high-duct').value) || 0;
+    const relocatePrice = parseFloat(document.getElementById('price-relocate').value) || 0;
+    const uvPrice = parseFloat(document.getElementById('price-uv').value) || 0;
+    const otherPrice = parseFloat(document.getElementById('price-other').value) || 0;
+    const otherName = document.getElementById('name-other').value.trim();
+    const otherDesc = document.getElementById('desc-other').value.trim();
+    const ductPrice = parseFloat(document.getElementById('price-duct').value) || 0;
 
-    let grandLow = equipLow, grandHigh = equipHigh;
-    if (plenumOn) { grandLow += plenumTotal; grandHigh += plenumTotal; }
-    if (drainpanOn) { grandLow += drainpanTotals.low; grandHigh += drainpanTotals.high; }
-    if (relocateOn) { grandLow += relocateLow; grandHigh += relocateHigh; }
-    if (uvOn) { grandLow += uvLow; grandHigh += uvHigh; }
-    if (ductOn) { grandLow += ductLow; grandHigh += ductHigh; }
+    let grandTotal = equipTotal;
+    if (plenumOn) grandTotal += plenumTotal;
+    if (drainpanOn) grandTotal += drainpanTotal;
+    if (relocateOn) grandTotal += relocatePrice;
+    if (uvOn) grandTotal += uvPrice;
+    if (otherOn) grandTotal += otherPrice;
+    if (ductOn) grandTotal += ductPrice;
 
-    document.getElementById('grand-total').textContent = rangeText(grandLow, grandHigh);
+    document.getElementById('grand-total').textContent = fmtMoney(grandTotal);
     document.getElementById('payment-terms').textContent =
-      `Payment Terms: 50% deposit required upon signing (${fmtMoney(grandLow / 2)}); remaining 50% due upon satisfactory project completion.`;
+      `Payment Terms: 50% deposit required upon signing (${fmtMoney(grandTotal / 2)}); remaining 50% due upon satisfactory project completion.`;
+
+    window._saaGetQuote = function () {
+      const tonSelect = document.getElementById('detail-condenser-linked');
+      const tierSelect = document.getElementById('detail-furnace-linked');
+      const lineItems = [];
+      if (condenserOn) lineItems.push({ name: 'Condenser Material + License Fee', desc: tonSelect ? tonnageLabel(tonSelect) + ' condenser' : '', price: condTotal });
+      if (coilOn) lineItems.push({ name: 'Coil Material', desc: 'Zone-adjusted coil replacement', price: coilTotal });
+      if (furnaceOn) lineItems.push({ name: 'Furnace Material', desc: tierSelect ? tierSelect.options[tierSelect.selectedIndex].textContent : '', price: furnaceTotal });
+      lineItems.push({ name: 'Labor & Overhead', desc: doubleLabor ? 'Doubled — condenser and coil both replaced' : '', price: laborTotal + overhead });
+      if (plenumOn) lineItems.push({ name: 'Plenum Change', price: plenumTotal });
+      if (drainpanOn) lineItems.push({ name: 'Secondary Drainpan & Float Switch', price: drainpanTotal });
+      if (relocateOn) lineItems.push({ name: 'Relocate Furnace and Coil', price: relocatePrice });
+      if (uvOn) lineItems.push({ name: 'UV Light Air Purifier', price: uvPrice });
+      if (otherOn && otherPrice > 0) lineItems.push({ name: otherName || 'Additional Item', desc: otherDesc, price: otherPrice });
+      if (ductOn) lineItems.push({ name: 'Duct Cleaning', price: ductPrice });
+      return {
+        jobTitle: 'New Installation',
+        customer: document.getElementById('q-customer').value,
+        address: document.getElementById('q-address').value,
+        date: document.getElementById('q-date').value,
+        lineItems: lineItems,
+        grandTotal: grandTotal,
+      };
+    };
   }
+
+  document.getElementById('print-quote-btn').addEventListener('click', () => {
+    printFormalQuote(window._saaGetQuote());
+  });
 
   document.querySelector('main').addEventListener('input', updateAll);
   document.querySelector('main').addEventListener('change', updateAll);

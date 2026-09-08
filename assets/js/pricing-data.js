@@ -3,36 +3,43 @@
    Ported from System_Replacement_Material_Cost.xlsx.
    Edit the numbers below to update prices across the whole site —
    every worksheet page reads from this one file.
+
+   2026-09-08: collapsed from low/high estimate ranges to a single
+   fixed price per item (previous "low" values kept as the price;
+   the old "high" contingency numbers were dropped). "optional"
+   (Yes/Check/Optional) became a plain included:true/false default —
+   true = counted by default, false = technician toggles it on when
+   the job needs it.
    ============================================================ */
 
 /* ---- Equipment price-by-tonnage tables (source: Replacement!P6:S13, P18:S30) ---- */
 const CONDENSER_TONNAGE = [
-  { tonnage: 1.5, desc: "Single speed condenser", low: 2000, high: 2200 },
-  { tonnage: 2,   desc: "Single speed condenser", low: 2200, high: 2420 },
-  { tonnage: 2.5, desc: "Single speed condenser", low: 2300, high: 2530 },
-  { tonnage: 3,   desc: "Single speed condenser", low: 2500, high: 2750 },
-  { tonnage: 3.5, desc: "Single speed condenser", low: 2800, high: 3080 },
-  { tonnage: 4,   desc: "Single speed condenser", low: 3100, high: 3410 },
-  { tonnage: 5,   desc: "Single speed condenser", low: 3500, high: 3850 },
-  { tonnage: 6,   desc: "Single speed condenser", low: 5000, high: 5500 },
+  { tonnage: 1.5, desc: "Single speed condenser", price: 2000 },
+  { tonnage: 2,   desc: "Single speed condenser", price: 2200 },
+  { tonnage: 2.5, desc: "Single speed condenser", price: 2300 },
+  { tonnage: 3,   desc: "Single speed condenser", price: 2500 },
+  { tonnage: 3.5, desc: "Single speed condenser", price: 2800 },
+  { tonnage: 4,   desc: "Single speed condenser", price: 3100 },
+  { tonnage: 5,   desc: "Single speed condenser", price: 3500 },
+  { tonnage: 6,   desc: "Single speed condenser", price: 5000 },
 ];
 
 const COIL_TONNAGE = [
-  { tonnage: 1.5, desc: "Cased Coil", low: 750,  high: 825 },
-  { tonnage: 2,   desc: "Cased Coil", low: 850,  high: 935 },
-  { tonnage: 2.5, desc: "Cased Coil", low: 1000, high: 1100 },
-  { tonnage: 3,   desc: "Cased Coil", low: 1000, high: 1100 },
-  { tonnage: 3.5, desc: "Cased Coil", low: 1300, high: 1430 },
-  { tonnage: 4,   desc: "Cased Coil", low: 1400, high: 1540 },
-  { tonnage: 5,   desc: "Cased Coil", low: 1500, high: 1650 },
-  { tonnage: 6,   desc: "Cased Coil", low: 1800, high: 1980 },
+  { tonnage: 1.5, desc: "Cased Coil", price: 750 },
+  { tonnage: 2,   desc: "Cased Coil", price: 850 },
+  { tonnage: 2.5, desc: "Cased Coil", price: 1000 },
+  { tonnage: 3,   desc: "Cased Coil", price: 1000 },
+  { tonnage: 3.5, desc: "Cased Coil", price: 1300 },
+  { tonnage: 4,   desc: "Cased Coil", price: 1400 },
+  { tonnage: 5,   desc: "Cased Coil", price: 1500 },
+  { tonnage: 6,   desc: "Cased Coil", price: 1800 },
 ];
 
 /* ---- Furnace tiers (sheet had no source data — starter tiers, edit freely) ---- */
 const FURNACE_TIERS = [
-  { id: "80std", label: "80% AFUE — single-stage (standard)", low: 1500, high: 1800 },
-  { id: "96two", label: "96% AFUE — two-stage",               low: 2400, high: 2800 },
-  { id: "96mod", label: "96% AFUE — variable-speed / modulating", low: 3200, high: 3800 },
+  { id: "80std", label: "80% AFUE — single-stage (standard)", price: 1500 },
+  { id: "96two", label: "96% AFUE — two-stage",               price: 2400 },
+  { id: "96mod", label: "96% AFUE — variable-speed / modulating", price: 3200 },
 ];
 
 /* ---- Installation access / complexity zones (source: New Install!P34:S40) ---- */
@@ -45,76 +52,76 @@ const ZONES = [
 ];
 
 /* ---- Condenser Change worksheet (source: 'Condenser Change' rows 4-21) ----
-   group: MATERIALS | ACCESSORIES   optional: Yes | Check | Optional
-   tonnageLinked: true -> row's low/high is driven by the tonnage picker */
+   group: MATERIALS | ACCESSORIES   included: true (counted by default) | false (technician toggles on)
+   tonnageLinked: true -> row's price is driven by the tonnage picker */
 const CONDENSER_MATERIALS = [
-  { group: "MATERIALS",   category: "Equipment",    item: "3-ton condenser unit (size below)", unit: "EA", qty: 1, low: 2500, high: 2750, spec: "AHRI-matched, 208/230V-1ph — confirm refrigerant type (R-410A vs A2L R-454B)", notes: "New outdoor condensing unit sized to match the existing coil/furnace.", optional: "Yes", tonnageLinked: true },
-  { group: "MATERIALS",   category: "Refrigeration", item: "Refrigerant charge", unit: "OZ", qty: 0.08, low: 200, high: 250, spec: "R-410A or A2L per system, ~8-10 lb typical for 3-ton", notes: "Refrigerant weighed to nameplate spec, adjusted for line length.", optional: "Yes" },
-  { group: "MATERIALS",   category: "Refrigeration", item: "POE refrigerant oil", unit: "OZ", qty: 1, low: 20, high: 22, spec: "POE, viscosity per condenser OEM spec", notes: "Compatible lubricant added per manufacturer spec.", optional: "Yes" },
-  { group: "MATERIALS",   category: "Refrigeration", item: "Line-set flare nuts / couplings", unit: "EA", qty: 0, low: 15, high: 16.5, spec: "Match existing line-set OD (3/8\" & 3/4\" typical 3-ton)", notes: "Reconnects line set to new condenser fittings.", optional: "Check" },
-  { group: "MATERIALS",   category: "Brazing",      item: "Nitrogen (job usage)", unit: "OZ", qty: 1, low: 15, high: 16.5, spec: "Per-job cylinder rental/fill portion", notes: "Purge gas during brazing and pressure test.", optional: "Yes" },
-  { group: "MATERIALS",   category: "Electrical",   item: "Electrical whip", unit: "EA", qty: 0, low: 35, high: 38.5, spec: "Sized to unit MCA/MOCP, typically 10/3 or 8/3 AWG", notes: "Power connection from disconnect to condenser.", optional: "Check" },
-  { group: "MATERIALS",   category: "Electrical",   item: "Disconnect switch", unit: "EA", qty: 0, low: 40, high: 44, spec: "Non-fused pull-out, 60A, weatherproof", notes: "Local electrical disconnect at the condenser.", optional: "Check" },
-  { group: "MATERIALS",   category: "Installation", item: "Condenser pad", unit: "EA", qty: 0, low: 60, high: 66, spec: "Composite, 36\"x36\"x3\" or equivalent", notes: "Level composite/concrete base for the new unit.", optional: "Check" },
-  { group: "MATERIALS",   category: "Installation", item: "Pad shims / leveling material", unit: "Bag", qty: 0, low: 10, high: 11, spec: "Composite shims, assorted thickness", notes: "Fine-levels the pad on uneven ground.", optional: "Check" },
-  { group: "MATERIALS",   category: "Electrical",   item: "Wire nuts / tape / anti-oxidant compound", unit: "Bag", qty: 1, low: 15, high: 16.5, spec: "UL-listed connectors, anti-oxidant paste", notes: "Electrical connection finishing, incl. aluminum whip prep.", optional: "Yes" },
-  { group: "MATERIALS",   category: "Equipment",    item: "Liquid-line filter drier", unit: "EA", qty: 1, low: 50, high: 80, spec: "Sized to line OD and system tonnage", notes: "Replaced any time the system is opened; mandatory after contamination/burnout.", optional: "Yes" },
-  { group: "ACCESSORIES", category: "Accessory",    item: "Hard start kit", unit: "EA", qty: 0, low: 60, high: 66, spec: "Single-phase, sized to compressor RLA", notes: "Reduces compressor inrush current; recommended on long line runs or weak supply.", optional: "Optional" },
-  { group: "ACCESSORIES", category: "Accessory",    item: "Whole-unit surge protector", unit: "EA", qty: 0, low: 80, high: 88, spec: "Line-side, condenser-rated", notes: "Protects condenser electronics from grid/storm surges.", optional: "Optional" },
-  { group: "ACCESSORIES", category: "Accessory",    item: "Low-ambient control kit", unit: "EA", qty: 0, low: 70, high: 77, spec: "Fan-cycling switch or head-pressure control", notes: "Enables reliable operation below manufacturer's rated ambient minimum.", optional: "Optional" },
-  { group: "ACCESSORIES", category: "Accessory",    item: "Compressor crankcase heater", unit: "EA", qty: 0, low: 50, high: 55, spec: "Wrap-style, sized to compressor", notes: "Prevents refrigerant migration into the compressor in cold weather (if not factory-included).", optional: "Optional" },
-  { group: "ACCESSORIES", category: "Accessory",    item: "Sound blanket / compressor cover", unit: "EA", qty: 0, low: 90, high: 99, spec: "Universal fit, weatherproof", notes: "Reduces operating noise — common customer request.", optional: "Optional" },
-  { group: "ACCESSORIES", category: "Accessory",    item: "Condenser security cage", unit: "EA", qty: 0, low: 150, high: 165, spec: "Powder-coated steel, ground-anchored", notes: "Theft deterrent for the outdoor unit.", optional: "Optional" },
-  { group: "ACCESSORIES", category: "Accessory",    item: "Line-set cover / channel kit", unit: "EA", qty: 0, low: 45, high: 49.5, spec: "10 ft kit, paintable PVC", notes: "Cosmetic cover for exposed exterior line set.", optional: "Check" },
+  { group: "MATERIALS",   category: "Equipment",    item: "3-ton condenser unit (size below)", unit: "EA", qty: 1, price: 2500, spec: "AHRI-matched, 208/230V-1ph — confirm refrigerant type (R-410A vs A2L R-454B)", notes: "New outdoor condensing unit sized to match the existing coil/furnace.", included: true, tonnageLinked: true },
+  { group: "MATERIALS",   category: "Refrigeration", item: "Refrigerant charge", unit: "OZ", qty: 0.08, price: 200, spec: "R-410A or A2L per system, ~8-10 lb typical for 3-ton", notes: "Refrigerant weighed to nameplate spec, adjusted for line length.", included: true },
+  { group: "MATERIALS",   category: "Refrigeration", item: "POE refrigerant oil", unit: "OZ", qty: 1, price: 20, spec: "POE, viscosity per condenser OEM spec", notes: "Compatible lubricant added per manufacturer spec.", included: true },
+  { group: "MATERIALS",   category: "Refrigeration", item: "Line-set flare nuts / couplings", unit: "EA", qty: 0, price: 15, spec: "Match existing line-set OD (3/8\" & 3/4\" typical 3-ton)", notes: "Reconnects line set to new condenser fittings.", included: false },
+  { group: "MATERIALS",   category: "Brazing",      item: "Nitrogen (job usage)", unit: "OZ", qty: 1, price: 15, spec: "Per-job cylinder rental/fill portion", notes: "Purge gas during brazing and pressure test.", included: true },
+  { group: "MATERIALS",   category: "Electrical",   item: "Electrical whip", unit: "EA", qty: 0, price: 35, spec: "Sized to unit MCA/MOCP, typically 10/3 or 8/3 AWG", notes: "Power connection from disconnect to condenser.", included: false },
+  { group: "MATERIALS",   category: "Electrical",   item: "Disconnect switch", unit: "EA", qty: 0, price: 40, spec: "Non-fused pull-out, 60A, weatherproof", notes: "Local electrical disconnect at the condenser.", included: false },
+  { group: "MATERIALS",   category: "Installation", item: "Condenser pad", unit: "EA", qty: 0, price: 60, spec: "Composite, 36\"x36\"x3\" or equivalent", notes: "Level composite/concrete base for the new unit.", included: false },
+  { group: "MATERIALS",   category: "Installation", item: "Pad shims / leveling material", unit: "Bag", qty: 0, price: 10, spec: "Composite shims, assorted thickness", notes: "Fine-levels the pad on uneven ground.", included: false },
+  { group: "MATERIALS",   category: "Electrical",   item: "Wire nuts / tape / anti-oxidant compound", unit: "Bag", qty: 1, price: 15, spec: "UL-listed connectors, anti-oxidant paste", notes: "Electrical connection finishing, incl. aluminum whip prep.", included: true },
+  { group: "MATERIALS",   category: "Equipment",    item: "Liquid-line filter drier", unit: "EA", qty: 1, price: 50, spec: "Sized to line OD and system tonnage", notes: "Replaced any time the system is opened; mandatory after contamination/burnout.", included: true },
+  { group: "ACCESSORIES", category: "Accessory",    item: "Hard start kit", unit: "EA", qty: 0, price: 60, spec: "Single-phase, sized to compressor RLA", notes: "Reduces compressor inrush current; recommended on long line runs or weak supply.", included: false },
+  { group: "ACCESSORIES", category: "Accessory",    item: "Whole-unit surge protector", unit: "EA", qty: 0, price: 80, spec: "Line-side, condenser-rated", notes: "Protects condenser electronics from grid/storm surges.", included: false },
+  { group: "ACCESSORIES", category: "Accessory",    item: "Low-ambient control kit", unit: "EA", qty: 0, price: 70, spec: "Fan-cycling switch or head-pressure control", notes: "Enables reliable operation below manufacturer's rated ambient minimum.", included: false },
+  { group: "ACCESSORIES", category: "Accessory",    item: "Compressor crankcase heater", unit: "EA", qty: 0, price: 50, spec: "Wrap-style, sized to compressor", notes: "Prevents refrigerant migration into the compressor in cold weather (if not factory-included).", included: false },
+  { group: "ACCESSORIES", category: "Accessory",    item: "Sound blanket / compressor cover", unit: "EA", qty: 0, price: 90, spec: "Universal fit, weatherproof", notes: "Reduces operating noise — common customer request.", included: false },
+  { group: "ACCESSORIES", category: "Accessory",    item: "Condenser security cage", unit: "EA", qty: 0, price: 150, spec: "Powder-coated steel, ground-anchored", notes: "Theft deterrent for the outdoor unit.", included: false },
+  { group: "ACCESSORIES", category: "Accessory",    item: "Line-set cover / channel kit", unit: "EA", qty: 0, price: 45, spec: "10 ft kit, paintable PVC", notes: "Cosmetic cover for exposed exterior line set.", included: false },
 ];
 
 /* ---- Coil Change worksheet (source: 'Coil Change' rows 2-33) ---- */
 const COIL_MATERIALS = [
-  { group: "MATERIALS", category: "Refrigeration",   item: "Evaporator coil – matched replacement (size below)", unit: "EA", qty: 1, low: 1000, high: 1100, notes: "OEM/matched coil; size and refrigerant dependent", optional: "Yes", tonnageLinked: true },
-  { group: "MATERIALS", category: "Refrigeration",   item: "TXV / metering device", unit: "EA", qty: 0, low: 80, high: 200, notes: "If not supplied with coil or replacement is required", optional: "Check" },
-  { group: "MATERIALS", category: "Refrigeration",   item: "Filter-drier", unit: "EA", qty: 0, low: 50, high: 80, notes: "Replace when refrigeration circuit is opened", optional: "Yes" },
-  { group: "MATERIALS", category: "Refrigeration",   item: "Refrigerant R-410A ($200/25lb allowance)", unit: "OZ", qty: 0.08, low: 200, high: 250, spec: "EPA-approved, dual-port, R-410A/A2L rated", notes: "Allowance only; use actual refrigerant and charge requirement", optional: "Yes" },
-  { group: "MATERIALS", category: "Refrigeration",   item: "Nitrogen / pressure-test allowance", unit: "LOT", qty: 1, low: 15, high: 30, notes: "Purging and pressure testing", optional: "Yes" },
-  { group: "MATERIALS", category: "Refrigeration",   item: "Copper tube 3/8\"", unit: "FT", qty: 0.25, low: 20, high: 50, notes: "Couplings, elbows and brazing material", optional: "Yes" },
-  { group: "MATERIALS", category: "Refrigeration",   item: "Copper tube 1\"", unit: "FT", qty: 0.25, low: 40, high: 80, optional: "Yes" },
-  { group: "MATERIALS", category: "Refrigeration",   item: "Copper fittings", unit: "Bag", qty: 1, low: 30, high: 50, notes: "Couplings, elbows and brazing material", optional: "Yes" },
-  { group: "MATERIALS", category: "Refrigeration",   item: "Copper brazing alloy", unit: "LOT", qty: 1, low: 5, high: 8, notes: "Couplings, elbows and brazing material", optional: "Yes" },
-  { group: "MATERIALS", category: "Refrigeration",   item: "Refrigerant pipe insulation", unit: "8FT", qty: 2, low: 24, high: 36, notes: "Replace disturbed insulation", optional: "Yes" },
-  { group: "MATERIALS", category: "Air Distribution", item: "Duct mastic / approved sealant", unit: "EA", qty: 1, low: 15, high: 35, notes: "Seal disturbed duct joints", optional: "Yes" },
-  { group: "MATERIALS", category: "Air Distribution", item: "UL-181 foil tape", unit: "Roll", qty: 0.5, low: 15, high: 30, notes: "Approved duct sealing tape", optional: "Yes" },
-  { group: "MATERIALS", category: "Air Distribution", item: "Zip ties for duct branches", unit: "Pack", qty: 0.25, low: 50, high: 80, notes: "2ft to 3ft long zip ties for ducting", optional: "Check" },
-  { group: "MATERIALS", category: "Air Distribution", item: "Air filter", unit: "EA", qty: 1, low: 40, high: 60, optional: "Yes" },
-  { group: "MATERIALS", category: "Drainage",         item: "PVC tube 3/4\", 8ft", unit: "EA", qty: 1, low: 10, high: 15, notes: "Typically PVC/CPVC; verify existing installation", optional: "Yes" },
-  { group: "MATERIALS", category: "Drainage",         item: "PVC fitting 3/4\" elbow", unit: "Bag", qty: 1, low: 6, high: 10, optional: "Yes" },
-  { group: "MATERIALS", category: "Drainage",         item: "PVC fitting 3/4\" straight", unit: "Bag", qty: 1, low: 6, high: 10, optional: "Yes" },
-  { group: "MATERIALS", category: "Drainage",         item: "P-trap / condensate trap", unit: "EA", qty: 1, low: 15, high: 40, notes: "Configuration dependent", optional: "Yes" },
-  { group: "MATERIALS", category: "Drainage",         item: "Cleanout / vent fittings", unit: "LOT", qty: 1, low: 10, high: 30, notes: "For serviceability and drain configuration", optional: "Yes" },
-  { group: "MATERIALS", category: "Safety",           item: "Primary drain float/overflow switch", unit: "EA", qty: 1, low: 25, high: 50, notes: "Safety shutoff; application dependent", optional: "Check" },
-  { group: "MATERIALS", category: "Equipment Support", item: "Structural support / hanging hardware", unit: "LOT", qty: 1, low: 75, high: 150, notes: "Angles, rods, brackets, anchors", optional: "Check" },
-  { group: "MATERIALS", category: "Equipment Support", item: "Vibration isolation pads", unit: "Set", qty: 0, low: 20, high: 75, notes: "Where applicable", optional: "Check" },
-  { group: "MATERIALS", category: "Electrical",       item: "Low-voltage wire/connectors", unit: "LOT", qty: 1, low: 15, high: 50, notes: "For safety switches/controls", optional: "Yes" },
-  { group: "MATERIALS", category: "Electrical",       item: "Wire nuts", unit: "Bag", qty: 1, low: 10, high: 30, notes: "Miscellaneous electrical material for furnace/EEV/switch connections", optional: "Yes" },
-  { group: "MATERIALS", category: "Electrical",       item: "Electric conduit", unit: "Bag", qty: 0, low: 10, high: 25, optional: "Check" },
-  { group: "MATERIALS", category: "Electrical",       item: "Wire cover", unit: "Bag", qty: 0, low: 10, high: 15, optional: "Check" },
-  { group: "MATERIALS", category: "Electrical",       item: "Conduit fitting with strain relief", unit: "EA", qty: 1, low: 1, high: 3, optional: "Yes" },
-  { group: "MATERIALS", category: "Electrical",       item: "Wire terminals", unit: "EA", qty: 4, low: 1, high: 3, optional: "Yes" },
-  { group: "MATERIALS", category: "Cleaning",         item: "Cleaning/sanitizing materials", unit: "LOT", qty: 1, low: 15, high: 50, notes: "Coil/pan/drain area", optional: "Yes" },
-  { group: "MATERIALS", category: "Permits",          item: "Permit/inspection allowance", unit: "LOT", qty: 1, low: 50, high: 250, notes: "Local jurisdiction dependent", optional: "Check" },
-  { group: "MATERIALS", category: "Disposable",       item: "Old equipment disposal fee / plastic packaging recycle fee", unit: "EA", qty: 1, low: 150, high: 250, optional: "Check" },
-  { group: "MATERIALS", category: "Cleaning",         item: "Bucket", unit: "EA", qty: 1, low: 15, high: 20, optional: "Yes" },
+  { group: "MATERIALS", category: "Refrigeration",   item: "Evaporator coil – matched replacement (size below)", unit: "EA", qty: 1, price: 1000, notes: "OEM/matched coil; size and refrigerant dependent", included: true, tonnageLinked: true },
+  { group: "MATERIALS", category: "Refrigeration",   item: "TXV / metering device", unit: "EA", qty: 0, price: 80, notes: "If not supplied with coil or replacement is required", included: false },
+  { group: "MATERIALS", category: "Refrigeration",   item: "Filter-drier", unit: "EA", qty: 0, price: 50, notes: "Replace when refrigeration circuit is opened", included: true },
+  { group: "MATERIALS", category: "Refrigeration",   item: "Refrigerant R-410A ($200/25lb allowance)", unit: "OZ", qty: 0.08, price: 200, spec: "EPA-approved, dual-port, R-410A/A2L rated", notes: "Allowance only; use actual refrigerant and charge requirement", included: true },
+  { group: "MATERIALS", category: "Refrigeration",   item: "Nitrogen / pressure-test allowance", unit: "LOT", qty: 1, price: 15, notes: "Purging and pressure testing", included: true },
+  { group: "MATERIALS", category: "Refrigeration",   item: "Copper tube 3/8\"", unit: "FT", qty: 0.25, price: 20, notes: "Couplings, elbows and brazing material", included: true },
+  { group: "MATERIALS", category: "Refrigeration",   item: "Copper tube 1\"", unit: "FT", qty: 0.25, price: 40, included: true },
+  { group: "MATERIALS", category: "Refrigeration",   item: "Copper fittings", unit: "Bag", qty: 1, price: 30, notes: "Couplings, elbows and brazing material", included: true },
+  { group: "MATERIALS", category: "Refrigeration",   item: "Copper brazing alloy", unit: "LOT", qty: 1, price: 5, notes: "Couplings, elbows and brazing material", included: true },
+  { group: "MATERIALS", category: "Refrigeration",   item: "Refrigerant pipe insulation", unit: "8FT", qty: 2, price: 24, notes: "Replace disturbed insulation", included: true },
+  { group: "MATERIALS", category: "Air Distribution", item: "Duct mastic / approved sealant", unit: "EA", qty: 1, price: 15, notes: "Seal disturbed duct joints", included: true },
+  { group: "MATERIALS", category: "Air Distribution", item: "UL-181 foil tape", unit: "Roll", qty: 0.5, price: 15, notes: "Approved duct sealing tape", included: true },
+  { group: "MATERIALS", category: "Air Distribution", item: "Zip ties for duct branches", unit: "Pack", qty: 0.25, price: 50, notes: "2ft to 3ft long zip ties for ducting", included: false },
+  { group: "MATERIALS", category: "Air Distribution", item: "Air filter", unit: "EA", qty: 1, price: 40, included: true },
+  { group: "MATERIALS", category: "Drainage",         item: "PVC tube 3/4\", 8ft", unit: "EA", qty: 1, price: 10, notes: "Typically PVC/CPVC; verify existing installation", included: true },
+  { group: "MATERIALS", category: "Drainage",         item: "PVC fitting 3/4\" elbow", unit: "Bag", qty: 1, price: 6, included: true },
+  { group: "MATERIALS", category: "Drainage",         item: "PVC fitting 3/4\" straight", unit: "Bag", qty: 1, price: 6, included: true },
+  { group: "MATERIALS", category: "Drainage",         item: "P-trap / condensate trap", unit: "EA", qty: 1, price: 15, notes: "Configuration dependent", included: true },
+  { group: "MATERIALS", category: "Drainage",         item: "Cleanout / vent fittings", unit: "LOT", qty: 1, price: 10, notes: "For serviceability and drain configuration", included: true },
+  { group: "MATERIALS", category: "Safety",           item: "Primary drain float/overflow switch", unit: "EA", qty: 1, price: 25, notes: "Safety shutoff; application dependent", included: false },
+  { group: "MATERIALS", category: "Equipment Support", item: "Structural support / hanging hardware", unit: "LOT", qty: 1, price: 75, notes: "Angles, rods, brackets, anchors", included: false },
+  { group: "MATERIALS", category: "Equipment Support", item: "Vibration isolation pads", unit: "Set", qty: 0, price: 20, notes: "Where applicable", included: false },
+  { group: "MATERIALS", category: "Electrical",       item: "Low-voltage wire/connectors", unit: "LOT", qty: 1, price: 15, notes: "For safety switches/controls", included: true },
+  { group: "MATERIALS", category: "Electrical",       item: "Wire nuts", unit: "Bag", qty: 1, price: 10, notes: "Miscellaneous electrical material for furnace/EEV/switch connections", included: true },
+  { group: "MATERIALS", category: "Electrical",       item: "Electric conduit", unit: "Bag", qty: 0, price: 10, included: false },
+  { group: "MATERIALS", category: "Electrical",       item: "Wire cover", unit: "Bag", qty: 0, price: 10, included: false },
+  { group: "MATERIALS", category: "Electrical",       item: "Conduit fitting with strain relief", unit: "EA", qty: 1, price: 1, included: true },
+  { group: "MATERIALS", category: "Electrical",       item: "Wire terminals", unit: "EA", qty: 4, price: 1, included: true },
+  { group: "MATERIALS", category: "Cleaning",         item: "Cleaning/sanitizing materials", unit: "LOT", qty: 1, price: 15, notes: "Coil/pan/drain area", included: true },
+  { group: "MATERIALS", category: "Permits",          item: "Permit/inspection allowance", unit: "LOT", qty: 1, price: 50, notes: "Local jurisdiction dependent", included: false },
+  { group: "MATERIALS", category: "Disposable",       item: "Old equipment disposal fee / plastic packaging recycle fee", unit: "EA", qty: 1, price: 150, included: false },
+  { group: "MATERIALS", category: "Cleaning",         item: "Bucket", unit: "EA", qty: 1, price: 15, included: true },
 ];
 
 /* ---- Furnace Change worksheet — starter list (no source sheet data; edit freely) ---- */
 const FURNACE_MATERIALS = [
-  { group: "MATERIALS", category: "Equipment",  item: "Furnace unit (tier below)", unit: "EA", qty: 1, low: 1500, high: 1800, notes: "Sized to duct system and BTU load", optional: "Yes", tierLinked: true },
-  { group: "MATERIALS", category: "Venting",    item: "Flue / vent pipe extension", unit: "LOT", qty: 1, low: 60, high: 150, notes: "Category I or PVC intake/exhaust depending on tier", optional: "Check" },
-  { group: "MATERIALS", category: "Gas",        item: "Gas line / flex connector", unit: "EA", qty: 1, low: 35, high: 75, notes: "Sized to furnace BTU input", optional: "Yes" },
-  { group: "MATERIALS", category: "Electrical", item: "Electrical whip / dedicated circuit", unit: "EA", qty: 0, low: 35, high: 60, optional: "Check" },
-  { group: "MATERIALS", category: "Drainage",   item: "Condensate drain / PVC (high-efficiency only)", unit: "LOT", qty: 0, low: 20, high: 45, notes: "Required for 90%+ AFUE units", optional: "Check" },
-  { group: "MATERIALS", category: "Air",        item: "Air filter", unit: "EA", qty: 1, low: 20, high: 35, optional: "Yes" },
-  { group: "MATERIALS", category: "Permits",    item: "Permit/inspection allowance", unit: "LOT", qty: 1, low: 50, high: 200, optional: "Check" },
-  { group: "MATERIALS", category: "Disposable", item: "Old equipment disposal fee", unit: "EA", qty: 1, low: 75, high: 125, optional: "Check" },
-  { group: "MATERIALS", category: "Electrical", item: "Wire nuts / misc electrical", unit: "Bag", qty: 1, low: 10, high: 20, optional: "Yes" },
+  { group: "MATERIALS", category: "Equipment",  item: "Furnace unit (tier below)", unit: "EA", qty: 1, price: 1500, notes: "Sized to duct system and BTU load", included: true, tierLinked: true },
+  { group: "MATERIALS", category: "Venting",    item: "Flue / vent pipe extension", unit: "LOT", qty: 1, price: 60, notes: "Category I or PVC intake/exhaust depending on tier", included: false },
+  { group: "MATERIALS", category: "Gas",        item: "Gas line / flex connector", unit: "EA", qty: 1, price: 35, notes: "Sized to furnace BTU input", included: true },
+  { group: "MATERIALS", category: "Electrical", item: "Electrical whip / dedicated circuit", unit: "EA", qty: 0, price: 35, included: false },
+  { group: "MATERIALS", category: "Drainage",   item: "Condensate drain / PVC (high-efficiency only)", unit: "LOT", qty: 0, price: 20, notes: "Required for 90%+ AFUE units", included: false },
+  { group: "MATERIALS", category: "Air",        item: "Air filter", unit: "EA", qty: 1, price: 20, included: true },
+  { group: "MATERIALS", category: "Permits",    item: "Permit/inspection allowance", unit: "LOT", qty: 1, price: 50, included: false },
+  { group: "MATERIALS", category: "Disposable", item: "Old equipment disposal fee", unit: "EA", qty: 1, price: 75, included: false },
+  { group: "MATERIALS", category: "Electrical", item: "Wire nuts / misc electrical", unit: "Bag", qty: 1, price: 10, included: true },
 ];
 
 /* ---- Plenum Change worksheet (source: 'Plenum Change' rows 3-31) ---- */
@@ -147,14 +154,14 @@ const DUCT_COLLARS = [
 
 /* ---- Drainline Maintenance: secondary drainpan installation (source rows 3-11) ---- */
 const DRAINPAN_MATERIALS = [
-  { category: "Drainage", item: "Secondary/emergency drain pipe & fittings (male threaded)", unit: "LOT", qty: 1, low: 10, high: 15, spec: "3/4 in. PVC Sch 40 90-deg fitting (10-pack), male threaded", notes: "If required by installation" },
-  { category: "Drainage", item: "Secondary/emergency drain pipe & fittings (female threaded)", unit: "LOT", qty: 1, low: 10, high: 15, spec: "3/4 in. PVC Sch 40 90-deg fitting (10-pack), female threaded" },
-  { category: "Drainage", item: "Secondary/emergency drain pan", unit: "EA", qty: 1, low: 75, high: 200, spec: "Drip pan, 27\" x 48\"", notes: "Size to equipment footprint" },
-  { category: "Safety",   item: "Secondary pan float switch", unit: "EA", qty: 1, low: 25, high: 50, spec: "3/4\" float switch, L-shape HVAC safety switch", notes: "Overflow protection" },
-  { category: "Safety",   item: "Additional drain-line safety switch", unit: "EA", qty: 0, low: 25, high: 50, notes: "Optional additional protection" },
-  { category: "Equipment Support", item: "Base/support platform", unit: "EA", qty: 1, low: 75, high: 150, notes: "Wood/metal/composite support as required" },
+  { category: "Drainage", item: "Secondary/emergency drain pipe & fittings (male threaded)", unit: "LOT", qty: 1, price: 10, spec: "3/4 in. PVC Sch 40 90-deg fitting (10-pack), male threaded", notes: "If required by installation", included: true },
+  { category: "Drainage", item: "Secondary/emergency drain pipe & fittings (female threaded)", unit: "LOT", qty: 1, price: 10, spec: "3/4 in. PVC Sch 40 90-deg fitting (10-pack), female threaded", included: true },
+  { category: "Drainage", item: "Secondary/emergency drain pan", unit: "EA", qty: 1, price: 75, spec: "Drip pan, 27\" x 48\"", notes: "Size to equipment footprint", included: true },
+  { category: "Safety",   item: "Secondary pan float switch", unit: "EA", qty: 1, price: 25, spec: "3/4\" float switch, L-shape HVAC safety switch", notes: "Overflow protection", included: true },
+  { category: "Safety",   item: "Additional drain-line safety switch", unit: "EA", qty: 0, price: 25, notes: "Optional additional protection", included: false },
+  { category: "Equipment Support", item: "Base/support platform", unit: "EA", qty: 1, price: 75, notes: "Wood/metal/composite support as required", included: true },
 ];
-const DRAINPAN_LABOR = { techs: 1, hours: 2, rateLow: 30, rateHigh: 50 };
+const DRAINPAN_LABOR = { techs: 1, hours: 2, rate: 30 };
 
 /* ---- Drainline Maintenance: routine cleaning service (source rows 21-34, single price col) ---- */
 const DRAIN_MAINT_ITEMS = [
@@ -176,19 +183,19 @@ const DRAIN_MAINT_ITEMS = [
 
 /* ---- Labor (source: 'Labor' rows 3-5) ---- */
 const LABOR_ROWS = [
-  { role: "Transportation",  costHr: 50, hoursLow: 4, hoursHigh: 8 },
-  { role: "1 Technician",    costHr: 50, hoursLow: 4, hoursHigh: 8 },
-  { role: "1 Lead",          costHr: 80, hoursLow: 4, hoursHigh: 8 },
+  { role: "Transportation",  costHr: 50, hours: 4 },
+  { role: "1 Technician",    costHr: 50, hours: 4 },
+  { role: "1 Lead",          costHr: 80, hours: 4 },
 ];
 
 /* ---- Duct cleaning (source: New Install!B22) ---- */
-const DUCT_CLEANING_ITEM = { item: "Duct cleaning (whole-system)", low: 500, high: 750 };
+const DUCT_CLEANING_ITEM = { item: "Duct cleaning (whole-system)", price: 500 };
 
 /* ---- UV light air purifier add-on (source: New Install!B19) ---- */
-const UV_LIGHT_ITEM = { item: "UV light air purifier — supply and install", low: 399, high: 499 };
+const UV_LIGHT_ITEM = { item: "UV light air purifier — supply and install", price: 399 };
 
 /* ---- Relocate furnace/coil add-on (source: New Install!B18) ---- */
-const RELOCATE_ITEM = { item: "Relocate furnace and coil — base support prep", low: 500, high: 750 };
+const RELOCATE_ITEM = { item: "Relocate furnace and coil — base support prep", price: 500 };
 
 /* ---- Maintenance plan tiers — starter template (no source sheet data; edit freely) ---- */
 const MAINTENANCE_PLANS = [

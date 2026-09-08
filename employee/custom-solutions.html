@@ -43,6 +43,7 @@
         <option value="tool-list.html">Tool List</option>
         <option value="receipts.html">Receipts</option>
       </select>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Employee</a>
       <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
       <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
     </div>
@@ -64,7 +65,7 @@
 <script src="../assets/js/worksheet.js"></script>
 <script>
   renderLineItemTable(document.getElementById('custom-table'), [
-    { group: "MATERIALS", category: "", item: "New item — edit me", unit: "EA", qty: 1, low: 0, high: 0 }
+    { group: "MATERIALS", category: "", item: "New item — edit me", unit: "EA", qty: 1, price: 0, included: true }
   ], { showGroupSubtotals: false, editableText: true, allowAddRow: true });
 </script>
 </body>

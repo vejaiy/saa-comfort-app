@@ -43,6 +43,7 @@
         <option value="tool-list.html">Tool List</option>
         <option value="receipts.html">Receipts</option>
       </select>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Employee</a>
       <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
       <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
     </div>
@@ -60,7 +61,7 @@
 <script src="../assets/js/worksheet.js"></script>
 <script>
   renderLineItemTable(document.getElementById('duct-table'), [
-    { group: "MATERIALS", category: "Service", item: DUCT_CLEANING_ITEM.item, unit: "System", qty: 1, low: DUCT_CLEANING_ITEM.low, high: DUCT_CLEANING_ITEM.high }
+    { group: "MATERIALS", category: "Service", item: DUCT_CLEANING_ITEM.item, unit: "System", qty: 1, price: DUCT_CLEANING_ITEM.price, included: true }
   ], { showGroupSubtotals: false });
 </script>
 </body>

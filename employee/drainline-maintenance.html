@@ -43,6 +43,7 @@
         <option value="tool-list.html">Tool List</option>
         <option value="receipts.html">Receipts</option>
       </select>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Employee</a>
       <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
       <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
     </div>
@@ -73,7 +74,7 @@
 <script>
   const drainpanRows = DRAINPAN_MATERIALS.concat([
     { category: "Labor", item: "Installation labor (1 technician)", unit: "HR",
-      qty: DRAINPAN_LABOR.techs * DRAINPAN_LABOR.hours, low: DRAINPAN_LABOR.rateLow, high: DRAINPAN_LABOR.rateHigh }
+      qty: DRAINPAN_LABOR.techs * DRAINPAN_LABOR.hours, price: DRAINPAN_LABOR.rate, included: true }
   ]);
   renderLineItemTable(document.getElementById('drainpan-table'), drainpanRows, { showGroupSubtotals: false });
   renderFlatPriceTable(document.getElementById('drainmaint-table'), DRAIN_MAINT_ITEMS);
