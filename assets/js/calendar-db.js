@@ -1,0 +1,238 @@
+/* ============================================================
+   SAA Comfort Air LLC — Dispatch Calendar data layer
+   Talks to: technicians, appointment_types, jobs, customers,
+   equipment, appointments, follow_ups (see database/README.md).
+   Requires auth.js to have already created the shared _saaClient.
+
+   Design note: rather than relying on supabase-js nested-select
+   joins (harder to unit-test and to mock), every function here
+   fetches flat rows and stitches them together in JS by id — the
+   same pattern quotes-db.js already uses for Save/Retrieve Quote.
+   ============================================================ */
+
+async function saaCalFetchTechnicians() {
+  const { data, error } = await _saaClient
+    .from("technicians")
+    .select("id,name,active")
+    .eq("active", true)
+    .order("name");
+  if (error) throw error;
+  return data || [];
+}
+
+async function saaCalFetchAppointmentTypes() {
+  const { data, error } = await _saaClient
+    .from("appointment_types")
+    .select("*")
+    .order("sort_order");
+  if (error) throw error;
+  return data || [];
+}
+
+function _saaCalDayBounds(dateStr) {
+  const start = `${dateStr}T00:00:00`;
+  const next = new Date(`${dateStr}T00:00:00`);
+  next.setDate(next.getDate() + 1);
+  const y = next.getFullYear(), m = String(next.getMonth() + 1).padStart(2, "0"), d = String(next.getDate()).padStart(2, "0");
+  return { start, end: `${y}-${m}-${d}T00:00:00` };
+}
+
+/**
+ * Loads everything the day-dispatch view needs for one calendar date:
+ * active technicians, that day's scheduled appointments, and the
+ * unscheduled-jobs queue (appointments with no start_datetime yet),
+ * each appointment hydrated with its job + customer + technician.
+ */
+async function saaCalFetchDayData(dateStr) {
+  const { start, end } = _saaCalDayBounds(dateStr);
+
+  const [{ data: scheduled, error: e1 }, { data: unscheduled, error: e2 }, technicians] = await Promise.all([
+    _saaClient.from("appointments").select("*").gte("start_datetime", start).lt("start_datetime", end),
+    _saaClient.from("appointments").select("*").is("start_datetime", null),
+    saaCalFetchTechnicians(),
+  ]);
+  if (e1) throw e1;
+  if (e2) throw e2;
+
+  const allAppts = [].concat(scheduled || [], unscheduled || []);
+  const jobIds = [...new Set(allAppts.map((a) => a.job_id).filter(Boolean))];
+  const { data: jobs, error: e4 } = jobIds.length
+    ? await _saaClient.from("jobs").select("*").in("id", jobIds)
+    : { data: [], error: null };
+  if (e4) throw e4;
+
+  const custIds = [...new Set((jobs || []).map((j) => j.customer_id).filter(Boolean))];
+  const { data: customers, error: e5 } = custIds.length
+    ? await _saaClient.from("customers").select("id,first_name,last_name,phone,billing_address").in("id", custIds)
+    : { data: [], error: null };
+  if (e5) throw e5;
+
+  const jobsById = Object.fromEntries((jobs || []).map((j) => [j.id, j]));
+  const custById = Object.fromEntries((customers || []).map((c) => [c.id, c]));
+  const techById = Object.fromEntries((technicians || []).map((t) => [t.id, t]));
+
+  function hydrate(a) {
+    const job = jobsById[a.job_id] || {};
+    const customer = custById[job.customer_id] || {};
+    return Object.assign({}, a, { job, customer, technician: techById[a.technician_id] || null });
+  }
+
+  return {
+    technicians: technicians || [],
+    scheduled: (scheduled || []).map(hydrate),
+    unscheduled: (unscheduled || []).map(hydrate),
+  };
+}
+
+/**
+ * Fast customer search for the New Service popup. Matches any one of
+ * first name / last name / phone (partial, case-insensitive) and
+ * attaches each match's most recent job + most recent equipment row
+ * so the result preview can show "Last Service / Equipment / Warranty"
+ * without a second round trip per click.
+ */
+async function saaCalSearchCustomers(query) {
+  const q = (query || "").trim().replace(/[%,()]/g, "");
+  if (!q) return [];
+
+  const { data: customers, error } = await _saaClient
+    .from("customers")
+    .select("id,first_name,last_name,phone,billing_address")
+    .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,phone.ilike.%${q}%`)
+    .limit(6);
+  if (error) throw error;
+  if (!customers || !customers.length) return [];
+
+  const ids = customers.map((c) => c.id);
+  const [{ data: jobs, error: e1 }, { data: equip, error: e2 }] = await Promise.all([
+    _saaClient.from("jobs").select("id,customer_id,title,job_type,completed_date,created_at").in("customer_id", ids).order("created_at", { ascending: false }),
+    _saaClient.from("equipment").select("*").in("customer_id", ids).order("created_at", { ascending: false }),
+  ]);
+  if (e1) throw e1;
+  if (e2) throw e2;
+
+  const lastJobByCust = {};
+  (jobs || []).forEach((j) => { if (!lastJobByCust[j.customer_id]) lastJobByCust[j.customer_id] = j; });
+  const equipByCust = {};
+  (equip || []).forEach((e) => { if (!equipByCust[e.customer_id]) equipByCust[e.customer_id] = e; });
+
+  return customers.map((c) => ({ customer: c, lastJob: lastJobByCust[c.id] || null, equipment: equipByCust[c.id] || null }));
+}
+
+/**
+ * New Service popup save: creates the job and its first appointment
+ * together. technicianId/startDatetime/endDatetime may be null (the
+ * job lands in the Unscheduled queue).
+ */
+async function saaCalCreateJobWithAppointment(payload) {
+  try {
+    const { data: job, error: jErr } = await _saaClient
+      .from("jobs")
+      .insert({
+        customer_id: payload.customerId,
+        job_type: payload.appointmentTypeKey,
+        status: payload.technicianId && payload.startDatetime ? "scheduled" : "lead",
+        title: payload.title || "",
+        priority: payload.priority || "normal",
+        job_address: payload.jobAddress || null,
+        assigned_technician_id: payload.technicianId || null,
+        notes: payload.notes || null,
+      })
+      .select("id")
+      .single();
+    if (jErr) throw jErr;
+
+    const { data: appt, error: aErr } = await _saaClient
+      .from("appointments")
+      .insert({
+        job_id: job.id,
+        technician_id: payload.technicianId || null,
+        start_datetime: payload.startDatetime || null,
+        end_datetime: payload.endDatetime || null,
+        status: "scheduled",
+      })
+      .select("id")
+      .single();
+    if (aErr) throw aErr;
+
+    return { ok: true, jobId: job.id, appointmentId: appt.id };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+/** Drag-and-drop reschedule: change technician, time, or both in one call. */
+async function saaCalUpdateAppointmentSchedule({ appointmentId, jobId, technicianId, startDatetime, endDatetime }) {
+  try {
+    const { error: aErr } = await _saaClient
+      .from("appointments")
+      .update({
+        technician_id: technicianId || null,
+        start_datetime: startDatetime || null,
+        end_datetime: endDatetime || null,
+      })
+      .eq("id", appointmentId);
+    if (aErr) throw aErr;
+
+    if (jobId) {
+      const { error: jErr } = await _saaClient
+        .from("jobs")
+        .update({ assigned_technician_id: technicianId || null, status: "scheduled" })
+        .eq("id", jobId);
+      if (jErr) throw jErr;
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+/** Status change from the Job Details drawer (drives the appointment card color). */
+async function saaCalUpdateAppointmentStatus({ appointmentId, jobId, status }) {
+  try {
+    const { error: aErr } = await _saaClient.from("appointments").update({ status }).eq("id", appointmentId);
+    if (aErr) throw aErr;
+
+    if (jobId && (status === "completed" || status === "cancelled")) {
+      const { error: jErr } = await _saaClient
+        .from("jobs")
+        .update({ status, completed_date: status === "completed" ? new Date().toISOString().slice(0, 10) : null })
+        .eq("id", jobId);
+      if (jErr) throw jErr;
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+/** Most recent equipment row on file for a customer (Job Details drawer). */
+async function saaCalFetchLatestEquipment(customerId) {
+  const { data, error } = await _saaClient
+    .from("equipment")
+    .select("*")
+    .eq("customer_id", customerId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  return (data && data[0]) || null;
+}
+
+/** The "extremely easy" post-job follow-up scheduling flow. */
+async function saaCalCreateFollowUp(payload) {
+  try {
+    const { error } = await _saaClient.from("follow_ups").insert({
+      job_id: payload.jobId,
+      appointment_id: payload.appointmentId || null,
+      follow_up_type: payload.followUpType,
+      due_date: payload.dueDate || null,
+      due_time: payload.dueTime || null,
+      assigned_to: payload.assignedTo || "Office",
+      notes: payload.notes || null,
+    });
+    if (error) throw error;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}

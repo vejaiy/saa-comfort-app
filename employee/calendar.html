@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260911e">
+
+<style>body.emp-shell{visibility:hidden}</style>
+</head>
+<body class="emp-shell">
+<script src="../assets/js/vendor/supabase.js?v=20260911e"></script>
+<script src="../assets/js/supabase-config.js?v=20260911e"></script>
+<script src="../assets/js/auth.js?v=20260911e"></script>
+<script>saaRequireAuth();</script>
+<header class="emp-header">
+  <div class="container">
+    <div>
+      <a class="brand" href="dashboard.html" style="font-size:1rem">
+        <span class="mark" style="width:34px;height:34px;font-size:.62rem;letter-spacing:-0.3px">SAA</span>
+        <span>Employee Tools<div class="muted" style="color:#b7c4d1;font-size:.85rem">SAA Comfort Air LLC</div></span>
+      </a>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select onchange="if(this.value) window.location.href=this.value" style="width:auto;min-width:170px">
+        <option value="">Jump to page&hellip;</option>
+        <option value="dashboard.html">Dashboard</option>
+        <option value="calendar.html" selected>Dispatch Calendar</option>
+        <option value="new-install.html">New Install</option>
+        <option value="replacement.html">Replacement</option>
+        <option value="condenser-change.html">Condenser Change</option>
+        <option value="coil-change.html">Coil Change</option>
+        <option value="furnace-change.html">Furnace Change</option>
+        <option value="plenum-change.html">Plenum Change</option>
+        <option value="drainline-maintenance.html">Drainline Maintenance</option>
+        <option value="duct-cleaning.html">Duct Cleaning</option>
+        <option value="labor.html">Labor</option>
+        <option value="inspection.html">Inspection / QC</option>
+        <option value="maintenance-plan.html">Maintenance Plan</option>
+        <option value="custom-solutions.html">Custom HVAC Solutions</option>
+        <option value="jobs.html">Jobs</option>
+        <option value="instruction-manual.html">Instruction Manual</option>
+        <option value="tool-list.html">Tool List</option>
+        <option value="receipts.html">Receipts</option>
+      </select>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Employee</a>
+      <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
+      <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
+    </div>
+  </div>
+</header>
+<main class="container" style="padding:26px 20px 60px">
+
+<div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Dispatch Calendar</div>
+
+<div class="cal-page-head">
+  <div>
+    <h1 style="margin-bottom:4px">Dispatch Calendar</h1>
+    <p class="muted" style="margin:0">Who is doing what, where, and when. Drag an appointment to change its time, its technician, or both.</p>
+  </div>
+  <button type="button" class="btn btn-navy" id="cal-new-service-btn">+ New Service</button>
+</div>
+
+<div class="cal-datebar" style="margin-bottom:14px">
+  <button type="button" class="btn btn-ghost btn-sm" id="cal-prev-btn">&larr;</button>
+  <button type="button" class="btn btn-ghost btn-sm" id="cal-today-btn">Today</button>
+  <button type="button" class="btn btn-ghost btn-sm" id="cal-next-btn">&rarr;</button>
+  <span class="cal-date-label" id="cal-date-label"></span>
+  <input type="date" id="cal-date-input" style="width:auto">
+</div>
+
+<div class="cal-summary-strip" id="cal-summary-strip"></div>
+
+<div class="cal-unscheduled">
+  <h3>Unscheduled Jobs (<span id="cal-unscheduled-count">0</span>) — drag onto a technician to schedule</h3>
+  <div class="cal-unscheduled-row" id="cal-unscheduled-row"></div>
+</div>
+
+<div class="cal-grid-wrap">
+  <div class="cal-grid-scroll">
+    <div class="cal-grid-hours" id="cal-grid-hours-row"></div>
+    <div id="cal-grid-body"></div>
+  </div>
+</div>
+
+<div class="cal-legend">
+  <span><span class="dot" style="background:var(--st-scheduled)"></span>Scheduled</span>
+  <span><span class="dot" style="background:var(--st-en_route)"></span>En Route</span>
+  <span><span class="dot" style="background:var(--st-on_site)"></span>On Site</span>
+  <span><span class="dot" style="background:var(--st-waiting_parts)"></span>Waiting for Parts</span>
+  <span><span class="dot" style="background:var(--st-completed)"></span>Completed</span>
+  <span><span class="dot" style="background:var(--st-cancelled)"></span>Cancelled</span>
+  <span><span class="dot" style="background:var(--st-no_show)"></span>No Show</span>
+</div>
+<p class="muted" style="font-size:.8rem;margin-top:10px">Day view only for now — Week/Month views, filters, and recurring-maintenance suggestions are planned for a follow-up pass.</p>
+
+<!-- ============ New Service popup ============ -->
+<div class="modal-overlay" id="cal-newsvc-modal" hidden>
+  <div class="modal-card cal-newsvc-card">
+    <h3>New Service</h3>
+    <div class="field cal-cust-search-wrap">
+      <label>Customer</label>
+      <input type="text" id="ns-cust-search" placeholder="Type a name or phone&hellip; (e.g. Smith)" autocomplete="off">
+      <div class="cal-cust-results" id="ns-cust-results" hidden></div>
+    </div>
+    <div class="cal-selected-cust" id="ns-selected-cust" hidden></div>
+
+    <div class="field" style="margin-top:10px">
+      <label>Service type</label>
+      <div class="cal-type-grid" id="ns-type-grid"></div>
+    </div>
+
+    <div class="field">
+      <label>What's the issue? (short description)</label>
+      <input type="text" id="ns-title" placeholder="e.g. No cooling">
+    </div>
+
+    <div class="field-row">
+      <div class="field"><label>Technician</label><select id="ns-tech"></select></div>
+      <div class="field"><label>Time</label><input type="time" id="ns-time"></div>
+    </div>
+
+    <div class="field">
+      <label>Priority</label>
+      <div class="cal-priority-row" id="ns-priority-row"></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-top:14px">
+      <button type="button" class="btn btn-navy btn-sm" id="ns-save-btn">Schedule</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="ns-cancel-btn">Cancel</button>
+      <span id="ns-status" class="muted" style="font-size:.85rem"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Schedule-conflict confirm ============ -->
+<div class="modal-overlay" id="cal-conflict-modal" hidden>
+  <div class="modal-card cal-conflict-card">
+    <h3><span class="warn-icon">&#9888;&#65039;</span> Schedule Conflict</h3>
+    <p class="muted" id="cal-conflict-detail" style="margin:10px 0"></p>
+    <div style="display:flex;gap:10px">
+      <button type="button" class="btn btn-ghost btn-sm" id="cal-conflict-cancel-btn">Cancel</button>
+      <button type="button" class="btn btn-navy btn-sm" id="cal-conflict-confirm-btn">Move Anyway</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Reschedule / Reassign ============ -->
+<div class="modal-overlay" id="cal-reassign-modal" hidden>
+  <div class="modal-card" style="max-width:360px">
+    <h3>Reschedule / Reassign</h3>
+    <div class="field"><label>Technician</label><select id="ra-tech"></select></div>
+    <div class="field"><label>Time</label><input type="time" id="ra-time"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+      <button type="button" class="btn btn-navy btn-sm" id="ra-save-btn">Save</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="ra-cancel-btn">Cancel</button>
+      <span id="ra-status" class="muted" style="font-size:.85rem"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Job Details drawer ============ -->
+<div class="cal-drawer-overlay" id="cal-drawer-overlay" hidden></div>
+<div class="cal-drawer" id="cal-drawer" hidden>
+  <button type="button" class="cal-drawer-close" id="cal-drawer-close-btn">&times;</button>
+  <h2 id="drawer-title"></h2>
+  <div class="job-num" id="drawer-jobnum"></div>
+
+  <div class="drawer-section">
+    <div class="drawer-row">&#128205; <span id="drawer-address"></span> &middot;
+      <a id="drawer-navigate-link" target="_blank" rel="noopener">Navigate</a>
+    </div>
+    <div class="drawer-row">&#128222; <a id="drawer-phone-link"><span id="drawer-phone"></span></a></div>
+  </div>
+
+  <div class="drawer-section">
+    <h4>Technician</h4>
+    <div class="drawer-row" id="drawer-tech"></div>
+    <h4 style="margin-top:8px">Time</h4>
+    <div class="drawer-row" id="drawer-time"></div>
+    <h4 style="margin-top:8px">Status</h4>
+    <select id="drawer-status-select">
+          <option value="scheduled">🟡 Scheduled</option>
+          <option value="en_route">🔵 En Route</option>
+          <option value="on_site">🟣 On Site</option>
+          <option value="waiting_parts">🟠 Waiting for Parts</option>
+          <option value="completed">🟢 Completed</option>
+          <option value="cancelled">🔴 Cancelled</option>
+          <option value="no_show">⚫ No Show</option>
+    </select>
+  </div>
+
+  <div class="drawer-section">
+    <h4>Equipment</h4>
+    <div class="drawer-row" id="drawer-equipment"></div>
+  </div>
+
+  <div class="drawer-section">
+    <div class="cal-drawer-actions">
+      <button type="button" class="btn btn-ghost btn-sm" id="drawer-reschedule-btn">Reschedule / Assign</button>
+      <button type="button" class="btn btn-outline-danger btn-sm" id="drawer-cancel-btn" style="border-color:var(--danger);color:var(--danger)">Cancel Appointment</button>
+    </div>
+
+    <div class="cal-followup-box" id="cal-followup-box" hidden>
+      <h4>&#10003; Job Completed</h4>
+      <button type="button" class="btn btn-outline btn-sm" id="cal-followup-start-btn" style="border-color:var(--ok);color:var(--ok)">+ Schedule Follow-Up</button>
+      <div id="cal-followup-form" hidden>
+        <div class="cal-followup-type-row" id="cal-followup-type-row"></div>
+        <div class="field"><label>Date</label><input type="date" id="fu-date"></div>
+        <div class="field"><label>Time</label><input type="time" id="fu-time" value="10:00"></div>
+        <div class="field"><label>Assign</label><select id="fu-assign"></select></div>
+        <button type="button" class="btn btn-navy btn-sm" id="fu-save-btn">Schedule</button>
+        <span id="fu-status" class="muted" style="font-size:.82rem"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="cal-toast" class="cal-toast" hidden></div>
+
+</main>
+<script src="../assets/js/pricing-data.js?v=20260911e"></script>
+<script src="../assets/js/worksheet.js?v=20260911e"></script>
+<script src="../assets/js/calendar-db.js?v=20260911e"></script>
+<script src="../assets/js/calendar.js?v=20260911e"></script>
+</body>
+</html>
