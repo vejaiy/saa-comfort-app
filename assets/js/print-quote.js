@@ -15,6 +15,7 @@ const SAA_QUOTE_INFO = {
 };
 
 function _saaQuoteRef(date) {
+  // Fallback only — used when no Quote # was entered on the worksheet page.
   const d = date instanceof Date ? date : new Date();
   const y = d.getFullYear();
   const stamp = `${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`;
@@ -29,13 +30,14 @@ function _saaEsc(s) {
  * opts: {
  *   jobTitle: "Replacement" | "New Installation" | ...
  *   customer, address, date (string as typed on the page),
+ *   quoteNumber: string (from the Quote # field on the page),
  *   lineItems: [{ name, desc, price }]   // only the toggled-on items
  *   grandTotal: number
  * }
  */
 function printFormalQuote(opts) {
   const info = SAA_QUOTE_INFO;
-  const ref = _saaQuoteRef();
+  const ref = (opts.quoteNumber || "").trim() || _saaQuoteRef();
   const deposit = (opts.grandTotal || 0) / 2;
   const itemsHtml = (opts.lineItems || []).filter(li => li && li.price > 0).map(li => `
         <tr>
@@ -58,7 +60,7 @@ function printFormalQuote(opts) {
   h1, h2, h3 { margin: 0; }
   .rule { border-top: 2px solid #1a6b5a; margin: 6px 0 10px; }
   .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
-  .header .mark { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 8px; background: #0f2439; color: #fff; font-weight: 800; font-size: 1rem; margin-bottom: 6px; }
+  .header .mark { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 44px; border-radius: 8px; background: #0f2439; color: #fff; font-weight: 800; font-size: .82rem; letter-spacing: -0.2px; margin-bottom: 6px; }
   .header h1 { font-size: 1.25rem; color: #0f2439; }
   .header .sub { color: #55636e; font-size: .85rem; }
   .header .contact { text-align: right; font-size: .82rem; color: #55636e; }
@@ -90,9 +92,9 @@ function printFormalQuote(opts) {
 
   <div class="header">
     <div>
-      <div class="mark">SA</div>
+      <div class="mark">SAA</div>
       <h1>${info.name}</h1>
-      <div class="sub">Houston Metro HVAC Sales &amp; Service &middot; ${info.license}</div>
+      <div class="sub">${info.license}</div>
     </div>
     <div class="contact">
       ${info.phone}<br>
@@ -129,7 +131,7 @@ function printFormalQuote(opts) {
   </div>
 
   <section>
-    <h2>Itemized Pricing</h2>
+    <h2>1. Itemized Price</h2>
     <table class="items">
       <thead><tr><th>Description</th><th class="num">Price</th></tr></thead>
       <tbody>
@@ -140,13 +142,33 @@ function printFormalQuote(opts) {
   </section>
 
   <section>
-    <h2>Warranties</h2>
+    <h2>2. Scope of Work</h2>
+    <ul class="terms">
+      <li>Removal of existing equipment</li>
+      <li>Installation of new equipment</li>
+      <li>Pressure test</li>
+      <li>Evacuation</li>
+      <li>Refrigerant charge</li>
+      <li>Startup and commissioning</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>3. Items Not Included in This Quote</h2>
+    <ul class="terms">
+      <li>Refrigerant line-set replacement, if required, is not included in this quote and will be replaced at additional cost.</li>
+      <li>Airflow duct replacement, if required, is not included in this quote and will be replaced at additional cost.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>4. Warranty</h2>
     <p class="muted" style="margin:2px 0"><strong>Parts Warranty:</strong> 10-Year Manufacturer Limited Warranty (upon online equipment registration within 60 days).</p>
     <p class="muted" style="margin:2px 0"><strong>Labor Warranty:</strong> 1-Year Installation Workmanship Warranty from SAA Comfort Air LLC.</p>
   </section>
 
   <section>
-    <h2>7. Payment Terms</h2>
+    <h2>5. Payment Terms</h2>
     <ul class="terms">
       <li>50% deposit required upon signing this quote/agreement (${fmtMoney(deposit)}).</li>
       <li>Remaining 50% due upon satisfactory completion of the project.</li>
@@ -155,7 +177,7 @@ function printFormalQuote(opts) {
   </section>
 
   <section>
-    <h2>8. Other Terms &amp; Conditions</h2>
+    <h2>6. Other Terms &amp; Conditions</h2>
     <ul class="terms">
       <li><strong>Permits:</strong> SAA Comfort Air LLC will obtain all required mechanical permits for the applicable jurisdiction and schedule required inspections. Permit fees are included in the pricing above unless noted otherwise.</li>
       <li><strong>Change Orders:</strong> Any change to scope, equipment, or price after acceptance must be documented in a written Change Order signed by both parties, except where immediate action is needed to prevent damage to the property or equipment.</li>
@@ -173,7 +195,7 @@ function printFormalQuote(opts) {
   </div>
 
   <div class="accept">
-    <h2 style="font-size:.95rem;color:#1a6b5a;text-transform:uppercase;letter-spacing:.3px">Acceptance</h2>
+    <h2 style="font-size:.95rem;color:#1a6b5a;text-transform:uppercase;letter-spacing:.3px">7. Acceptance</h2>
     <p class="muted">By signing below, the customer accepts this quotation as the basis for proceeding with a formal Service &amp; Installation Agreement with SAA Comfort Air LLC.</p>
     <div class="sig-row">
       <div class="sig-line">Customer Signature &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date</div>

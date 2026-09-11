@@ -5,20 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Replacement | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260911a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260911b">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260911a"></script>
-<script src="../assets/js/supabase-config.js?v=20260911a"></script>
-<script src="../assets/js/auth.js?v=20260911a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260911b"></script>
+<script src="../assets/js/supabase-config.js?v=20260911b"></script>
+<script src="../assets/js/auth.js?v=20260911b"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
     <div>
       <a class="brand" href="dashboard.html" style="font-size:1rem">
-        <span class="mark" style="width:30px;height:30px;font-size:.85rem">SA</span>
+        <span class="mark" style="width:34px;height:34px;font-size:.62rem;letter-spacing:-0.3px">SAA</span>
         <span>Employee Tools</span>
       </a>
     </div>
@@ -60,7 +60,10 @@
     <div class="field"><label>Customer name</label><input type="text" id="q-customer"></div>
     <div class="field"><label>Job address</label><input type="text" id="q-address"></div>
   </div>
-  <div class="field" style="max-width:220px"><label>Quote date</label><input type="text" id="q-date"></div>
+  <div class="field-row">
+    <div class="field" style="max-width:220px"><label>Quote date</label><input type="text" id="q-date"></div>
+    <div class="field" style="max-width:220px"><label>Quote #</label><input type="text" id="q-number" value="2026-0021"></div>
+  </div>
 </div>
 
 <h2 style="font-size:1.05rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted)">Equipment Replacement</h2>
@@ -149,6 +152,24 @@
 </div>
 
 <div class="toggle-row">
+  <div class="meta"><div class="name">Equipment/Refrigerant Disposal Fee</div><div class="desc">Disposal of old condenser, coil, furnace, and recovered refrigerant per county requirements.</div></div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="muted" style="font-size:.82rem">$</span>
+    <input type="number" id="price-disposal" value="200" style="width:90px" step="any">
+  </div>
+  <label class="switch"><input type="checkbox" id="tgl-disposal" checked><span class="slider"></span></label>
+</div>
+
+<div class="toggle-row">
+  <div class="meta"><div class="name">Permit &amp; Inspection Fee</div><div class="desc">Mechanical permit application and required inspection scheduling for the applicable jurisdiction.</div></div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="muted" style="font-size:.82rem">$</span>
+    <input type="number" id="price-permit" value="250" style="width:90px" step="any">
+  </div>
+  <label class="switch"><input type="checkbox" id="tgl-permit" checked><span class="slider"></span></label>
+</div>
+
+<div class="toggle-row">
   <div class="meta">
     <input type="text" id="name-other" class="inline-input name-input" placeholder="Other item — name" aria-label="Custom item name">
     <input type="text" id="desc-other" class="inline-input desc-input" placeholder="Description (optional)" aria-label="Custom item description">
@@ -184,11 +205,11 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260911a"></script>
-<script src="../assets/js/worksheet.js?v=20260911a"></script>
-<script src="../assets/js/labor-widget.js?v=20260911a"></script>
-<script src="../assets/js/plenum-widget.js?v=20260911a"></script>
-<script src="../assets/js/print-quote.js?v=20260911a"></script>
+<script src="../assets/js/pricing-data.js?v=20260911b"></script>
+<script src="../assets/js/worksheet.js?v=20260911b"></script>
+<script src="../assets/js/labor-widget.js?v=20260911b"></script>
+<script src="../assets/js/plenum-widget.js?v=20260911b"></script>
+<script src="../assets/js/print-quote.js?v=20260911b"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
 
@@ -228,6 +249,8 @@
     const drainpanOn = document.getElementById('tgl-drainpan').checked;
     const relocateOn = document.getElementById('tgl-relocate').checked;
     const uvOn = document.getElementById('tgl-uv').checked;
+    const disposalOn = document.getElementById('tgl-disposal').checked;
+    const permitOn = document.getElementById('tgl-permit').checked;
     const otherOn = document.getElementById('tgl-other').checked;
     const ductOn = document.getElementById('tgl-duct').checked;
 
@@ -264,6 +287,8 @@
 
     const relocatePrice = parseFloat(document.getElementById('price-relocate').value) || 0;
     const uvPrice = parseFloat(document.getElementById('price-uv').value) || 0;
+    const disposalPrice = parseFloat(document.getElementById('price-disposal').value) || 0;
+    const permitPrice = parseFloat(document.getElementById('price-permit').value) || 0;
     const otherPrice = parseFloat(document.getElementById('price-other').value) || 0;
     const otherName = document.getElementById('name-other').value.trim();
     const otherDesc = document.getElementById('desc-other').value.trim();
@@ -274,6 +299,8 @@
     if (drainpanOn) grandTotal += drainpanTotal;
     if (relocateOn) grandTotal += relocatePrice;
     if (uvOn) grandTotal += uvPrice;
+    if (disposalOn) grandTotal += disposalPrice;
+    if (permitOn) grandTotal += permitPrice;
     if (otherOn) grandTotal += otherPrice;
     if (ductOn) grandTotal += ductPrice;
 
@@ -284,15 +311,33 @@
     window._saaGetQuote = function () {
       const tonSelect = document.getElementById('detail-condenser-linked');
       const tierSelect = document.getElementById('detail-furnace-linked');
+
+      function systemDesc() {
+        const parts = [];
+        if (condenserOn) parts.push((tonSelect ? tonnageLabel(tonSelect) + ' ' : '') + 'condenser');
+        if (coilOn) parts.push('matched evaporator coil');
+        if (furnaceOn) {
+          const tierLabel = tierSelect ? tierSelect.options[tierSelect.selectedIndex].textContent : '';
+          parts.push((tierLabel ? tierLabel + ' ' : '') + 'furnace');
+        }
+        if (!parts.length) return '';
+        let list;
+        if (parts.length === 1) list = parts[0];
+        else if (parts.length === 2) list = parts.join(' and ');
+        else list = parts.slice(0, -1).join(', ') + ', and ' + parts[parts.length - 1];
+        return 'New ' + list + '. Existing equipment removed and disposed of; new manufacturer-matched equipment installed and charged to spec.';
+      }
+
       const lineItems = [];
-      if (condenserOn) lineItems.push({ name: 'Condenser Material + License Fee', desc: tonSelect ? tonnageLabel(tonSelect) + ' condenser' : '', price: condTotal });
-      if (coilOn) lineItems.push({ name: 'Coil Material', desc: 'Zone-adjusted coil replacement', price: coilTotal });
-      if (furnaceOn) lineItems.push({ name: 'Furnace Material', desc: tierSelect ? tierSelect.options[tierSelect.selectedIndex].textContent : '', price: furnaceTotal });
-      lineItems.push({ name: 'Labor & Overhead', desc: doubleLabor ? 'Doubled — condenser and coil both replaced' : '', price: laborTotal + overhead });
+      if (equipTotal > 0) {
+        lineItems.push({ name: 'New HVAC System (Condenser, Coil & Furnace)', desc: systemDesc() || 'System installation, labor, and startup.', price: equipTotal });
+      }
       if (plenumOn) lineItems.push({ name: 'Plenum Change', price: plenumTotal });
       if (drainpanOn) lineItems.push({ name: 'Secondary Drainpan & Float Switch', price: drainpanTotal });
       if (relocateOn) lineItems.push({ name: 'Relocate Furnace and Coil', price: relocatePrice });
       if (uvOn) lineItems.push({ name: 'UV Light Air Purifier', price: uvPrice });
+      if (disposalOn) lineItems.push({ name: 'Equipment/Refrigerant Disposal Fee', desc: 'Disposal of old condenser, coil, furnace, and recovered refrigerant per county requirements.', price: disposalPrice });
+      if (permitOn) lineItems.push({ name: 'Permit & Inspection Fee', desc: 'Mechanical permit application and required inspection scheduling for the applicable jurisdiction.', price: permitPrice });
       if (otherOn && otherPrice > 0) lineItems.push({ name: otherName || 'Additional Item', desc: otherDesc, price: otherPrice });
       if (ductOn) lineItems.push({ name: 'Duct Cleaning', price: ductPrice });
       return {
@@ -300,6 +345,7 @@
         customer: document.getElementById('q-customer').value,
         address: document.getElementById('q-address').value,
         date: document.getElementById('q-date').value,
+        quoteNumber: document.getElementById('q-number').value,
         lineItems: lineItems,
         grandTotal: grandTotal,
       };
