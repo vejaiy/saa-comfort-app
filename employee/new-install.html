@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>New Installation | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260911b">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260911c">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260911b"></script>
-<script src="../assets/js/supabase-config.js?v=20260911b"></script>
-<script src="../assets/js/auth.js?v=20260911b"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260911c"></script>
+<script src="../assets/js/supabase-config.js?v=20260911c"></script>
+<script src="../assets/js/auth.js?v=20260911c"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -57,12 +57,37 @@
 
 <div class="card" style="margin-bottom:22px">
   <div class="field-row">
-    <div class="field"><label>Customer name</label><input type="text" id="q-customer"></div>
+    <div class="field"><label>Customer first name</label><input type="text" id="q-first"></div>
+    <div class="field"><label>Customer last name</label><input type="text" id="q-last"></div>
+  </div>
+  <div class="field-row">
+    <div class="field"><label>Phone number</label><input type="tel" id="q-phone"></div>
     <div class="field"><label>Job address</label><input type="text" id="q-address"></div>
   </div>
   <div class="field-row">
     <div class="field" style="max-width:220px"><label>Quote date</label><input type="text" id="q-date"></div>
     <div class="field" style="max-width:220px"><label>Quote #</label><input type="text" id="q-number" value="2026-0021"></div>
+  </div>
+  <button type="button" class="btn btn-outline btn-sm" id="retrieve-quote-btn" style="margin-top:6px">Retrieve Saved Quote&hellip;</button>
+</div>
+
+<div class="modal-overlay" id="retrieve-modal" hidden>
+  <div class="modal-card">
+    <h3>Retrieve Saved Quote</h3>
+    <p class="muted" style="font-size:.85rem;margin-bottom:12px">Enter any one of the fields below — first name, last name, or phone number — to find matching saved quotes.</p>
+    <div class="field-row">
+      <div class="field"><label>First name</label><input type="text" id="rq-first"></div>
+      <div class="field"><label>Last name</label><input type="text" id="rq-last"></div>
+    </div>
+    <div class="field"><label>Phone number</label><input type="tel" id="rq-phone"></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button type="button" class="btn btn-navy btn-sm" id="rq-search-btn">Search</button>
+      <span id="rq-status" class="muted" style="font-size:.85rem"></span>
+    </div>
+    <div class="quote-result-list" id="rq-results"></div>
+    <div class="modal-close-row">
+      <button type="button" class="btn btn-ghost btn-sm" id="rq-close-btn">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -201,15 +226,20 @@
   <p class="muted" style="margin-bottom:4px"><strong>Parts Warranty:</strong> 10-Year Manufacturer Limited Warranty (upon online equipment registration within 60 days).</p>
   <p class="muted"><strong>Labor Warranty:</strong> 1-Year Installation Workmanship Warranty from SAA Comfort Air LLC.</p>
   <div class="terms" id="payment-terms"></div>
-  <button class="btn btn-navy btn-sm" style="margin-top:14px" id="print-quote-btn">Print Quote</button>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px">
+    <button class="btn btn-navy btn-sm" id="print-quote-btn">Print Quote</button>
+    <button class="btn btn-outline btn-sm" id="save-quote-btn">Save Quote</button>
+    <span id="save-status" class="muted" style="font-size:.85rem"></span>
+  </div>
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260911b"></script>
-<script src="../assets/js/worksheet.js?v=20260911b"></script>
-<script src="../assets/js/labor-widget.js?v=20260911b"></script>
-<script src="../assets/js/plenum-widget.js?v=20260911b"></script>
-<script src="../assets/js/print-quote.js?v=20260911b"></script>
+<script src="../assets/js/pricing-data.js?v=20260911c"></script>
+<script src="../assets/js/worksheet.js?v=20260911c"></script>
+<script src="../assets/js/labor-widget.js?v=20260911c"></script>
+<script src="../assets/js/plenum-widget.js?v=20260911c"></script>
+<script src="../assets/js/print-quote.js?v=20260911c"></script>
+<script src="../assets/js/quotes-db.js?v=20260911c"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
 
@@ -224,6 +254,15 @@
   const condenserDetail = renderLineItemTable(document.getElementById('detail-condenser'), CONDENSER_MATERIALS, { linkedOptions: CONDENSER_TONNAGE, linkedKind: 'tonnage' });
   const coilDetail = renderLineItemTable(document.getElementById('detail-coil'), COIL_MATERIALS, { linkedOptions: COIL_TONNAGE, linkedKind: 'tonnage' });
   const furnaceDetail = renderLineItemTable(document.getElementById('detail-furnace'), FURNACE_MATERIALS, { linkedOptions: FURNACE_TIERS, linkedKind: 'tier' });
+
+  // Keep the coil worksheet's tonnage (and price) matched to whatever
+  // tonnage was picked for the condenser — pick the condenser size once
+  // and the matching coil populates itself.
+  const condenserTonSelect = document.getElementById('detail-condenser-linked');
+  if (condenserTonSelect) {
+    condenserTonSelect.addEventListener('change', () => coilDetail.setLinkedValue(condenserTonSelect.value));
+    coilDetail.setLinkedValue(condenserTonSelect.value);
+  }
 
   // ---- Additional-change detail worksheets ----
   const plenumWidget = initPlenumWidget(document.getElementById('detail-plenum'));
@@ -340,9 +379,15 @@
       if (permitOn) lineItems.push({ name: 'Permit & Inspection Fee', desc: 'Mechanical permit application and required inspection scheduling for the applicable jurisdiction.', price: permitPrice });
       if (otherOn && otherPrice > 0) lineItems.push({ name: otherName || 'Additional Item', desc: otherDesc, price: otherPrice });
       if (ductOn) lineItems.push({ name: 'Duct Cleaning', price: ductPrice });
+      const firstName = document.getElementById('q-first').value.trim();
+      const lastName = document.getElementById('q-last').value.trim();
       return {
         jobTitle: 'New Installation',
-        customer: document.getElementById('q-customer').value,
+        quoteType: 'new_install',
+        firstName: firstName,
+        lastName: lastName,
+        customer: [firstName, lastName].filter(Boolean).join(' '),
+        phone: document.getElementById('q-phone').value.trim(),
         address: document.getElementById('q-address').value,
         date: document.getElementById('q-date').value,
         quoteNumber: document.getElementById('q-number').value,
@@ -354,6 +399,83 @@
 
   document.getElementById('print-quote-btn').addEventListener('click', () => {
     printFormalQuote(window._saaGetQuote());
+  });
+
+  // ---- Save Quote ----
+  document.getElementById('save-quote-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('save-quote-btn');
+    const status = document.getElementById('save-status');
+    const quote = window._saaGetQuote();
+    if (!quote.firstName && !quote.lastName && !quote.phone) {
+      status.textContent = 'Enter a first name, last name, or phone number first.';
+      return;
+    }
+    btn.disabled = true;
+    status.textContent = 'Saving…';
+    const result = await saaSaveQuote({
+      quoteNumber: quote.quoteNumber,
+      quoteType: quote.quoteType,
+      firstName: quote.firstName,
+      lastName: quote.lastName,
+      phone: quote.phone,
+      jobAddress: quote.address,
+      total: quote.grandTotal,
+      formState: saaSerializeFormState(),
+    });
+    btn.disabled = false;
+    status.textContent = result.ok ? ('Saved as ' + (quote.quoteNumber || 'quote') + '.') : ('Error: ' + result.error);
+  });
+
+  // ---- Retrieve Quote ----
+  document.getElementById('retrieve-quote-btn').addEventListener('click', () => {
+    document.getElementById('retrieve-modal').hidden = false;
+    document.getElementById('rq-results').innerHTML = '';
+    document.getElementById('rq-status').textContent = '';
+  });
+  document.getElementById('rq-close-btn').addEventListener('click', () => {
+    document.getElementById('retrieve-modal').hidden = true;
+  });
+  document.getElementById('rq-search-btn').addEventListener('click', async () => {
+    const firstName = document.getElementById('rq-first').value.trim();
+    const lastName = document.getElementById('rq-last').value.trim();
+    const phone = document.getElementById('rq-phone').value.trim();
+    const status = document.getElementById('rq-status');
+    const results = document.getElementById('rq-results');
+    if (!firstName && !lastName && !phone) {
+      status.textContent = 'Enter at least one field.';
+      return;
+    }
+    status.textContent = 'Searching…';
+    results.innerHTML = '';
+    const res = await saaSearchQuotes({ firstName, lastName, phone });
+    if (!res.ok) { status.textContent = 'Error: ' + res.error; return; }
+    status.textContent = res.results.length + ' match' + (res.results.length === 1 ? '' : 'es') + ' found.';
+    if (!res.results.length) {
+      results.innerHTML = '<div class="quote-result-empty">No saved quotes match.</div>';
+      return;
+    }
+    results.innerHTML = res.results.map(q => {
+      const c = q.customer || {};
+      const name = [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Unnamed';
+      const when = q.updated_at ? new Date(q.updated_at).toLocaleDateString('en-US') : '';
+      return `<div class="quote-result-row" data-quote-id="${q.id}">
+        <div>
+          <div class="name">${name}${c.phone ? ' — ' + c.phone : ''}</div>
+          <div class="meta">${q.quote_number || 'No #'} &middot; ${q.quote_type || ''} &middot; ${q.job_address || ''} &middot; ${when}</div>
+        </div>
+        <div class="name">${fmtMoney(q.total || 0)}</div>
+      </div>`;
+    }).join('');
+    results.querySelectorAll('.quote-result-row').forEach(row => {
+      row.addEventListener('click', async () => {
+        status.textContent = 'Loading…';
+        const loaded = await saaLoadQuote(row.dataset.quoteId);
+        if (!loaded.ok) { status.textContent = 'Error: ' + loaded.error; return; }
+        if (loaded.quote.form_state) saaApplyFormState(loaded.quote.form_state);
+        document.getElementById('retrieve-modal').hidden = true;
+        updateAll();
+      });
+    });
   });
 
   document.querySelector('main').addEventListener('input', updateAll);

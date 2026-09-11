@@ -123,6 +123,7 @@ function printFormalQuote(opts) {
     <div class="meta-box">
       <div class="label">Customer</div>
       <div class="val">${_saaEsc(opts.customer) || "&mdash;"}</div>
+      ${opts.phone ? `<div class="val" style="font-size:.8rem;color:#55636e;margin-top:2px">${_saaEsc(opts.phone)}</div>` : ""}
     </div>
     <div class="meta-box">
       <div class="label">Job Address</div>

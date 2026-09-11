@@ -14,8 +14,8 @@ function initLaborWidget(mountEl) {
   tbody.innerHTML = LABOR_ROWS.map((r, i) => `
     <tr data-row="${i}">
       <td class="item-name">${r.role}</td>
-      <td class="num"><input type="number" step="any" class="lw-costhr" value="${r.costHr}"></td>
-      <td class="num"><input type="number" step="any" class="lw-hours" value="${r.hours}"></td>
+      <td class="num"><input type="number" step="any" class="lw-costhr" name="${mountEl.id}__costhr__${i}" value="${r.costHr}"></td>
+      <td class="num"><input type="number" step="any" class="lw-hours" name="${mountEl.id}__hours__${i}" value="${r.hours}"></td>
       <td class="num lw-total-row">${fmtMoney(r.costHr * r.hours)}</td>
     </tr>`).join("");
 

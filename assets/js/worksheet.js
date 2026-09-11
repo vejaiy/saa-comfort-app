@@ -55,10 +55,10 @@ function renderLineItemTable(mountEl, rows, opts) {
       <td>${catCell}</td>
       <td class="item-name">${itemCell}</td>
       <td>${r.unit || ""}</td>
-      <td><input type="number" step="any" class="qty" value="${r.qty}" aria-label="Quantity"></td>
-      <td class="num"><input type="number" step="any" class="price" value="${r.price}" aria-label="Unit cost"></td>
+      <td><input type="number" step="any" class="qty" name="${mountEl.id}__qty__${i}" value="${r.qty}" aria-label="Quantity"></td>
+      <td class="num"><input type="number" step="any" class="price" name="${mountEl.id}__price__${i}" value="${r.price}" aria-label="Unit cost"></td>
       <td class="num ext">${fmtMoney(included ? r.qty * r.price : 0)}</td>
-      <td class="toggle-cell"><label class="switch sm"><input type="checkbox" class="row-toggle" aria-label="Include this line item"${included ? " checked" : ""}><span class="slider"></span></label></td>
+      <td class="toggle-cell"><label class="switch sm"><input type="checkbox" class="row-toggle" name="${mountEl.id}__included__${i}" aria-label="Include this line item"${included ? " checked" : ""}><span class="slider"></span></label></td>
     </tr>`;
   }).join("");
 
@@ -152,6 +152,11 @@ function renderLineItemTable(mountEl, rows, opts) {
     el: mountEl,
     getTotals: recalc,
     getLinkedValue: () => (linkedSelect ? linkedSelect.value : null),
+    setLinkedValue: (val) => {
+      if (!linkedSelect) return;
+      linkedSelect.value = String(val);
+      linkedSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    },
   };
 }
 
@@ -165,8 +170,8 @@ function renderFlatPriceTable(mountEl, rows) {
     <tr data-row data-idx="${i}">
       <td class="item-name">${r.item}</td>
       <td>${r.unit || ""}</td>
-      <td><input type="number" step="any" class="qty" value="${r.qty}"></td>
-      <td class="num"><input type="number" step="any" class="price" value="${r.price}"></td>
+      <td><input type="number" step="any" class="qty" name="${mountEl.id}__qty__${i}" value="${r.qty}"></td>
+      <td class="num"><input type="number" step="any" class="price" name="${mountEl.id}__price__${i}" value="${r.price}"></td>
       <td class="num ext">${fmtMoney(r.qty * r.price)}</td>
     </tr>`).join("");
 
@@ -194,4 +199,40 @@ function renderFlatPriceTable(mountEl, rows) {
   mountEl.addEventListener("input", recalc);
   recalc();
   return { el: mountEl, getTotals: recalc };
+}
+
+/* ============================================================
+   Generic whole-page form-state capture/restore, used by the
+   Save Quote / Retrieve Quote feature on the New Installation and
+   Replacement pages. Every input/select on the page that has an
+   "id" (the page-level fields, toggles, and linked pickers) or a
+   generated "name" (per-row cells inside a worksheet table, added
+   above) is captured by that stable key — so saving/restoring
+   doesn't depend on DOM order and tolerates the page gaining new
+   fields later (an old saved quote just leaves those unset).
+   ============================================================ */
+function saaSerializeFormState(rootSelector) {
+  const root = document.querySelector(rootSelector || "main");
+  const state = {};
+  root.querySelectorAll("input, select, textarea").forEach((el) => {
+    const key = el.id || el.name;
+    if (!key) return;
+    if (el.type === "checkbox" || el.type === "radio") state[key] = { c: el.checked };
+    else state[key] = { v: el.value };
+  });
+  return state;
+}
+
+function saaApplyFormState(state, rootSelector) {
+  if (!state) return;
+  const root = document.querySelector(rootSelector || "main");
+  root.querySelectorAll("input, select, textarea").forEach((el) => {
+    const key = el.id || el.name;
+    if (!key || !(key in state)) return;
+    const s = state[key];
+    if ("c" in s) el.checked = s.c;
+    else el.value = s.v;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
 }

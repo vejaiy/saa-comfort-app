@@ -17,9 +17,9 @@ function initPlenumWidget(mountEl) {
       <table class="worksheet">
         <thead><tr><th>Technicians</th><th>Rate/Hr</th><th>Hours</th><th>Total</th></tr></thead>
         <tbody><tr>
-          <td><input type="number" class="pw-techs" value="1" step="1"></td>
-          <td class="num"><input type="number" class="pw-rate" value="50" step="any"></td>
-          <td class="num"><input type="number" class="pw-hours" value="2" step="any"></td>
+          <td><input type="number" class="pw-techs" name="${mountEl.id}__techs" value="1" step="1"></td>
+          <td class="num"><input type="number" class="pw-rate" name="${mountEl.id}__rate" value="50" step="any"></td>
+          <td class="num"><input type="number" class="pw-hours" name="${mountEl.id}__hours" value="2" step="any"></td>
           <td class="num pw-labor-total">$100.00</td>
         </tr></tbody>
       </table>
@@ -34,10 +34,10 @@ function initPlenumWidget(mountEl) {
     const typeOpts = plenumOptions(eq).map(t => `<option value="${t}"${t === defaultType ? " selected" : ""}>${t}</option>`).join("");
     return `<tr data-eq="${eq}" data-defcab="${defaultCab}">
       <td class="item-name">${label}</td>
-      <td><select class="pw-type">${typeOpts}</select></td>
-      <td><select class="pw-cab"></select></td>
+      <td><select class="pw-type" name="${mountEl.id}__type__${eq}">${typeOpts}</select></td>
+      <td><select class="pw-cab" name="${mountEl.id}__cab__${eq}"></select></td>
       <td class="spec pw-spec"></td>
-      <td><input type="number" class="pw-qty" value="1" step="1" style="width:60px"></td>
+      <td><input type="number" class="pw-qty" name="${mountEl.id}__qty__${eq}" value="1" step="1" style="width:60px"></td>
       <td class="num pw-price">$0.00</td>
       <td class="num pw-ext">$0.00</td>
     </tr>`;
