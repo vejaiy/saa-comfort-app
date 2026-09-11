@@ -68,7 +68,11 @@
     <div class="field" style="max-width:220px"><label>Quote date</label><input type="text" id="q-date"></div>
     <div class="field" style="max-width:220px"><label>Quote #</label><input type="text" id="q-number" value="2026-0021"></div>
   </div>
-  <button type="button" class="btn btn-outline btn-sm" id="retrieve-quote-btn" style="margin-top:6px">Retrieve Saved Quote&hellip;</button>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px">
+    <button type="button" class="btn btn-navy btn-sm" id="save-quote-btn">Save Quote</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="retrieve-quote-btn">Retrieve Saved Quote&hellip;</button>
+    <span id="save-status" class="muted" style="font-size:.85rem"></span>
+  </div>
 </div>
 
 <div class="modal-overlay" id="retrieve-modal" hidden>
@@ -228,8 +232,6 @@
   <div class="terms" id="payment-terms"></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px">
     <button class="btn btn-navy btn-sm" id="print-quote-btn">Print Quote</button>
-    <button class="btn btn-outline btn-sm" id="save-quote-btn">Save Quote</button>
-    <span id="save-status" class="muted" style="font-size:.85rem"></span>
   </div>
 </div>
 
