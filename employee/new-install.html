@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>New Installation | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260911c">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260911d">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260911c"></script>
-<script src="../assets/js/supabase-config.js?v=20260911c"></script>
-<script src="../assets/js/auth.js?v=20260911c"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260911d"></script>
+<script src="../assets/js/supabase-config.js?v=20260911d"></script>
+<script src="../assets/js/auth.js?v=20260911d"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -61,7 +61,7 @@
     <div class="field"><label>Customer last name</label><input type="text" id="q-last"></div>
   </div>
   <div class="field-row">
-    <div class="field"><label>Phone number</label><input type="tel" id="q-phone"></div>
+    <div class="field"><label>Phone number</label><input type="tel" id="q-phone" placeholder="XXX-XXX-XXXX" maxlength="12"></div>
     <div class="field"><label>Job address</label><input type="text" id="q-address"></div>
   </div>
   <div class="field-row">
@@ -83,7 +83,7 @@
       <div class="field"><label>First name</label><input type="text" id="rq-first"></div>
       <div class="field"><label>Last name</label><input type="text" id="rq-last"></div>
     </div>
-    <div class="field"><label>Phone number</label><input type="tel" id="rq-phone"></div>
+    <div class="field"><label>Phone number</label><input type="tel" id="rq-phone" placeholder="XXX-XXX-XXXX" maxlength="12"></div>
     <div style="display:flex;align-items:center;gap:10px">
       <button type="button" class="btn btn-navy btn-sm" id="rq-search-btn">Search</button>
       <span id="rq-status" class="muted" style="font-size:.85rem"></span>
@@ -236,14 +236,16 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260911c"></script>
-<script src="../assets/js/worksheet.js?v=20260911c"></script>
-<script src="../assets/js/labor-widget.js?v=20260911c"></script>
-<script src="../assets/js/plenum-widget.js?v=20260911c"></script>
-<script src="../assets/js/print-quote.js?v=20260911c"></script>
-<script src="../assets/js/quotes-db.js?v=20260911c"></script>
+<script src="../assets/js/pricing-data.js?v=20260911d"></script>
+<script src="../assets/js/worksheet.js?v=20260911d"></script>
+<script src="../assets/js/labor-widget.js?v=20260911d"></script>
+<script src="../assets/js/plenum-widget.js?v=20260911d"></script>
+<script src="../assets/js/print-quote.js?v=20260911d"></script>
+<script src="../assets/js/quotes-db.js?v=20260911d"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
+  saaAttachPhoneMask(document.getElementById('q-phone'));
+  saaAttachPhoneMask(document.getElementById('rq-phone'));
 
   // ---- Zone selector ----
   const zoneSelect = document.getElementById('zone-select');
@@ -462,7 +464,7 @@
       const when = q.updated_at ? new Date(q.updated_at).toLocaleDateString('en-US') : '';
       return `<div class="quote-result-row" data-quote-id="${q.id}">
         <div>
-          <div class="name">${name}${c.phone ? ' — ' + c.phone : ''}</div>
+          <div class="name">${name}${c.phone ? ' — ' + saaFormatPhone(c.phone) : ''}</div>
           <div class="meta">${q.quote_number || 'No #'} &middot; ${q.quote_type || ''} &middot; ${q.job_address || ''} &middot; ${when}</div>
         </div>
         <div class="name">${fmtMoney(q.total || 0)}</div>

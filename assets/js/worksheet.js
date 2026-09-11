@@ -236,3 +236,26 @@ function saaApplyFormState(state, rootSelector) {
     el.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
+
+/* ============================================================
+   Phone number formatting — normalizes any phone number (typed
+   live, loaded from a saved quote, or pulled from a customer
+   record) to XXX-XXX-XXXX for display/printing consistency.
+   ============================================================ */
+function saaFormatPhone(raw) {
+  const digits = String(raw == null ? "" : raw).replace(/\D/g, "").slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+}
+
+// Live-format a phone <input> as the user types (or as a saved value is
+// restored into it), so every phone number entered anywhere in the app
+// ends up stored and displayed the same way: XXX-XXX-XXXX.
+function saaAttachPhoneMask(el) {
+  if (!el) return;
+  el.addEventListener("input", () => {
+    const formatted = saaFormatPhone(el.value);
+    if (formatted !== el.value) el.value = formatted;
+  });
+}

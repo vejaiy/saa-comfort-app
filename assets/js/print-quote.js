@@ -54,36 +54,40 @@ function printFormalQuote(opts) {
 <meta charset="utf-8">
 <title>Quotation ${ref} — ${info.name}</title>
 <style>
-  @page { size: letter; margin: 0.6in; }
+  @page { size: letter; margin: 0.45in 0.55in; }
   * { box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; color: #1a2733; font-size: 13px; line-height: 1.5; margin: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #1a2733; font-size: 11.5px; line-height: 1.35; margin: 0; }
   h1, h2, h3 { margin: 0; }
-  .rule { border-top: 2px solid #1a6b5a; margin: 6px 0 10px; }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
-  .header .mark { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 44px; border-radius: 8px; background: #0f2439; color: #fff; font-weight: 800; font-size: .82rem; letter-spacing: -0.2px; margin-bottom: 6px; }
-  .header h1 { font-size: 1.25rem; color: #0f2439; }
-  .header .sub { color: #55636e; font-size: .85rem; }
-  .header .contact { text-align: right; font-size: .82rem; color: #55636e; }
-  .meta-row { display: flex; justify-content: space-between; gap: 24px; margin: 14px 0 18px; }
+  .rule { border-top: 2px solid #1a6b5a; margin: 4px 0 8px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+  .header .mark { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 34px; border-radius: 7px; background: #0f2439; color: #fff; font-weight: 800; font-size: .72rem; letter-spacing: -0.2px; margin-bottom: 4px; }
+  .header h1 { font-size: 1.1rem; color: #0f2439; }
+  .header .sub { color: #55636e; font-size: .78rem; }
+  .header .contact { text-align: right; font-size: .76rem; color: #55636e; }
+  .meta-row { display: flex; justify-content: space-between; gap: 20px; margin: 8px 0 10px; }
   .meta-box { flex: 1; }
-  .meta-box .label { text-transform: uppercase; font-size: .68rem; letter-spacing: .4px; color: #55636e; font-weight: 700; margin-bottom: 3px; }
-  .meta-box .val { font-size: .92rem; }
-  section { margin-bottom: 18px; }
-  section h2 { font-size: .95rem; color: #1a6b5a; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 4px; }
-  table.items { width: 100%; border-collapse: collapse; margin-top: 6px; }
-  table.items th { text-align: left; font-size: .68rem; text-transform: uppercase; letter-spacing: .3px; color: #55636e; border-bottom: 1px solid #cfd8de; padding: 6px 4px; }
-  table.items td { padding: 8px 4px; border-bottom: 1px solid #e7ecef; vertical-align: top; }
+  .meta-box .label { text-transform: uppercase; font-size: .62rem; letter-spacing: .4px; color: #55636e; font-weight: 700; margin-bottom: 2px; }
+  .meta-box .val { font-size: .84rem; }
+  section { margin-bottom: 11px; }
+  section h2 { font-size: .84rem; color: #1a6b5a; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 3px; page-break-after: avoid; break-after: avoid; }
+  ul.terms li { page-break-inside: avoid; break-inside: avoid; }
+  .two-col { display: flex; gap: 28px; margin-bottom: 11px; }
+  .two-col > section { flex: 1; margin-bottom: 0; }
+  table.items { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  table.items th { text-align: left; font-size: .62rem; text-transform: uppercase; letter-spacing: .3px; color: #55636e; border-bottom: 1px solid #cfd8de; padding: 4px 4px; }
+  table.items td { padding: 5px 4px; border-bottom: 1px solid #e7ecef; vertical-align: top; }
   table.items td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .li-name { font-weight: 700; }
-  .li-desc { color: #55636e; font-size: .82rem; margin-top: 2px; }
-  .total-row td { border-top: 2px solid #0f2439; border-bottom: none; font-weight: 800; font-size: 1.05rem; padding-top: 10px; }
-  ul.terms { margin: 6px 0 0; padding-left: 18px; }
-  ul.terms li { margin-bottom: 6px; }
-  .disclaimer { color: #55636e; font-size: .78rem; font-style: italic; margin-top: 8px; }
-  .footer { display: flex; justify-content: space-between; color: #55636e; font-size: .76rem; border-top: 1px solid #cfd8de; padding-top: 8px; margin-top: 20px; }
-  .accept { margin-top: 26px; page-break-inside: avoid; }
-  .sig-row { display: flex; gap: 40px; margin-top: 34px; }
-  .sig-line { flex: 1; border-top: 1px solid #1a2733; padding-top: 4px; font-size: .82rem; color: #55636e; }
+  .li-desc { color: #55636e; font-size: .76rem; margin-top: 1px; }
+  .total-row td { border-top: 2px solid #0f2439; border-bottom: none; font-weight: 800; font-size: .98rem; padding-top: 7px; }
+  ul.terms { margin: 4px 0 0; padding-left: 15px; }
+  ul.terms li { margin-bottom: 3px; }
+  .disclaimer { color: #55636e; font-size: .7rem; font-style: italic; margin-top: 5px; }
+  .footer { display: flex; justify-content: space-between; color: #55636e; font-size: .7rem; border-top: 1px solid #cfd8de; padding-top: 5px; margin-top: 10px; }
+  .accept { margin-top: 12px; page-break-inside: avoid; }
+  .sig-row { display: flex; gap: 40px; margin-top: 22px; }
+  .sig-row + .sig-row { margin-top: 16px; }
+  .sig-line { flex: 1; border-top: 1px solid #1a2733; padding-top: 3px; font-size: .76rem; color: #55636e; }
   .muted { color: #55636e; }
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style>
@@ -110,12 +114,12 @@ function printFormalQuote(opts) {
       <div class="val">${ref}</div>
     </div>
     <div class="meta-box">
-      <div class="label">Date</div>
-      <div class="val">${_saaEsc(opts.date || "")}</div>
-    </div>
-    <div class="meta-box">
       <div class="label">Job Type</div>
       <div class="val">${_saaEsc(opts.jobTitle || "")}</div>
+    </div>
+    <div class="meta-box" style="text-align:right">
+      <div class="label">Date</div>
+      <div class="val">${_saaEsc(opts.date || "")}</div>
     </div>
   </div>
 
@@ -123,7 +127,7 @@ function printFormalQuote(opts) {
     <div class="meta-box">
       <div class="label">Customer</div>
       <div class="val">${_saaEsc(opts.customer) || "&mdash;"}</div>
-      ${opts.phone ? `<div class="val" style="font-size:.8rem;color:#55636e;margin-top:2px">${_saaEsc(opts.phone)}</div>` : ""}
+      ${opts.phone ? `<div class="val" style="font-size:.8rem;color:#55636e;margin-top:2px">${_saaEsc(saaFormatPhone(opts.phone))}</div>` : ""}
     </div>
     <div class="meta-box">
       <div class="label">Job Address</div>
@@ -142,25 +146,27 @@ function printFormalQuote(opts) {
     </table>
   </section>
 
-  <section>
-    <h2>2. Scope of Work</h2>
-    <ul class="terms">
-      <li>Removal of existing equipment</li>
-      <li>Installation of new equipment</li>
-      <li>Pressure test</li>
-      <li>Evacuation</li>
-      <li>Refrigerant charge</li>
-      <li>Startup and commissioning</li>
-    </ul>
-  </section>
+  <div class="two-col">
+    <section>
+      <h2>2. Scope of Work</h2>
+      <ul class="terms">
+        <li>Removal of existing equipment</li>
+        <li>Installation of new equipment</li>
+        <li>Pressure test</li>
+        <li>Evacuation</li>
+        <li>Refrigerant charge</li>
+        <li>Startup and commissioning</li>
+      </ul>
+    </section>
 
-  <section>
-    <h2>3. Items Not Included in This Quote</h2>
-    <ul class="terms">
-      <li>Refrigerant line-set replacement, if required, is not included in this quote and will be replaced at additional cost.</li>
-      <li>Airflow duct replacement, if required, is not included in this quote and will be replaced at additional cost.</li>
-    </ul>
-  </section>
+    <section>
+      <h2>3. Items Not Included in This Quote</h2>
+      <ul class="terms">
+        <li>Refrigerant line-set replacement, if required, is not included in this quote and will be replaced at additional cost.</li>
+        <li>Airflow duct replacement, if required, is not included in this quote and will be replaced at additional cost.</li>
+      </ul>
+    </section>
+  </div>
 
   <section>
     <h2>4. Warranty</h2>
@@ -202,7 +208,7 @@ function printFormalQuote(opts) {
       <div class="sig-line">Customer Signature &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date</div>
     </div>
     <div class="sig-row">
-      <div class="sig-line">Vijayan Subramanian, Owner &mdash; SAA Comfort Air LLC &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date</div>
+      <div class="sig-line">Co-Owner &mdash; SAA Comfort Air LLC &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date</div>
     </div>
   </div>
 
