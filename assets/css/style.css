@@ -342,6 +342,10 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .cal-selected-cust { background: #f5f8fa; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 8px; font-size: .85rem; }
 .cal-selected-cust .name { font-weight: 700; color: var(--navy); }
 .cal-selected-cust .row { color: var(--muted); margin-top: 2px; }
+.cal-cust-result.add-new { color: var(--accent, #1a6b5a); font-weight: 700; font-size: .85rem; }
+.cal-newcust-form { background: #f5f8fa; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 8px; }
+.cal-newcust-form .field-row { gap: 10px; margin-bottom: 8px; }
+.cal-newcust-form .field-row:last-of-type { margin-bottom: 0; }
 .cal-type-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 6px; }
 .cal-type-btn { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 8px 4px; font-size: .72rem; text-align: center; cursor: pointer; line-height: 1.3; }
 .cal-type-btn .ic { font-size: 1.1rem; display: block; }

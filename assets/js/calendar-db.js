@@ -120,16 +120,55 @@ async function saaCalSearchCustomers(query) {
 }
 
 /**
+ * Find-or-create a customer by exact first name + last name + phone —
+ * same matching rule quotes-db.js uses for Save Quote, so a customer
+ * created from either the calendar or a quote worksheet lands as one
+ * row either way. Only used when the New Service popup's search found
+ * no match and the dispatcher filled in the "new customer" mini-form.
+ */
+async function saaCalFindOrCreateCustomer(firstName, lastName, phone, address) {
+  const { data: existing, error: findErr } = await _saaClient
+    .from("customers")
+    .select("id")
+    .eq("first_name", firstName || "")
+    .eq("last_name", lastName || "")
+    .eq("phone", phone || "")
+    .limit(1);
+  if (findErr) throw findErr;
+  if (existing && existing.length) return existing[0].id;
+
+  const { data: created, error: createErr } = await _saaClient
+    .from("customers")
+    .insert({ first_name: firstName || null, last_name: lastName || null, phone: phone || null, billing_address: address || null })
+    .select("id")
+    .single();
+  if (createErr) throw createErr;
+  return created.id;
+}
+
+/**
  * New Service popup save: creates the job and its first appointment
  * together. technicianId/startDatetime/endDatetime may be null (the
- * job lands in the Unscheduled queue).
+ * job lands in the Unscheduled queue). Pass either `customerId` (an
+ * existing customer picked from search) or `newCustomer: {firstName,
+ * lastName, phone, address}` (search found nobody, so find-or-create one).
  */
 async function saaCalCreateJobWithAppointment(payload) {
   try {
+    let customerId = payload.customerId || null;
+    if (!customerId && payload.newCustomer) {
+      const nc = payload.newCustomer;
+      if (!nc.firstName && !nc.lastName && !nc.phone) {
+        return { ok: false, error: "Enter a first name, last name, or phone number for the new customer." };
+      }
+      customerId = await saaCalFindOrCreateCustomer(nc.firstName, nc.lastName, nc.phone, nc.address);
+    }
+    if (!customerId) return { ok: false, error: "Select or add a customer first." };
+
     const { data: job, error: jErr } = await _saaClient
       .from("jobs")
       .insert({
-        customer_id: payload.customerId,
+        customer_id: customerId,
         job_type: payload.appointmentTypeKey,
         status: payload.technicianId && payload.startDatetime ? "scheduled" : "lead",
         title: payload.title || "",

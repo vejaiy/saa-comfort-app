@@ -106,6 +106,22 @@
     </div>
     <div class="cal-selected-cust" id="ns-selected-cust" hidden></div>
 
+    <div class="cal-newcust-form" id="ns-newcust-form" hidden>
+      <p class="muted" style="font-size:.8rem;margin:0 0 6px">New customer — not yet in the system:</p>
+      <div class="field-row">
+        <div class="field"><label>First name</label><input type="text" id="ns-newcust-first"></div>
+        <div class="field"><label>Last name</label><input type="text" id="ns-newcust-last"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Phone</label><input type="tel" id="ns-newcust-phone" placeholder="713-555-1234"></div>
+        <div class="field"><label>Address</label><input type="text" id="ns-newcust-address" placeholder="123 Main St"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:2px">
+        <button type="button" class="btn btn-navy btn-sm" id="ns-newcust-use-btn">Use This Customer</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="ns-newcust-cancel-btn">Back to Search</button>
+      </div>
+    </div>
+
     <div class="field" style="margin-top:10px">
       <label>Service type</label>
       <div class="cal-type-grid" id="ns-type-grid"></div>

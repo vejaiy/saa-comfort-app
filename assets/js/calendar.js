@@ -399,6 +399,8 @@ function saaCalOpenNewServicePopup(ctx) {
   document.getElementById("ns-cust-search").value = "";
   document.getElementById("ns-selected-cust").hidden = true;
   document.getElementById("ns-cust-results").hidden = true;
+  document.getElementById("ns-newcust-form").hidden = true;
+  ["ns-newcust-first", "ns-newcust-last", "ns-newcust-phone", "ns-newcust-address"].forEach((id) => { document.getElementById(id).value = ""; });
   document.getElementById("ns-title").value = "";
   document.getElementById("ns-status").textContent = "";
   saaCalRenderTypeGrid();
@@ -413,11 +415,13 @@ function saaCalOpenNewServicePopup(ctx) {
   document.getElementById("ns-cust-search").focus();
 }
 
-function saaCalRenderCustResults(results) {
+function saaCalRenderCustResults(results, query) {
   const box = document.getElementById("ns-cust-results");
+  const addNewHtml = `<div class="cal-cust-result add-new" id="ns-add-new-cust">+ Add "${_saaCalEsc(query || "new customer")}" as a new customer</div>`;
   if (!results.length) {
-    box.innerHTML = '<div class="cal-cust-result muted">No matches.</div>';
+    box.innerHTML = `<div class="cal-cust-result muted">No matches.</div>${addNewHtml}`;
     box.hidden = false;
+    document.getElementById("ns-add-new-cust").addEventListener("click", () => saaCalOpenNewCustomerForm(query));
     return;
   }
   box.innerHTML = results.map((r, i) => {
@@ -437,8 +441,9 @@ function saaCalRenderCustResults(results) {
       ${c.phone ? `<div class="phone">${_saaCalEsc(saaFormatPhone(c.phone))}</div>` : ""}
       ${metaParts.length ? `<div class="svc-meta">${_saaCalEsc(metaParts.join(" · "))}</div>` : ""}
     </div>`;
-  }).join("");
+  }).join("") + addNewHtml;
   box.hidden = false;
+  document.getElementById("ns-add-new-cust").addEventListener("click", () => saaCalOpenNewCustomerForm(query));
   box.querySelectorAll(".cal-cust-result[data-idx]").forEach((el) => {
     el.addEventListener("click", () => saaCalSelectCustomer(results[parseInt(el.dataset.idx, 10)]));
   });
@@ -447,17 +452,48 @@ function saaCalRenderCustResults(results) {
 function saaCalSelectCustomer(result) {
   saaCalSelectedCustomer = result;
   document.getElementById("ns-cust-results").hidden = true;
+  document.getElementById("ns-newcust-form").hidden = true;
   const c = result.customer;
   const equipLine = result.equipment ? `${result.equipment.brand || ""} ${result.equipment.tonnage ? result.equipment.tonnage + " Ton" : ""}`.trim() : "No equipment on file";
   const warrantyLine = result.equipment ? (result.equipment.warranty_status === "active" ? "Active" : result.equipment.warranty_status === "expired" ? "Expired" : "Unknown") : "—";
   const box = document.getElementById("ns-selected-cust");
-  box.innerHTML = `<div class="name">${_saaCalEsc(saaCalCustName(c))}</div>
+  box.innerHTML = `<div class="name">${_saaCalEsc(saaCalCustName(c))}${result.isNew ? ' <span class="muted" style="font-weight:400;font-size:.76rem">(new customer)</span>' : ""}</div>
     <div class="row">📍 ${_saaCalEsc(c.billing_address || "No address on file")}</div>
     <div class="row">📞 ${_saaCalEsc(c.phone ? saaFormatPhone(c.phone) : "—")}</div>
     <div class="row">🔧 ${_saaCalEsc(equipLine)}</div>
     <div class="row">🛡️ Warranty: ${_saaCalEsc(warrantyLine)}</div>`;
   box.hidden = false;
   document.getElementById("ns-cust-search").value = saaCalCustName(c);
+}
+
+/** Search found nobody — reveal the compact "new customer" mini-form. */
+function saaCalOpenNewCustomerForm(query) {
+  document.getElementById("ns-cust-results").hidden = true;
+  const q = (query || "").trim();
+  const looksLikePhone = /^[\d\s\-().]{7,}$/.test(q);
+  document.getElementById("ns-newcust-first").value = "";
+  document.getElementById("ns-newcust-last").value = looksLikePhone ? "" : q;
+  document.getElementById("ns-newcust-phone").value = looksLikePhone ? q : "";
+  document.getElementById("ns-newcust-address").value = "";
+  document.getElementById("ns-newcust-form").hidden = false;
+  document.getElementById("ns-newcust-first").focus();
+}
+
+function saaCalUseNewCustomer() {
+  const first = document.getElementById("ns-newcust-first").value.trim();
+  const last = document.getElementById("ns-newcust-last").value.trim();
+  const phone = document.getElementById("ns-newcust-phone").value.trim();
+  const address = document.getElementById("ns-newcust-address").value.trim();
+  if (!first && !last && !phone) {
+    document.getElementById("ns-status").textContent = "Enter at least a name or phone number for the new customer.";
+    return;
+  }
+  saaCalSelectCustomer({
+    isNew: true,
+    customer: { first_name: first || null, last_name: last || null, phone: phone || null, billing_address: address || null },
+    equipment: null,
+    lastJob: null,
+  });
 }
 
 /* ============================== JOB DETAILS DRAWER ============================== */
@@ -530,7 +566,7 @@ function saaCalWireStaticHandlers() {
     saaCalSearchTimer = setTimeout(async () => {
       try {
         const results = await saaCalSearchCustomers(q);
-        saaCalRenderCustResults(results);
+        saaCalRenderCustResults(results, q);
       } catch (err) { /* silent — search is best-effort */ }
     }, 200);
   });
@@ -551,14 +587,16 @@ function saaCalWireStaticHandlers() {
       endDatetime = saaCalTimeStr(saaCalCurrentDate, startMinutes + dur);
     }
     status.textContent = "Saving…";
+    const sc = saaCalSelectedCustomer;
     const res = await saaCalCreateJobWithAppointment({
-      customerId: saaCalSelectedCustomer.customer.id,
+      customerId: sc.isNew ? null : sc.customer.id,
+      newCustomer: sc.isNew ? { firstName: sc.customer.first_name, lastName: sc.customer.last_name, phone: sc.customer.phone, address: sc.customer.billing_address } : null,
       title: document.getElementById("ns-title").value.trim(),
       appointmentTypeKey: saaCalSelectedTypeKey,
       priority: saaCalGetSelectedPriority(),
       technicianId: techId,
       startDatetime, endDatetime,
-      jobAddress: saaCalSelectedCustomer.customer.billing_address || null,
+      jobAddress: sc.customer.billing_address || null,
     });
     if (res.ok) {
       document.getElementById("cal-newsvc-modal").hidden = true;
@@ -569,6 +607,12 @@ function saaCalWireStaticHandlers() {
     }
   });
   document.getElementById("ns-cancel-btn").addEventListener("click", () => { document.getElementById("cal-newsvc-modal").hidden = true; });
+
+  document.getElementById("ns-newcust-use-btn").addEventListener("click", saaCalUseNewCustomer);
+  document.getElementById("ns-newcust-cancel-btn").addEventListener("click", () => {
+    document.getElementById("ns-newcust-form").hidden = true;
+    document.getElementById("ns-cust-search").focus();
+  });
 
   document.getElementById("cal-drawer-close-btn").addEventListener("click", saaCalCloseDrawer);
   document.getElementById("cal-drawer-overlay").addEventListener("click", saaCalCloseDrawer);

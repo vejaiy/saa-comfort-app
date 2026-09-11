@@ -373,8 +373,13 @@
       }
 
       const lineItems = [];
-      if (equipTotal > 0) {
-        lineItems.push({ name: 'New HVAC System (Condenser, Coil & Furnace)', desc: systemDesc() || 'System installation, labor, and startup.', price: equipTotal });
+      const equipOnlyTotal = (condenserOn ? condTotal : 0) + (coilOn ? coilTotal : 0) + (furnaceOn ? furnaceTotal : 0);
+      const laborLineTotal = laborTotal + overhead;
+      if (equipOnlyTotal > 0) {
+        lineItems.push({ name: 'New HVAC System (Condenser, Coil & Furnace)', desc: systemDesc() || 'New equipment installed and charged to spec.', price: equipOnlyTotal });
+      }
+      if (laborLineTotal > 0) {
+        lineItems.push({ name: 'Labor', desc: 'Installation labor: removal of existing equipment, pressure test, evacuation, refrigerant charge, and startup/commissioning.', price: laborLineTotal });
       }
       if (plenumOn) lineItems.push({ name: 'Plenum Change', price: plenumTotal });
       if (drainpanOn) lineItems.push({ name: 'Secondary Drainpan & Float Switch', price: drainpanTotal });
