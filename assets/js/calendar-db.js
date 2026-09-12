@@ -165,12 +165,16 @@ async function saaCalCreateJobWithAppointment(payload) {
     }
     if (!customerId) return { ok: false, error: "Select or add a customer first." };
 
+    let status = "new";
+    if (payload.technicianId && payload.startDatetime) status = "scheduled";
+    else if (payload.technicianId) status = "assigned";
+
     const { data: job, error: jErr } = await _saaClient
       .from("jobs")
       .insert({
         customer_id: customerId,
         job_type: payload.appointmentTypeKey,
-        status: payload.technicianId && payload.startDatetime ? "scheduled" : "lead",
+        status,
         title: payload.title || "",
         priority: payload.priority || "normal",
         job_address: payload.jobAddress || null,

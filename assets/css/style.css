@@ -386,3 +386,44 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 
 .cal-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--navy); color: #fff; padding: 10px 18px; border-radius: 8px; font-size: .88rem; box-shadow: var(--shadow); z-index: 60; }
 .cal-toast[hidden] { display: none; }
+
+/* ============ Jobs Master List (jobs.html) ============ */
+.jobs-toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.jobs-toolbar select { width: auto; min-width: 150px; }
+.jobs-toolbar input[type="text"] { min-width: 200px; }
+.jobs-table-wrap { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); overflow-x: auto; }
+.jobs-table { width: 100%; border-collapse: collapse; font-size: .85rem; white-space: nowrap; }
+.jobs-table th { text-align: left; text-transform: uppercase; letter-spacing: .3px; font-size: .66rem; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--line); background: #f7fafb; position: sticky; top: 0; }
+.jobs-table td { padding: 10px 12px; border-bottom: 1px solid #f0f3f6; }
+.jobs-table tr.jb-row { cursor: pointer; }
+.jobs-table tr.jb-row:hover { background: #f5f8fa; }
+
+.jb-badge { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: .72rem; font-weight: 700; background: #eef3f6; color: var(--muted); white-space: nowrap; }
+.jb-pri-low { background: #eef3f6; color: var(--muted); }
+.jb-pri-normal { background: #e7f0fb; color: #1a4c8a; }
+.jb-pri-high { background: #fdeee0; color: #b3611a; }
+.jb-pri-emergency { background: #fbe3e1; color: var(--danger); }
+.jb-status-new { background: #eef3f6; color: var(--muted); }
+.jb-status-assigned { background: #eef2fd; color: #3b4fc4; }
+.jb-status-scheduled { background: #e7f0fb; color: #1a4c8a; }
+.jb-status-in_progress { background: #fdf3d8; color: #8a6d1a; }
+.jb-status-completed { background: #e3f6ee; color: var(--ok); }
+.jb-status-cancelled { background: #f0f0f0; color: #7a7a7a; }
+.jb-pay-unpaid { background: #fbe3e1; color: var(--danger); }
+.jb-pay-partial { background: #fdf3d8; color: #8a6d1a; }
+.jb-pay-paid { background: #e3f6ee; color: var(--ok); }
+.jb-invstatus-none { background: #eef3f6; color: var(--muted); }
+
+.jb-detail-card { max-width: 940px; }
+.jb-detail-card .job-num { color: var(--muted); font-size: .82rem; }
+.jb-detail-card .drawer-section { border-top: 1px solid var(--line); padding: 12px 0; }
+.jb-detail-card .drawer-section:first-of-type { border-top: none; padding-top: 0; }
+.jb-detail-card .drawer-section h4 { font-size: .7rem; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); margin-bottom: 6px; }
+.jb-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+@media (max-width: 760px) { .jb-detail-grid { grid-template-columns: 1fr; } }
+
+.jb-profit-box { background: #f5f8fa; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 8px; }
+.jb-profit-row { display: flex; justify-content: space-between; font-size: .85rem; padding: 3px 0; }
+.jb-negative { color: var(--danger); }
+.jb-payments-list { font-size: .82rem; color: var(--muted); margin: 4px 0; }
+.jb-payment-row { padding: 2px 0; }

@@ -519,6 +519,7 @@ async function saaCalOpenJobDrawer(apptId) {
 
   document.getElementById("drawer-title").textContent = `${custName} – ${appt.job.title || type.label || ""}`;
   document.getElementById("drawer-jobnum").textContent = jobNum;
+  document.getElementById("drawer-jobrecord-link").href = "jobs.html?job=" + encodeURIComponent(appt.job_id || "");
   document.getElementById("drawer-address").textContent = address;
   document.getElementById("drawer-phone").textContent = phone ? saaFormatPhone(phone) : "—";
   document.getElementById("drawer-phone-link").href = phone ? "tel:" + phone.replace(/\D/g, "") : "#";

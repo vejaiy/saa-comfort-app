@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dashboard | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260911e">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260911f">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260911e"></script>
-<script src="../assets/js/supabase-config.js?v=20260911e"></script>
-<script src="../assets/js/auth.js?v=20260911e"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260911f"></script>
+<script src="../assets/js/supabase-config.js?v=20260911f"></script>
+<script src="../assets/js/auth.js?v=20260911f"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -60,13 +60,22 @@
   <a class="btn btn-navy" href="https://www.manualjcalculator.com/#sample" target="_blank" rel="noopener">Manual J Calculator ↗</a>
 </div>
 
-<a class="card category-card" href="calendar.html" style="display:flex;align-items:center;gap:18px;margin-bottom:28px;text-decoration:none">
-  <div class="icon-wrap" style="flex:0 0 auto;font-size:26px">📅</div>
-  <div>
-    <h3 style="margin-bottom:2px">Dispatch Calendar</h3>
-    <p class="muted" style="margin:0">The operational center — technician schedule, customer, job, and status all in one drag-and-drop board.</p>
-  </div>
-</a>
+<div class="tool-grid" style="margin-bottom:28px">
+  <a class="card category-card" href="calendar.html" style="display:flex;align-items:center;gap:18px;text-decoration:none">
+    <div class="icon-wrap" style="flex:0 0 auto;font-size:26px">📅</div>
+    <div>
+      <h3 style="margin-bottom:2px">Dispatch Calendar</h3>
+      <p class="muted" style="margin:0">The operational center — technician schedule, customer, job, and status all in one drag-and-drop board.</p>
+    </div>
+  </a>
+  <a class="card category-card" href="jobs.html" style="display:flex;align-items:center;gap:18px;text-decoration:none">
+    <div class="icon-wrap" style="flex:0 0 auto;font-size:26px">🗂️</div>
+    <div>
+      <h3 style="margin-bottom:2px">Jobs</h3>
+      <p class="muted" style="margin:0">Every job's full record — customer, equipment, diagnosis, quote, actual cost, invoice, and payments.</p>
+    </div>
+  </a>
+</div>
 
 <h2 style="font-size:1.1rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted)">Quotation Worksheets</h2>
 <div class="tool-grid" style="margin-bottom:32px">
@@ -134,11 +143,6 @@
 
 <h2 style="font-size:1.1rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted)">Resources</h2>
 <div class="tool-grid">
-      <a class="tool-card stub" href="jobs.html" style="text-decoration:none">
-        <div class="icon">📋</div>
-        <h3 style="margin-bottom:0">Jobs</h3>
-        <p class="muted" style="margin:0">Job tracker — coming soon.</p>
-      </a>
       <a class="tool-card stub" href="instruction-manual.html" style="text-decoration:none">
         <div class="icon">📖</div>
         <h3 style="margin-bottom:0">Instruction Manual</h3>
@@ -157,8 +161,8 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260911e"></script>
-<script src="../assets/js/worksheet.js?v=20260911e"></script>
+<script src="../assets/js/pricing-data.js?v=20260911f"></script>
+<script src="../assets/js/worksheet.js?v=20260911f"></script>
 
 </body>
 </html>
