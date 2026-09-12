@@ -19,9 +19,19 @@ function fmtMoney(n) {
  *   linkedOptions: [{ tonnage|id, desc/label, price }]  // populates a picker for tonnageLinked/tierLinked rows
  *   linkedKind: 'tonnage' | 'tier'
  *   showGroupSubtotals: bool (default true if >1 distinct group)
+ *   showBuyColumn: bool (default false) — adds a second toggle column
+ *     ("Buy") after Included, for marking a part as needing to be
+ *     purchased/ordered vs. already on the truck. Purely informational —
+ *     doesn't affect Ext./totals, just captured in the row's form state.
  *   onTotals: fn(totals) -> totals = { byGroup: {G:{total}}, total }
  * }
  * returns { el, getTotals(), setLinkedValue(value) }
+ *
+ * Turning a row's Included toggle ON (from off) defaults its Qty to 1 if
+ * the field is currently blank/0 — so a template row with no quantity
+ * pre-filled (e.g. a Repair worksheet item) prices correctly the moment
+ * it's switched on, instead of silently totaling to $0 until someone
+ * remembers to also type a quantity.
  */
 function renderLineItemTable(mountEl, rows, opts) {
   opts = opts || {};
@@ -51,6 +61,9 @@ function renderLineItemTable(mountEl, rows, opts) {
     const itemCell = opts.editableText
       ? `<input type="text" class="item-input" value="${(r.item || "").replace(/"/g, "&quot;")}" style="width:100%;min-width:180px">`
       : `${r.item}${r.spec ? `<div class="spec">${r.spec}</div>` : ""}`;
+    const buyCell = opts.showBuyColumn
+      ? `<td class="toggle-cell"><label class="switch sm"><input type="checkbox" class="row-buy" name="${mountEl.id}__buy__${i}" aria-label="Needs to be bought/ordered"${r.buy ? " checked" : ""}><span class="slider"></span></label></td>`
+      : "";
     return `<tr data-row data-group="${group}" data-idx="${i}"${isLinked}${included ? "" : " class=\"row-off\""}>
       <td>${catCell}</td>
       <td class="item-name">${itemCell}</td>
@@ -58,7 +71,7 @@ function renderLineItemTable(mountEl, rows, opts) {
       <td><input type="number" step="any" class="qty" name="${mountEl.id}__qty__${i}" value="${r.qty}" aria-label="Quantity"></td>
       <td class="num"><input type="number" step="any" class="price" name="${mountEl.id}__price__${i}" value="${r.price}" aria-label="Unit cost"></td>
       <td class="num ext">${fmtMoney(included ? r.qty * r.price : 0)}</td>
-      <td class="toggle-cell"><label class="switch sm"><input type="checkbox" class="row-toggle" name="${mountEl.id}__included__${i}" aria-label="Include this line item"${included ? " checked" : ""}><span class="slider"></span></label></td>
+      <td class="toggle-cell"><label class="switch sm"><input type="checkbox" class="row-toggle" name="${mountEl.id}__included__${i}" aria-label="Include this line item"${included ? " checked" : ""}><span class="slider"></span></label></td>${buyCell}
     </tr>`;
   }).join("");
 
@@ -78,13 +91,13 @@ function renderLineItemTable(mountEl, rows, opts) {
       <table class="worksheet">
         <thead><tr>
           <th>Category</th><th>Item</th><th>Unit</th><th>Qty</th>
-          <th>Unit $</th><th>Ext.</th><th>Included</th>
+          <th>Unit $</th><th>Ext.</th><th>Included</th>${opts.showBuyColumn ? "<th>Buy</th>" : ""}
         </tr></thead>
         <tbody>${rowsHtml}</tbody>
         <tfoot><tr>
           <td colspan="5">Subtotal</td>
           <td class="num" data-total="total">$0.00</td>
-          <td></td>
+          <td></td>${opts.showBuyColumn ? "<td></td>" : ""}
         </tr></tfoot>
       </table>
     </div>
@@ -94,10 +107,25 @@ function renderLineItemTable(mountEl, rows, opts) {
 
   if (opts.allowAddRow) {
     mountEl.querySelector(`#${mountEl.id}-addrow`).addEventListener("click", () => {
-      rows.push({ group: "MATERIALS", category: "", item: "New item — edit me", unit: "EA", qty: 1, price: 0, included: true });
+      rows.push({ group: "MATERIALS", category: "", item: "New item — edit me", unit: "EA", qty: 1, price: 0, included: true, buy: false });
       renderLineItemTable(mountEl, rows, opts);
     });
   }
+
+  // Flipping a row's Included toggle ON defaults Qty to 1 if it's
+  // currently blank/0 (see the showBuyColumn doc comment above). Bound
+  // directly to each checkbox so it runs before the delegated "change"
+  // listener (added below) recalculates totals off the updated value.
+  mountEl.querySelectorAll(".row-toggle").forEach((cb) => {
+    cb.addEventListener("change", () => {
+      if (!cb.checked) return;
+      const tr = cb.closest("tr");
+      const qtyInput = tr && tr.querySelector(".qty");
+      if (qtyInput && (!qtyInput.value || parseFloat(qtyInput.value) === 0)) {
+        qtyInput.value = 1;
+      }
+    });
+  });
 
   function recalc() {
     const totals = { byGroup: {}, total: 0 };

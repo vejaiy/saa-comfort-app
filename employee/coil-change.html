@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Coil Change | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260911f">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260912c">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260911f"></script>
-<script src="../assets/js/supabase-config.js?v=20260911f"></script>
-<script src="../assets/js/auth.js?v=20260911f"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260912c"></script>
+<script src="../assets/js/supabase-config.js?v=20260912c"></script>
+<script src="../assets/js/auth.js?v=20260912c"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -27,8 +27,8 @@
         <option value="">Jump to page&hellip;</option>
         <option value="dashboard.html">Dashboard</option>
         <option value="calendar.html">Dispatch Calendar</option>
-        <option value="new-install.html">New Install</option>
-        <option value="replacement.html">Replacement</option>
+        <option value="quotation.html">Quotation</option>
+        <option value="repair.html">Repair</option>
         <option value="condenser-change.html">Condenser Change</option>
         <option value="coil-change.html" selected>Coil Change</option>
         <option value="furnace-change.html">Furnace Change</option>
@@ -44,7 +44,7 @@
         <option value="tool-list.html">Tool List</option>
         <option value="receipts.html">Receipts</option>
       </select>
-      <a class="btn btn-ghost btn-sm" href="dashboard.html">Employee</a>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Dashboard</a>
       <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
       <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
     </div>
@@ -60,8 +60,8 @@
 <div id="ws-table"></div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260911f"></script>
-<script src="../assets/js/worksheet.js?v=20260911f"></script>
+<script src="../assets/js/pricing-data.js?v=20260912c"></script>
+<script src="../assets/js/worksheet.js?v=20260912c"></script>
 <script>
   renderLineItemTable(document.getElementById('ws-table'), COIL_MATERIALS, {
     linkedOptions: COIL_TONNAGE,

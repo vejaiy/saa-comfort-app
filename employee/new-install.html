@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>New Installation | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260911f">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260912c">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260911f"></script>
-<script src="../assets/js/supabase-config.js?v=20260911f"></script>
-<script src="../assets/js/auth.js?v=20260911f"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260912c"></script>
+<script src="../assets/js/supabase-config.js?v=20260912c"></script>
+<script src="../assets/js/auth.js?v=20260912c"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -27,8 +27,8 @@
         <option value="">Jump to page&hellip;</option>
         <option value="dashboard.html">Dashboard</option>
         <option value="calendar.html">Dispatch Calendar</option>
-        <option value="new-install.html" selected>New Install</option>
-        <option value="replacement.html">Replacement</option>
+        <option value="quotation.html">Quotation</option>
+        <option value="repair.html">Repair</option>
         <option value="condenser-change.html">Condenser Change</option>
         <option value="coil-change.html">Coil Change</option>
         <option value="furnace-change.html">Furnace Change</option>
@@ -44,7 +44,7 @@
         <option value="tool-list.html">Tool List</option>
         <option value="receipts.html">Receipts</option>
       </select>
-      <a class="btn btn-ghost btn-sm" href="dashboard.html">Employee</a>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Dashboard</a>
       <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
       <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
     </div>
@@ -53,444 +53,17 @@
 <main class="container" style="padding:26px 20px 60px">
 
 <div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; New Installation</div>
-<div class="page-title-row"><h1>New Installation</h1></div>
-<div class="note-box blue">Full system build for new construction or a home without existing ductwork. Toggle on what the job needs — worksheets open for detail and stay live as you edit.</div>
-
-<div class="card" style="margin-bottom:22px">
-  <div class="field-row">
-    <div class="field"><label>Customer first name</label><input type="text" id="q-first"></div>
-    <div class="field"><label>Customer last name</label><input type="text" id="q-last"></div>
-  </div>
-  <div class="field-row">
-    <div class="field"><label>Phone number</label><input type="tel" id="q-phone" placeholder="XXX-XXX-XXXX" maxlength="12"></div>
-    <div class="field"><label>Job address</label><input type="text" id="q-address"></div>
-  </div>
-  <div class="field-row">
-    <div class="field" style="max-width:220px"><label>Quote date</label><input type="text" id="q-date"></div>
-    <div class="field" style="max-width:220px"><label>Quote #</label><input type="text" id="q-number" value="2026-0021"></div>
-  </div>
-  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px">
-    <button type="button" class="btn btn-navy btn-sm" id="save-quote-btn">Save Quote</button>
-    <button type="button" class="btn btn-ghost btn-sm" id="retrieve-quote-btn">Retrieve Saved Quote&hellip;</button>
-    <span id="save-status" class="muted" style="font-size:.85rem"></span>
-  </div>
+<div class="stub-note card" style="max-width:520px;margin:20px auto">
+  <div style="font-size:2rem">🧾</div>
+  <h3>Moved to Quotation</h3>
+  <p class="muted">New Installation and Replacement are now one worksheet — pick the quote type at the top of the page.</p>
+  <a class="btn btn-navy" href="quotation.html">Go to Quotation &rarr;</a>
 </div>
-
-<div class="modal-overlay" id="retrieve-modal" hidden>
-  <div class="modal-card">
-    <h3>Retrieve Saved Quote</h3>
-    <p class="muted" style="font-size:.85rem;margin-bottom:12px">Enter any one of the fields below — first name, last name, or phone number — to find matching saved quotes.</p>
-    <div class="field-row">
-      <div class="field"><label>First name</label><input type="text" id="rq-first"></div>
-      <div class="field"><label>Last name</label><input type="text" id="rq-last"></div>
-    </div>
-    <div class="field"><label>Phone number</label><input type="tel" id="rq-phone" placeholder="XXX-XXX-XXXX" maxlength="12"></div>
-    <div style="display:flex;align-items:center;gap:10px">
-      <button type="button" class="btn btn-navy btn-sm" id="rq-search-btn">Search</button>
-      <span id="rq-status" class="muted" style="font-size:.85rem"></span>
-    </div>
-    <div class="quote-result-list" id="rq-results"></div>
-    <div class="modal-close-row">
-      <button type="button" class="btn btn-ghost btn-sm" id="rq-close-btn">Cancel</button>
-    </div>
-  </div>
-</div>
-
-<h2 style="font-size:1.05rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted)">Equipment Replacement</h2>
-
-<div class="toggle-row">
-  <div class="meta"><div class="name">Condenser Material + License Fee</div><div class="desc">Remove and dispose of the existing condenser; install a new manufacturer-matched unit, refrigerant charged to spec.</div></div>
-  <div class="price" id="price-condenser">$0.00</div>
-  <label class="switch"><input type="checkbox" id="tgl-condenser" checked><span class="slider"></span></label>
-</div>
-<details class="detail-panel" id="panel-condenser">
-  <summary>Condenser Change worksheet <span class="hint">click to open the worksheet</span></summary>
-  <div class="detail-body"><div id="detail-condenser"></div></div>
-</details>
-
-<div class="toggle-row">
-  <div class="meta"><div class="name">Coil Material</div><div class="desc">Remove and dispose of the existing coil; install a new matched coil. Price scales with the access/complexity zone below.</div></div>
-  <div class="price" id="price-coil">$0.00</div>
-  <label class="switch"><input type="checkbox" id="tgl-coil" checked><span class="slider"></span></label>
-</div>
-<details class="detail-panel" id="panel-coil">
-  <summary>Coil Change worksheet <span class="hint">click to open the worksheet</span></summary>
-  <div class="detail-body"><div id="detail-coil"></div></div>
-</details>
-<div class="field" style="max-width:480px;margin:-6px 0 16px 16px"><label>Installation access / complexity zone (affects coil price)</label>
-  <select id="zone-select"></select>
-  <div class="muted" id="zone-note" style="font-size:.82rem;margin-top:4px"></div>
-</div>
-
-<div class="toggle-row">
-  <div class="meta"><div class="name">Furnace Material</div><div class="desc">Remove and dispose of the existing furnace; install a new furnace at the tier selected in the worksheet.</div></div>
-  <div class="price" id="price-furnace">$0.00</div>
-  <label class="switch"><input type="checkbox" id="tgl-furnace" checked><span class="slider"></span></label>
-</div>
-<details class="detail-panel" id="panel-furnace">
-  <summary>Furnace Change worksheet <span class="hint">click to open the worksheet</span></summary>
-  <div class="detail-body"><div id="detail-furnace"></div></div>
-</details>
-
-<h2 style="font-size:1.05rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:28px">Labor &amp; Overhead</h2>
-<div id="labor-widget" style="margin-bottom:12px"></div>
-<div class="note-box" id="labor-double-note" style="display:none">Labor is automatically doubled because both Condenser and Coil are being replaced.</div>
-<div class="field" style="max-width:220px"><label>Overhead %</label><input type="number" id="overhead-pct" value="0" step="any"></div>
-
-<div class="totals-strip">
-  <div class="total-box"><div class="label">Equipment + Labor + Overhead</div><div class="value" id="subtotal-box" style="font-size:1.3rem">$0.00</div></div>
-</div>
-
-<h2 style="font-size:1.05rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:28px">Additional Changes</h2>
-
-<div class="toggle-row">
-  <div class="meta"><div class="name">Plenum Change</div><div class="desc">Replace both return and supply plenum; extend ducts to reach the new plenum location.</div></div>
-  <div class="price" id="price-plenum">$0.00</div>
-  <label class="switch"><input type="checkbox" id="tgl-plenum" ><span class="slider"></span></label>
-</div>
-<details class="detail-panel" id="panel-plenum">
-  <summary>Plenum Change worksheet <span class="hint">click to open the worksheet</span></summary>
-  <div class="detail-body"><div id="detail-plenum"></div></div>
-</details>
-
-<div class="toggle-row">
-  <div class="meta"><div class="name">Secondary Drainpan &amp; Float Switch</div><div class="desc">Install a new secondary drain pan with float switch; connect and flush the existing drain line.</div></div>
-  <div class="price" id="price-drainpan">$0.00</div>
-  <label class="switch"><input type="checkbox" id="tgl-drainpan" ><span class="slider"></span></label>
-</div>
-<details class="detail-panel" id="panel-drainpan">
-  <summary>Drainpan install worksheet <span class="hint">click to open the worksheet</span></summary>
-  <div class="detail-body"><div id="detail-drainpan"></div></div>
-</details>
-
-<div class="toggle-row">
-  <div class="meta"><div class="name">Relocate Furnace and Coil</div><div class="desc">Prepare and provide base support for a furnace/coil relocation.</div></div>
-  <div style="display:flex;gap:8px;align-items:center">
-    <span class="muted" style="font-size:.82rem">$</span>
-    <input type="number" id="price-relocate" value="500" style="width:90px" step="any">
-  </div>
-  <label class="switch"><input type="checkbox" id="tgl-relocate" ><span class="slider"></span></label>
-</div>
-
-<div class="toggle-row">
-  <div class="meta"><div class="name">UV Light Air Purifier</div><div class="desc">Supply and install a UV light air purifier.</div></div>
-  <div style="display:flex;gap:8px;align-items:center">
-    <span class="muted" style="font-size:.82rem">$</span>
-    <input type="number" id="price-uv" value="399" style="width:90px" step="any">
-  </div>
-  <label class="switch"><input type="checkbox" id="tgl-uv" ><span class="slider"></span></label>
-</div>
-
-<div class="toggle-row">
-  <div class="meta"><div class="name">Equipment/Refrigerant Disposal Fee</div><div class="desc">Disposal of old condenser, coil, furnace, and recovered refrigerant per county requirements.</div></div>
-  <div style="display:flex;gap:8px;align-items:center">
-    <span class="muted" style="font-size:.82rem">$</span>
-    <input type="number" id="price-disposal" value="200" style="width:90px" step="any">
-  </div>
-  <label class="switch"><input type="checkbox" id="tgl-disposal" checked><span class="slider"></span></label>
-</div>
-
-<div class="toggle-row">
-  <div class="meta"><div class="name">Permit &amp; Inspection Fee</div><div class="desc">Mechanical permit application and required inspection scheduling for the applicable jurisdiction.</div></div>
-  <div style="display:flex;gap:8px;align-items:center">
-    <span class="muted" style="font-size:.82rem">$</span>
-    <input type="number" id="price-permit" value="250" style="width:90px" step="any">
-  </div>
-  <label class="switch"><input type="checkbox" id="tgl-permit" checked><span class="slider"></span></label>
-</div>
-
-<div class="toggle-row">
-  <div class="meta">
-    <input type="text" id="name-other" class="inline-input name-input" placeholder="Other item — name" aria-label="Custom item name">
-    <input type="text" id="desc-other" class="inline-input desc-input" placeholder="Description (optional)" aria-label="Custom item description">
-  </div>
-  <div style="display:flex;gap:8px;align-items:center">
-    <span class="muted" style="font-size:.82rem">$</span>
-    <input type="number" id="price-other" value="0" style="width:90px" step="any">
-  </div>
-  <label class="switch"><input type="checkbox" id="tgl-other"><span class="slider"></span></label>
-</div>
-
-<h2 style="font-size:1.05rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:28px">Additional Service</h2>
-
-<div class="toggle-row">
-  <div class="meta"><div class="name">Duct Cleaning</div><div class="desc">Whole-system duct cleaning.</div></div>
-  <div style="display:flex;gap:8px;align-items:center">
-    <span class="muted" style="font-size:.82rem">$</span>
-    <input type="number" id="price-duct" value="500" style="width:90px" step="any">
-  </div>
-  <label class="switch"><input type="checkbox" id="tgl-duct" ><span class="slider"></span></label>
-</div>
-
-<div class="totals-strip" style="margin-top:24px">
-  <div class="total-box grand"><div class="label">Quote Total</div><div class="value" id="grand-total">$0.00</div></div>
-</div>
-
-<div class="printable-summary" id="print-summary">
-  <h3>Warranties &amp; Terms</h3>
-  <p class="muted" style="margin-bottom:4px"><strong>Parts Warranty:</strong> 10-Year Manufacturer Limited Warranty (upon online equipment registration within 60 days).</p>
-  <p class="muted"><strong>Labor Warranty:</strong> 1-Year Installation Workmanship Warranty from SAA Comfort Air LLC.</p>
-  <div class="terms" id="payment-terms"></div>
-  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px">
-    <button class="btn btn-navy btn-sm" id="print-quote-btn">Print Quote</button>
-  </div>
-</div>
+<script>window.location.replace("quotation.html");</script>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260911f"></script>
-<script src="../assets/js/worksheet.js?v=20260911f"></script>
-<script src="../assets/js/labor-widget.js?v=20260911f"></script>
-<script src="../assets/js/plenum-widget.js?v=20260911f"></script>
-<script src="../assets/js/print-quote.js?v=20260911f"></script>
-<script src="../assets/js/quotes-db.js?v=20260911f"></script>
-<script>
-  document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
-  saaAttachPhoneMask(document.getElementById('q-phone'));
-  saaAttachPhoneMask(document.getElementById('rq-phone'));
+<script src="../assets/js/pricing-data.js?v=20260912c"></script>
+<script src="../assets/js/worksheet.js?v=20260912c"></script>
 
-  // ---- Zone selector ----
-  const zoneSelect = document.getElementById('zone-select');
-  zoneSelect.innerHTML = ZONES.map((z, i) => `<option value="${z.id}"${i === 0 ? " selected" : ""}>${z.label}</option>`).join('');
-  function currentZone() { return ZONES.find(z => z.id === parseInt(zoneSelect.value, 10)); }
-  zoneSelect.addEventListener('change', () => { document.getElementById('zone-note').textContent = currentZone().note; updateAll(); });
-  document.getElementById('zone-note').textContent = currentZone().note;
-
-  // ---- Equipment detail worksheets ----
-  const condenserDetail = renderLineItemTable(document.getElementById('detail-condenser'), CONDENSER_MATERIALS, { linkedOptions: CONDENSER_TONNAGE, linkedKind: 'tonnage' });
-  const coilDetail = renderLineItemTable(document.getElementById('detail-coil'), COIL_MATERIALS, { linkedOptions: COIL_TONNAGE, linkedKind: 'tonnage' });
-  const furnaceDetail = renderLineItemTable(document.getElementById('detail-furnace'), FURNACE_MATERIALS, { linkedOptions: FURNACE_TIERS, linkedKind: 'tier' });
-
-  // Keep the coil worksheet's tonnage (and price) matched to whatever
-  // tonnage was picked for the condenser — pick the condenser size once
-  // and the matching coil populates itself.
-  const condenserTonSelect = document.getElementById('detail-condenser-linked');
-  if (condenserTonSelect) {
-    condenserTonSelect.addEventListener('change', () => coilDetail.setLinkedValue(condenserTonSelect.value));
-    coilDetail.setLinkedValue(condenserTonSelect.value);
-  }
-
-  // ---- Additional-change detail worksheets ----
-  const plenumWidget = initPlenumWidget(document.getElementById('detail-plenum'));
-  const drainpanRows = DRAINPAN_MATERIALS.concat([
-    { category: "Labor", item: "Installation labor (1 technician)", unit: "HR",
-      qty: DRAINPAN_LABOR.techs * DRAINPAN_LABOR.hours, price: DRAINPAN_LABOR.rate, included: true }
-  ]);
-  const drainpanDetail = renderLineItemTable(document.getElementById('detail-drainpan'), drainpanRows, { showGroupSubtotals: false });
-
-  // ---- Labor widget ----
-  const laborWidget = initLaborWidget(document.getElementById('labor-widget'));
-
-  function tonnageLabel(select) {
-    const opt = select.options[select.selectedIndex];
-    return opt ? opt.textContent.split(' — ')[0] : '';
-  }
-
-  function updateAll() {
-    const condenserOn = document.getElementById('tgl-condenser').checked;
-    const coilOn = document.getElementById('tgl-coil').checked;
-    const furnaceOn = document.getElementById('tgl-furnace').checked;
-    const plenumOn = document.getElementById('tgl-plenum').checked;
-    const drainpanOn = document.getElementById('tgl-drainpan').checked;
-    const relocateOn = document.getElementById('tgl-relocate').checked;
-    const uvOn = document.getElementById('tgl-uv').checked;
-    const disposalOn = document.getElementById('tgl-disposal').checked;
-    const permitOn = document.getElementById('tgl-permit').checked;
-    const otherOn = document.getElementById('tgl-other').checked;
-    const ductOn = document.getElementById('tgl-duct').checked;
-
-    document.getElementById('panel-condenser').style.display = condenserOn ? '' : 'none';
-    document.getElementById('panel-coil').style.display = coilOn ? '' : 'none';
-    document.getElementById('panel-furnace').style.display = furnaceOn ? '' : 'none';
-    document.getElementById('panel-plenum').style.display = plenumOn ? '' : 'none';
-    document.getElementById('panel-drainpan').style.display = drainpanOn ? '' : 'none';
-
-    const zoneMult = currentZone().multiplier;
-    const condTotal = condenserDetail.getTotals().total;
-    const coilTotal = coilDetail.getTotals().total * zoneMult;
-    const furnaceTotal = furnaceDetail.getTotals().total;
-
-    document.getElementById('price-condenser').textContent = fmtMoney(condTotal);
-    document.getElementById('price-coil').textContent = fmtMoney(coilTotal);
-    document.getElementById('price-furnace').textContent = fmtMoney(furnaceTotal);
-
-    let laborTotal = laborWidget.getTotal().total;
-    const doubleLabor = condenserOn && coilOn;
-    document.getElementById('labor-double-note').style.display = doubleLabor ? '' : 'none';
-    if (doubleLabor) laborTotal *= 2;
-
-    const overheadPct = (parseFloat(document.getElementById('overhead-pct').value) || 0) / 100;
-    const overhead = laborTotal * overheadPct;
-
-    const equipTotal = (condenserOn ? condTotal : 0) + (coilOn ? coilTotal : 0) + (furnaceOn ? furnaceTotal : 0) + laborTotal + overhead;
-    document.getElementById('subtotal-box').textContent = fmtMoney(equipTotal);
-
-    const plenumTotal = plenumWidget.getTotal();
-    document.getElementById('price-plenum').textContent = fmtMoney(plenumTotal);
-    const drainpanTotal = drainpanDetail.getTotals().total;
-    document.getElementById('price-drainpan').textContent = fmtMoney(drainpanTotal);
-
-    const relocatePrice = parseFloat(document.getElementById('price-relocate').value) || 0;
-    const uvPrice = parseFloat(document.getElementById('price-uv').value) || 0;
-    const disposalPrice = parseFloat(document.getElementById('price-disposal').value) || 0;
-    const permitPrice = parseFloat(document.getElementById('price-permit').value) || 0;
-    const otherPrice = parseFloat(document.getElementById('price-other').value) || 0;
-    const otherName = document.getElementById('name-other').value.trim();
-    const otherDesc = document.getElementById('desc-other').value.trim();
-    const ductPrice = parseFloat(document.getElementById('price-duct').value) || 0;
-
-    let grandTotal = equipTotal;
-    if (plenumOn) grandTotal += plenumTotal;
-    if (drainpanOn) grandTotal += drainpanTotal;
-    if (relocateOn) grandTotal += relocatePrice;
-    if (uvOn) grandTotal += uvPrice;
-    if (disposalOn) grandTotal += disposalPrice;
-    if (permitOn) grandTotal += permitPrice;
-    if (otherOn) grandTotal += otherPrice;
-    if (ductOn) grandTotal += ductPrice;
-
-    document.getElementById('grand-total').textContent = fmtMoney(grandTotal);
-    document.getElementById('payment-terms').textContent =
-      `Payment Terms: 50% deposit required upon signing (${fmtMoney(grandTotal / 2)}); remaining 50% due upon satisfactory project completion.`;
-
-    window._saaGetQuote = function () {
-      const tonSelect = document.getElementById('detail-condenser-linked');
-      const tierSelect = document.getElementById('detail-furnace-linked');
-
-      function systemDesc() {
-        const parts = [];
-        if (condenserOn) parts.push((tonSelect ? tonnageLabel(tonSelect) + ' ' : '') + 'condenser');
-        if (coilOn) parts.push('matched evaporator coil');
-        if (furnaceOn) {
-          const tierLabel = tierSelect ? tierSelect.options[tierSelect.selectedIndex].textContent : '';
-          parts.push((tierLabel ? tierLabel + ' ' : '') + 'furnace');
-        }
-        if (!parts.length) return '';
-        let list;
-        if (parts.length === 1) list = parts[0];
-        else if (parts.length === 2) list = parts.join(' and ');
-        else list = parts.slice(0, -1).join(', ') + ', and ' + parts[parts.length - 1];
-        return 'New ' + list + '. Existing equipment removed and disposed of; new manufacturer-matched equipment installed and charged to spec.';
-      }
-
-      const lineItems = [];
-      const equipOnlyTotal = (condenserOn ? condTotal : 0) + (coilOn ? coilTotal : 0) + (furnaceOn ? furnaceTotal : 0);
-      const laborLineTotal = laborTotal + overhead;
-      if (equipOnlyTotal > 0) {
-        lineItems.push({ name: 'New HVAC System (Condenser, Coil & Furnace)', desc: systemDesc() || 'New equipment installed and charged to spec.', price: equipOnlyTotal });
-      }
-      if (laborLineTotal > 0) {
-        lineItems.push({ name: 'Labor', desc: 'Installation labor: removal of existing equipment, pressure test, evacuation, refrigerant charge, and startup/commissioning.', price: laborLineTotal });
-      }
-      if (plenumOn) lineItems.push({ name: 'Plenum Change', price: plenumTotal });
-      if (drainpanOn) lineItems.push({ name: 'Secondary Drainpan & Float Switch', price: drainpanTotal });
-      if (relocateOn) lineItems.push({ name: 'Relocate Furnace and Coil', price: relocatePrice });
-      if (uvOn) lineItems.push({ name: 'UV Light Air Purifier', price: uvPrice });
-      if (disposalOn) lineItems.push({ name: 'Equipment/Refrigerant Disposal Fee', desc: 'Disposal of old condenser, coil, furnace, and recovered refrigerant per county requirements.', price: disposalPrice });
-      if (permitOn) lineItems.push({ name: 'Permit & Inspection Fee', desc: 'Mechanical permit application and required inspection scheduling for the applicable jurisdiction.', price: permitPrice });
-      if (otherOn && otherPrice > 0) lineItems.push({ name: otherName || 'Additional Item', desc: otherDesc, price: otherPrice });
-      if (ductOn) lineItems.push({ name: 'Duct Cleaning', price: ductPrice });
-      const firstName = document.getElementById('q-first').value.trim();
-      const lastName = document.getElementById('q-last').value.trim();
-      return {
-        jobTitle: 'New Installation',
-        quoteType: 'new_install',
-        firstName: firstName,
-        lastName: lastName,
-        customer: [firstName, lastName].filter(Boolean).join(' '),
-        phone: document.getElementById('q-phone').value.trim(),
-        address: document.getElementById('q-address').value,
-        date: document.getElementById('q-date').value,
-        quoteNumber: document.getElementById('q-number').value,
-        lineItems: lineItems,
-        grandTotal: grandTotal,
-      };
-    };
-  }
-
-  document.getElementById('print-quote-btn').addEventListener('click', () => {
-    printFormalQuote(window._saaGetQuote());
-  });
-
-  // ---- Save Quote ----
-  document.getElementById('save-quote-btn').addEventListener('click', async () => {
-    const btn = document.getElementById('save-quote-btn');
-    const status = document.getElementById('save-status');
-    const quote = window._saaGetQuote();
-    if (!quote.firstName && !quote.lastName && !quote.phone) {
-      status.textContent = 'Enter a first name, last name, or phone number first.';
-      return;
-    }
-    btn.disabled = true;
-    status.textContent = 'Saving…';
-    const result = await saaSaveQuote({
-      quoteNumber: quote.quoteNumber,
-      quoteType: quote.quoteType,
-      firstName: quote.firstName,
-      lastName: quote.lastName,
-      phone: quote.phone,
-      jobAddress: quote.address,
-      total: quote.grandTotal,
-      formState: saaSerializeFormState(),
-    });
-    btn.disabled = false;
-    status.textContent = result.ok ? ('Saved as ' + (quote.quoteNumber || 'quote') + '.') : ('Error: ' + result.error);
-  });
-
-  // ---- Retrieve Quote ----
-  document.getElementById('retrieve-quote-btn').addEventListener('click', () => {
-    document.getElementById('retrieve-modal').hidden = false;
-    document.getElementById('rq-results').innerHTML = '';
-    document.getElementById('rq-status').textContent = '';
-  });
-  document.getElementById('rq-close-btn').addEventListener('click', () => {
-    document.getElementById('retrieve-modal').hidden = true;
-  });
-  document.getElementById('rq-search-btn').addEventListener('click', async () => {
-    const firstName = document.getElementById('rq-first').value.trim();
-    const lastName = document.getElementById('rq-last').value.trim();
-    const phone = document.getElementById('rq-phone').value.trim();
-    const status = document.getElementById('rq-status');
-    const results = document.getElementById('rq-results');
-    if (!firstName && !lastName && !phone) {
-      status.textContent = 'Enter at least one field.';
-      return;
-    }
-    status.textContent = 'Searching…';
-    results.innerHTML = '';
-    const res = await saaSearchQuotes({ firstName, lastName, phone });
-    if (!res.ok) { status.textContent = 'Error: ' + res.error; return; }
-    status.textContent = res.results.length + ' match' + (res.results.length === 1 ? '' : 'es') + ' found.';
-    if (!res.results.length) {
-      results.innerHTML = '<div class="quote-result-empty">No saved quotes match.</div>';
-      return;
-    }
-    results.innerHTML = res.results.map(q => {
-      const c = q.customer || {};
-      const name = [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Unnamed';
-      const when = q.updated_at ? new Date(q.updated_at).toLocaleDateString('en-US') : '';
-      return `<div class="quote-result-row" data-quote-id="${q.id}">
-        <div>
-          <div class="name">${name}${c.phone ? ' — ' + saaFormatPhone(c.phone) : ''}</div>
-          <div class="meta">${q.quote_number || 'No #'} &middot; ${q.quote_type || ''} &middot; ${q.job_address || ''} &middot; ${when}</div>
-        </div>
-        <div class="name">${fmtMoney(q.total || 0)}</div>
-      </div>`;
-    }).join('');
-    results.querySelectorAll('.quote-result-row').forEach(row => {
-      row.addEventListener('click', async () => {
-        status.textContent = 'Loading…';
-        const loaded = await saaLoadQuote(row.dataset.quoteId);
-        if (!loaded.ok) { status.textContent = 'Error: ' + loaded.error; return; }
-        if (loaded.quote.form_state) saaApplyFormState(loaded.quote.form_state);
-        document.getElementById('retrieve-modal').hidden = true;
-        updateAll();
-      });
-    });
-  });
-
-  document.querySelector('main').addEventListener('input', updateAll);
-  document.querySelector('main').addEventListener('change', updateAll);
-  updateAll();
-</script>
 </body>
 </html>

@@ -38,10 +38,28 @@ async function saaFindOrCreateCustomer(firstName, lastName, phone) {
   return created.id;
 }
 
+/** Sequential, human-readable quote number (Q-2026-0001) — same
+ *  count-based scheme jobs-db.js uses for job numbers and invoices
+ *  already use for invoice numbers. Assigned automatically the first
+ *  time a quote is saved; the office never types one in (round 3,
+ *  2026-09-12 — previously "Quote #" was a free-text field the office
+ *  had to remember to fill in and keep unique themselves). */
+async function _saaNextQuoteNumber() {
+  const year = new Date().getFullYear();
+  const { count, error } = await _saaClient
+    .from("quotes")
+    .select("id", { count: "exact", head: true })
+    .like("quote_number", `Q-${year}-%`);
+  if (error) throw error;
+  return `Q-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
+}
+
 /**
- * payload: { quoteNumber, quoteType, firstName, lastName, phone,
- *            jobAddress, total, formState }
- * returns: { ok: true, quoteId } | { ok: false, error }
+ * payload: { quoteId (optional — pass the id of a quote already saved or
+ *            retrieved this session to update it instead of creating a
+ *            new one), quoteType, firstName, lastName, phone, jobAddress,
+ *            total, formState }
+ * returns: { ok: true, quoteId, quoteNumber } | { ok: false, error }
  */
 async function saaSaveQuote(payload) {
   try {
@@ -51,7 +69,6 @@ async function saaSaveQuote(payload) {
     const customerId = await saaFindOrCreateCustomer(payload.firstName, payload.lastName, payload.phone);
 
     const row = {
-      quote_number: payload.quoteNumber || null,
       customer_id: customerId,
       quote_type: payload.quoteType || "",
       job_address: payload.jobAddress || null,
@@ -60,25 +77,20 @@ async function saaSaveQuote(payload) {
       updated_at: new Date().toISOString(),
     };
 
-    let existingId = null;
-    if (row.quote_number) {
+    if (payload.quoteId) {
       const { data, error } = await _saaClient
         .from("quotes")
-        .select("id")
-        .eq("quote_number", row.quote_number)
-        .limit(1);
+        .update(row)
+        .eq("id", payload.quoteId)
+        .select("id,quote_number")
+        .single();
       if (error) throw error;
-      if (data && data.length) existingId = data[0].id;
-    }
-
-    if (existingId) {
-      const { error } = await _saaClient.from("quotes").update(row).eq("id", existingId);
-      if (error) throw error;
-      return { ok: true, quoteId: existingId };
+      return { ok: true, quoteId: data.id, quoteNumber: data.quote_number };
     } else {
-      const { data, error } = await _saaClient.from("quotes").insert(row).select("id").single();
+      row.quote_number = await _saaNextQuoteNumber();
+      const { data, error } = await _saaClient.from("quotes").insert(row).select("id,quote_number").single();
       if (error) throw error;
-      return { ok: true, quoteId: data.id };
+      return { ok: true, quoteId: data.id, quoteNumber: data.quote_number };
     }
   } catch (e) {
     return { ok: false, error: (e && e.message) || String(e) };

@@ -62,7 +62,7 @@ const SAA_JOB_TYPE_LABELS = {
 
 /** The curated set offered on the Jobs List's own "Job Type" field —
  *  matches Vijayan's spec exactly, each mapped to an existing job_type key. */
-const SAA_JOBS_TYPE_OPTIONS = [
+const SAA_JOBS_TYPE_OPTIONS_CURATED = [
   ["diagnostic", "Diagnostic / Repair"],
   ["maintenance_visit", "Preventive Maintenance"],
   ["condenser_change", "Condenser Replacement"],
@@ -73,6 +73,23 @@ const SAA_JOBS_TYPE_OPTIONS = [
   ["electrical_repair", "Electrical Repair"],
   ["custom", "Other"],
 ];
+
+/** Full type list (curated set first, then every other job_type key) —
+ *  used everywhere a job's *actual* type has to reliably round-trip:
+ *  the Job Card's own Job Type field, the filter dropdown, and the New
+ *  Job form when it's pre-filled by converting a saved quote (a quote's
+ *  quote_type is one of the New Install/Replacement/etc. worksheet keys,
+ *  which are already in the curated 9 — but a job created from the
+ *  Dispatch Calendar can carry one of the calendar's own quick-dispatch
+ *  types, like "service_call" or "tune_up", that aren't in the curated
+ *  list. Without this fallback, opening that job's Job Card would show
+ *  the select defaulting to its first option and silently rewrite the
+ *  job's type on save. */
+const SAA_JOBS_TYPE_OPTIONS = SAA_JOBS_TYPE_OPTIONS_CURATED.concat(
+  Object.keys(SAA_JOB_TYPE_LABELS)
+    .filter((k) => !SAA_JOBS_TYPE_OPTIONS_CURATED.some(([v]) => v === k))
+    .map((k) => [k, SAA_JOB_TYPE_LABELS[k]])
+);
 
 const SAA_JOBS_STATUS_OPTIONS = [
   ["new", "New"],
@@ -228,10 +245,114 @@ function saaJobsPaymentStatus(invoice, amountPaid) {
   return "unpaid";
 }
 
-/** Creates a job directly from the Jobs List "+ New Job" form, and an
- *  unscheduled appointment alongside it so the job also appears in the
- *  Dispatch Calendar's Unscheduled Jobs queue, ready to be dragged onto
- *  an actual time slot. */
+/** Every appointment type's default duration, used to size the block a
+ *  job takes up on the Dispatch Calendar grid when it's scheduled
+ *  straight from the Jobs List (duplicated from calendar-db.js's own
+ *  fetch — see file header on why these data-layer files don't share
+ *  code). Falls back to 60 minutes for a job_type with no matching
+ *  appointment_types row (most of the Jobs List's own curated types
+ *  are worksheet/quote categories, not quick-dispatch ones). */
+async function saaJobsFetchAppointmentTypes() {
+  const { data, error } = await _saaClient.from("appointment_types").select("key,default_duration_minutes");
+  if (error) throw error;
+  return Object.fromEntries((data || []).map((t) => [t.key, t.default_duration_minutes]));
+}
+
+/* ---- naive wall-clock time strings, same convention calendar.js uses:
+   build "<date>T<HH>:<MM>:00" directly, never round-trip through
+   new Date().toISOString(), so what the office picks is exactly what
+   redisplays with no timezone-conversion surprises. ---- */
+function _saaJobsTimeStr(dateStr, hhmm) {
+  return `${dateStr}T${hhmm}:00`;
+}
+function _saaJobsAddMinutes(hhmm, minutes) {
+  const [h, m] = String(hhmm || "00:00").split(":").map(Number);
+  const total = ((h * 60 + m + minutes) % 1440 + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/** Keeps a job's calendar appointment in sync with its Scheduled Date /
+ *  Scheduled Time / Technician fields, whichever page last changed them.
+ *  Called after every save on the Jobs List's Job Card (the Dispatch
+ *  Calendar's own drag-and-drop already updates the appointment directly
+ *  — see saaCalUpdateAppointmentSchedule in calendar-db.js, which now
+ *  also writes these same fields back onto the job). A job with a
+ *  technician AND a scheduled date gets placed on the calendar grid at
+ *  that date/time (defaulting to 9:00 AM and the type's usual duration,
+ *  or 60 minutes, if no time was entered); otherwise its appointment is
+ *  cleared back to no start time, which is exactly what puts it back in
+ *  the Unscheduled Jobs queue. */
+async function saaJobsSyncAppointmentSchedule(jobId, { technicianId, scheduledDate, scheduledTime, jobType }) {
+  try {
+    let start = null, end = null;
+    if (technicianId && scheduledDate) {
+      const time = scheduledTime || "09:00";
+      const durations = await saaJobsFetchAppointmentTypes();
+      const duration = durations[jobType] || 60;
+      start = _saaJobsTimeStr(scheduledDate, time);
+      end = _saaJobsTimeStr(scheduledDate, _saaJobsAddMinutes(time, duration));
+    }
+    const { error } = await _saaClient
+      .from("appointments")
+      .update({ technician_id: technicianId || null, start_datetime: start, end_datetime: end })
+      .eq("job_id", jobId);
+    if (error) throw error;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+/** Global quote search for the New Job popup's "Start from a Quote"
+ *  flow — unlike saaJobsFetchCustomerQuotes (scoped to one already-
+ *  selected customer), this searches every saved quote by quote number
+ *  or by the customer's name/phone, since at this point in the New Job
+ *  flow no customer has been picked yet. */
+async function saaJobsSearchQuotes(query) {
+  const q = (query || "").trim().replace(/[%,()]/g, "");
+  if (!q) return [];
+
+  const [{ data: byNumber, error: e1 }, { data: matchedCust, error: e2 }] = await Promise.all([
+    _saaClient.from("quotes").select("id,quote_number,quote_type,total,customer_id,job_address,created_at").or(`quote_number.ilike.%${q}%`),
+    _saaClient.from("customers").select("id,first_name,last_name,phone,billing_city,billing_zip").or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,phone.ilike.%${q}%`),
+  ]);
+  if (e1) throw e1;
+  if (e2) throw e2;
+
+  const custIds = (matchedCust || []).map((c) => c.id);
+  const { data: byCust, error: e3 } = custIds.length
+    ? await _saaClient.from("quotes").select("id,quote_number,quote_type,total,customer_id,job_address,created_at").in("customer_id", custIds)
+    : { data: [], error: null };
+  if (e3) throw e3;
+
+  const merged = {};
+  [].concat(byNumber || [], byCust || []).forEach((qt) => { merged[qt.id] = qt; });
+  const quotes = Object.values(merged);
+  if (!quotes.length) return [];
+
+  const allCustIds = [...new Set(quotes.map((qt) => qt.customer_id))];
+  const { data: customers, error: e4 } = await _saaClient
+    .from("customers")
+    .select("id,first_name,last_name,phone,billing_address,billing_city,billing_zip")
+    .in("id", allCustIds);
+  if (e4) throw e4;
+  const custById = Object.fromEntries((customers || []).map((c) => [c.id, c]));
+
+  return quotes
+    .map((qt) => Object.assign({}, qt, { customer: custById[qt.customer_id] || null }))
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 10);
+}
+
+/** Creates a job directly from the Jobs List "+ New Job" form. If a
+ *  technician and scheduled date (and, usually, time) are set, the job's
+ *  appointment is placed directly on that slot on the Dispatch Calendar
+ *  grid; otherwise it's created with no start time, which is exactly
+ *  what puts a job in the calendar's Unscheduled Jobs queue — no extra
+ *  plumbing needed, it falls out of the existing schema. When the job is
+ *  being created from a saved quote (payload.linkedQuoteId), the two
+ *  rows are linked both ways: the new job's linked_quote_id points at
+ *  the quote, and the quote's job_id points back at the new job. */
 async function saaJobsCreateJob(payload) {
   try {
     let customerId = payload.customerId || null;
@@ -248,9 +369,12 @@ async function saaJobsCreateJob(payload) {
     if (payload.technicianId && payload.scheduledDate) status = "scheduled";
     else if (payload.technicianId) status = "assigned";
 
+    const jobNumber = await _saaJobsNextJobNumber();
+
     const { data: job, error: jErr } = await _saaClient
       .from("jobs")
       .insert({
+        job_number: jobNumber,
         customer_id: customerId,
         job_type: payload.jobType,
         priority: payload.priority || "normal",
@@ -258,23 +382,41 @@ async function saaJobsCreateJob(payload) {
         title: payload.title || "",
         job_address: payload.jobAddress || null,
         job_city: payload.jobCity || null,
+        job_state: payload.jobState || "TX",
         job_zip: payload.jobZip || null,
         assigned_technician_id: payload.technicianId || null,
         scheduled_date: payload.scheduledDate || null,
+        scheduled_time: payload.scheduledTime || null,
+        linked_quote_id: payload.linkedQuoteId || null,
+        quoted_amount: payload.quotedAmount || null,
         notes: payload.notes || null,
       })
       .select("id")
       .single();
     if (jErr) throw jErr;
 
+    let start = null, end = null;
+    if (payload.technicianId && payload.scheduledDate) {
+      const time = payload.scheduledTime || "09:00";
+      const durations = await saaJobsFetchAppointmentTypes();
+      const duration = durations[payload.jobType] || 60;
+      start = _saaJobsTimeStr(payload.scheduledDate, time);
+      end = _saaJobsTimeStr(payload.scheduledDate, _saaJobsAddMinutes(time, duration));
+    }
+
     const { error: aErr } = await _saaClient.from("appointments").insert({
       job_id: job.id,
       technician_id: payload.technicianId || null,
-      start_datetime: null,
-      end_datetime: null,
+      start_datetime: start,
+      end_datetime: end,
       status: "scheduled",
     });
     if (aErr) throw aErr;
+
+    if (payload.linkedQuoteId) {
+      const { error: qErr } = await _saaClient.from("quotes").update({ job_id: job.id }).eq("id", payload.linkedQuoteId);
+      if (qErr) throw qErr;
+    }
 
     return { ok: true, jobId: job.id };
   } catch (e) {
@@ -321,6 +463,8 @@ async function saaJobsLinkQuote(jobId, quoteId) {
       .update({ linked_quote_id: quoteId, quoted_amount: quote.total || 0, updated_at: new Date().toISOString() })
       .eq("id", jobId);
     if (error) throw error;
+    // Keep the link two-way, same as a quote-to-job conversion from the New Job popup.
+    await _saaClient.from("quotes").update({ job_id: jobId }).eq("id", quoteId);
     return { ok: true, quotedAmount: quote.total || 0 };
   } catch (e) {
     return { ok: false, error: (e && e.message) || String(e) };
@@ -338,12 +482,39 @@ async function saaJobsFetchLatestEquipment(customerId) {
   return (data && data[0]) || null;
 }
 
-/** Updates the customer's most recent equipment row, or creates their
- *  first one if they don't have one yet. Equipment is customer-level
- *  (see file header), not job-level. */
-async function saaJobsSaveEquipment(customerId, fields) {
+/** The Job Card's three equipment buttons (Condenser / Coil / Furnace) —
+ *  each is its own row on the `equipment` table, distinguished by the new
+ *  equipment_type column, so a customer can have one current record per
+ *  system component instead of a single generic "equipment" blob. Returns
+ *  the most recent row of each type (or null if that type hasn't been
+ *  added for this customer yet). */
+const SAA_EQUIPMENT_TYPES = [["condenser", "Condenser"], ["coil", "Coil"], ["furnace", "Furnace"]];
+
+async function saaJobsFetchEquipmentByType(customerId) {
+  const { data, error } = await _saaClient
+    .from("equipment")
+    .select("*")
+    .eq("customer_id", customerId)
+    .in("equipment_type", ["condenser", "coil", "furnace"])
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  const byType = { condenser: null, coil: null, furnace: null };
+  (data || []).forEach((row) => { if (!byType[row.equipment_type]) byType[row.equipment_type] = row; });
+  return byType;
+}
+
+/** Creates or updates that customer's current row for one equipment type.
+ *  Does nothing to the other two types' rows. */
+async function saaJobsSaveEquipmentByType(customerId, equipmentType, fields) {
   try {
-    const existing = await saaJobsFetchLatestEquipment(customerId);
+    const { data: existing, error: findErr } = await _saaClient
+      .from("equipment")
+      .select("id")
+      .eq("customer_id", customerId)
+      .eq("equipment_type", equipmentType)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (findErr) throw findErr;
     const row = {
       brand: fields.brand || null,
       model: fields.model || null,
@@ -354,17 +525,48 @@ async function saaJobsSaveEquipment(customerId, fields) {
       warranty_status: fields.warrantyStatus || "unknown",
       updated_at: new Date().toISOString(),
     };
-    if (existing) {
-      const { error } = await _saaClient.from("equipment").update(row).eq("id", existing.id);
+    if (existing && existing.length) {
+      const { error } = await _saaClient.from("equipment").update(row).eq("id", existing[0].id);
       if (error) throw error;
+      return { ok: true, id: existing[0].id };
     } else {
-      const { error } = await _saaClient.from("equipment").insert(Object.assign({ customer_id: customerId }, row));
+      const { data: created, error } = await _saaClient
+        .from("equipment")
+        .insert(Object.assign({ customer_id: customerId, equipment_type: equipmentType }, row))
+        .select("id")
+        .single();
       if (error) throw error;
+      return { ok: true, id: created.id };
     }
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+/** Locks or unlocks one equipment record so its fields can't be edited
+ *  from the Job Card by accident until someone deliberately unlocks it. */
+async function saaJobsToggleEquipmentLock(equipmentId, locked) {
+  try {
+    const { error } = await _saaClient.from("equipment").update({ locked }).eq("id", equipmentId);
+    if (error) throw error;
     return { ok: true };
   } catch (e) {
     return { ok: false, error: (e && e.message) || String(e) };
   }
+}
+
+/** Sequential, human-readable job number (J-2026-0001) assigned once at
+ *  creation — same count-based pattern _saaJobsNextInvoiceNumber already
+ *  uses for invoices. Replaces the old "JOB-<uuid8>" display, which was
+ *  a random UUID fragment, not sequential or trackable at all. */
+async function _saaJobsNextJobNumber() {
+  const year = new Date().getFullYear();
+  const { count, error } = await _saaClient
+    .from("jobs")
+    .select("id", { count: "exact", head: true })
+    .like("job_number", `J-${year}-%`);
+  if (error) throw error;
+  return `J-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
 }
 
 async function _saaJobsNextInvoiceNumber() {

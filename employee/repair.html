@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Repair | Employee | SAA Comfort Air LLC</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260912c">
+
+<style>body.emp-shell{visibility:hidden}</style>
+</head>
+<body class="emp-shell">
+<script src="../assets/js/vendor/supabase.js?v=20260912c"></script>
+<script src="../assets/js/supabase-config.js?v=20260912c"></script>
+<script src="../assets/js/auth.js?v=20260912c"></script>
+<script>saaRequireAuth();</script>
+<header class="emp-header">
+  <div class="container">
+    <div>
+      <a class="brand" href="dashboard.html" style="font-size:1rem">
+        <span class="mark" style="width:34px;height:34px;font-size:.62rem;letter-spacing:-0.3px">SAA</span>
+        <span>Employee Tools</span>
+      </a>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select onchange="if(this.value) window.location.href=this.value" style="width:auto;min-width:170px">
+        <option value="">Jump to page&hellip;</option>
+        <option value="dashboard.html">Dashboard</option>
+        <option value="calendar.html">Dispatch Calendar</option>
+        <option value="quotation.html">Quotation</option>
+        <option value="repair.html" selected>Repair</option>
+        <option value="condenser-change.html">Condenser Change</option>
+        <option value="coil-change.html">Coil Change</option>
+        <option value="furnace-change.html">Furnace Change</option>
+        <option value="plenum-change.html">Plenum Change</option>
+        <option value="drainline-maintenance.html">Drainline Maintenance</option>
+        <option value="duct-cleaning.html">Duct Cleaning</option>
+        <option value="labor.html">Labor</option>
+        <option value="inspection.html">Inspection / QC</option>
+        <option value="maintenance-plan.html">Maintenance Plan</option>
+        <option value="custom-solutions.html">Custom HVAC Solutions</option>
+        <option value="jobs.html">Jobs</option>
+        <option value="instruction-manual.html">Instruction Manual</option>
+        <option value="tool-list.html">Tool List</option>
+        <option value="receipts.html">Receipts</option>
+      </select>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Dashboard</a>
+      <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
+      <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
+    </div>
+  </div>
+</header>
+<main class="container" style="padding:26px 20px 60px">
+
+<div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Repair</div>
+<div class="page-title-row"><h1>Repair</h1></div>
+<div class="note-box blue">Component-level repair estimate for a Condenser, Fan Coil, or Furnace. Toggle on the system that needs work, then switch on and price each part it needs — quantities default to 1 the moment a part is included. Save at the bottom when you're done.</div>
+
+
+<div class="card" style="margin-bottom:22px">
+  <div class="field-row">
+    <div class="field"><label>Customer first name</label><input type="text" id="q-first"></div>
+    <div class="field"><label>Customer last name</label><input type="text" id="q-last"></div>
+  </div>
+  <div class="field-row">
+    <div class="field"><label>Phone number</label><input type="tel" id="q-phone" placeholder="XXX-XXX-XXXX" maxlength="12"></div>
+    <div class="field"><label>Job address</label><input type="text" id="q-address"></div>
+  </div>
+  <div class="field-row">
+    <div class="field" style="max-width:220px"><label>Quote date</label><input type="text" id="q-date"></div>
+    <div class="field" style="max-width:220px"><label>Quote #</label><input type="text" id="q-number" readonly placeholder="Assigned when saved" style="background:#f3f5f7;color:var(--muted)"></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px">
+    <button type="button" class="btn btn-ghost btn-sm" id="retrieve-quote-btn">Retrieve Saved Quote&hellip;</button>
+    <span id="save-status" class="muted" style="font-size:.85rem"></span>
+  </div>
+</div>
+
+<div class="modal-overlay" id="retrieve-modal" hidden>
+  <div class="modal-card">
+    <h3>Retrieve Saved Quote</h3>
+    <p class="muted" style="font-size:.85rem;margin-bottom:12px">Enter any one of the fields below — first name, last name, or phone number — to find matching saved quotes.</p>
+    <div class="field-row">
+      <div class="field"><label>First name</label><input type="text" id="rq-first"></div>
+      <div class="field"><label>Last name</label><input type="text" id="rq-last"></div>
+    </div>
+    <div class="field"><label>Phone number</label><input type="tel" id="rq-phone" placeholder="XXX-XXX-XXXX" maxlength="12"></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button type="button" class="btn btn-navy btn-sm" id="rq-search-btn">Search</button>
+      <span id="rq-status" class="muted" style="font-size:.85rem"></span>
+    </div>
+    <div class="quote-result-list" id="rq-results"></div>
+    <div class="modal-close-row">
+      <button type="button" class="btn btn-ghost btn-sm" id="rq-close-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<h2 style="font-size:1.05rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:28px">Condenser</h2>
+
+<div class="toggle-row">
+  <div class="meta"><div class="name">Condenser Repair</div><div class="desc">Compressor, motor, electrical, and refrigerant-circuit parts.</div></div>
+  <div class="price" id="price-rep-condenser">$0.00</div>
+  <label class="switch"><input type="checkbox" id="tgl-rep-condenser" ><span class="slider"></span></label>
+</div>
+<details class="detail-panel" id="panel-rep-condenser">
+  <summary>Condenser repair items <span class="hint">click to open the worksheet</span></summary>
+  <div class="detail-body"><div id="detail-rep-condenser"></div></div>
+</details>
+
+<h2 style="font-size:1.05rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:28px">Fan Coil</h2>
+
+<div class="toggle-row">
+  <div class="meta"><div class="name">Fan Coil Repair</div><div class="desc">Coil, metering device, control board, and drainline parts.</div></div>
+  <div class="price" id="price-rep-fancoil">$0.00</div>
+  <label class="switch"><input type="checkbox" id="tgl-rep-fancoil" ><span class="slider"></span></label>
+</div>
+<details class="detail-panel" id="panel-rep-fancoil">
+  <summary>Fan coil repair items <span class="hint">click to open the worksheet</span></summary>
+  <div class="detail-body"><div id="detail-rep-fancoil"></div></div>
+</details>
+
+<h2 style="font-size:1.05rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:28px">Furnace</h2>
+
+<div class="toggle-row">
+  <div class="meta"><div class="name">Furnace Repair</div><div class="desc">Ignition, gas, blower, and control parts.</div></div>
+  <div class="price" id="price-rep-furnace">$0.00</div>
+  <label class="switch"><input type="checkbox" id="tgl-rep-furnace" ><span class="slider"></span></label>
+</div>
+<details class="detail-panel" id="panel-rep-furnace">
+  <summary>Furnace repair items <span class="hint">click to open the worksheet</span></summary>
+  <div class="detail-body"><div id="detail-rep-furnace"></div></div>
+</details>
+
+<div class="totals-strip" style="margin-top:24px">
+  <div class="total-box grand"><div class="label">Repair Total</div><div class="value" id="grand-total">$0.00</div></div>
+</div>
+
+<div class="card" style="margin-top:20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+  <button type="button" class="btn btn-navy btn-sm" id="save-quote-btn">Save Repair</button>
+  <span id="save-status" class="muted" style="font-size:.85rem"></span>
+</div>
+
+</main>
+<script src="../assets/js/pricing-data.js?v=20260912c"></script>
+<script src="../assets/js/worksheet.js?v=20260912c"></script>
+<script src="../assets/js/quotes-db.js?v=20260912c"></script>
+<script>
+  document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
+  saaAttachPhoneMask(document.getElementById('q-phone'));
+  saaAttachPhoneMask(document.getElementById('rq-phone'));
+
+  // Tracks which saved repair-quote this page is editing, once one
+  // exists — same pattern as Quotation's Save/Retrieve (quotes-db.js),
+  // just always saved with quoteType "repair".
+  let _saaCurrentQuoteId = null;
+
+  const condenserDetail = renderLineItemTable(document.getElementById('detail-rep-condenser'), REPAIR_CONDENSER_ITEMS, { allowAddRow: true, showBuyColumn: true, showGroupSubtotals: false });
+  const fancoilDetail = renderLineItemTable(document.getElementById('detail-rep-fancoil'), REPAIR_FANCOIL_ITEMS, { allowAddRow: true, showBuyColumn: true, showGroupSubtotals: false });
+  const furnaceDetail = renderLineItemTable(document.getElementById('detail-rep-furnace'), REPAIR_FURNACE_ITEMS, { allowAddRow: true, showBuyColumn: true, showGroupSubtotals: false });
+
+  function updateAll() {
+    const condenserOn = document.getElementById('tgl-rep-condenser').checked;
+    const fancoilOn = document.getElementById('tgl-rep-fancoil').checked;
+    const furnaceOn = document.getElementById('tgl-rep-furnace').checked;
+
+    document.getElementById('panel-rep-condenser').style.display = condenserOn ? '' : 'none';
+    document.getElementById('panel-rep-fancoil').style.display = fancoilOn ? '' : 'none';
+    document.getElementById('panel-rep-furnace').style.display = furnaceOn ? '' : 'none';
+
+    const condenserTotal = condenserDetail.getTotals().total;
+    const fancoilTotal = fancoilDetail.getTotals().total;
+    const furnaceTotal = furnaceDetail.getTotals().total;
+
+    document.getElementById('price-rep-condenser').textContent = fmtMoney(condenserOn ? condenserTotal : 0);
+    document.getElementById('price-rep-fancoil').textContent = fmtMoney(fancoilOn ? fancoilTotal : 0);
+    document.getElementById('price-rep-furnace').textContent = fmtMoney(furnaceOn ? furnaceTotal : 0);
+
+    const grandTotal = (condenserOn ? condenserTotal : 0) + (fancoilOn ? fancoilTotal : 0) + (furnaceOn ? furnaceTotal : 0);
+    document.getElementById('grand-total').textContent = fmtMoney(grandTotal);
+
+    window._saaGetQuote = function () {
+      const firstName = document.getElementById('q-first').value.trim();
+      const lastName = document.getElementById('q-last').value.trim();
+      return {
+        jobTitle: 'Repair',
+        quoteType: 'repair',
+        firstName: firstName,
+        lastName: lastName,
+        customer: [firstName, lastName].filter(Boolean).join(' '),
+        phone: document.getElementById('q-phone').value.trim(),
+        address: document.getElementById('q-address').value,
+        date: document.getElementById('q-date').value,
+        quoteNumber: document.getElementById('q-number').value,
+        grandTotal: grandTotal,
+      };
+    }
+  }
+
+  // ---- Save Repair ----
+  document.getElementById('save-quote-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('save-quote-btn');
+    const status = document.getElementById('save-status');
+    const quote = window._saaGetQuote();
+    if (!quote.firstName && !quote.lastName && !quote.phone) {
+      status.textContent = 'Enter a first name, last name, or phone number first.';
+      return;
+    }
+    btn.disabled = true;
+    status.textContent = 'Saving…';
+    const result = await saaSaveQuote({
+      quoteId: _saaCurrentQuoteId,
+      quoteType: quote.quoteType,
+      firstName: quote.firstName,
+      lastName: quote.lastName,
+      phone: quote.phone,
+      jobAddress: quote.address,
+      total: quote.grandTotal,
+      formState: saaSerializeFormState(),
+    });
+    btn.disabled = false;
+    if (result.ok) {
+      _saaCurrentQuoteId = result.quoteId;
+      document.getElementById('q-number').value = result.quoteNumber || '';
+      status.textContent = 'Saved as ' + (result.quoteNumber || 'quote') + '.';
+    } else {
+      status.textContent = 'Error: ' + result.error;
+    }
+  });
+
+  // ---- Retrieve Quote ----
+  document.getElementById('retrieve-quote-btn').addEventListener('click', () => {
+    document.getElementById('retrieve-modal').hidden = false;
+    document.getElementById('rq-results').innerHTML = '';
+    document.getElementById('rq-status').textContent = '';
+  });
+  document.getElementById('rq-close-btn').addEventListener('click', () => {
+    document.getElementById('retrieve-modal').hidden = true;
+  });
+  document.getElementById('rq-search-btn').addEventListener('click', async () => {
+    const firstName = document.getElementById('rq-first').value.trim();
+    const lastName = document.getElementById('rq-last').value.trim();
+    const phone = document.getElementById('rq-phone').value.trim();
+    const status = document.getElementById('rq-status');
+    const results = document.getElementById('rq-results');
+    if (!firstName && !lastName && !phone) {
+      status.textContent = 'Enter at least one field.';
+      return;
+    }
+    status.textContent = 'Searching…';
+    results.innerHTML = '';
+    const res = await saaSearchQuotes({ firstName, lastName, phone });
+    if (!res.ok) { status.textContent = 'Error: ' + res.error; return; }
+    status.textContent = res.results.length + ' match' + (res.results.length === 1 ? '' : 'es') + ' found.';
+    if (!res.results.length) {
+      results.innerHTML = '<div class="quote-result-empty">No saved quotes match.</div>';
+      return;
+    }
+    results.innerHTML = res.results.map(q => {
+      const c = q.customer || {};
+      const name = [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Unnamed';
+      const when = q.updated_at ? new Date(q.updated_at).toLocaleDateString('en-US') : '';
+      return `<div class="quote-result-row" data-quote-id="${q.id}">
+        <div>
+          <div class="name">${name}${c.phone ? ' — ' + saaFormatPhone(c.phone) : ''}</div>
+          <div class="meta">${q.quote_number || 'No #'} &middot; ${q.quote_type || ''} &middot; ${q.job_address || ''} &middot; ${when}</div>
+        </div>
+        <div class="name">${fmtMoney(q.total || 0)}</div>
+      </div>`;
+    }).join('');
+    results.querySelectorAll('.quote-result-row').forEach(row => {
+      row.addEventListener('click', async () => {
+        status.textContent = 'Loading…';
+        const loaded = await saaLoadQuote(row.dataset.quoteId);
+        if (!loaded.ok) { status.textContent = 'Error: ' + loaded.error; return; }
+        if (loaded.quote.form_state) saaApplyFormState(loaded.quote.form_state);
+        _saaCurrentQuoteId = loaded.quote.id;
+        document.getElementById('q-number').value = loaded.quote.quote_number || '';
+        document.getElementById('retrieve-modal').hidden = true;
+        updateAll();
+      });
+    });
+  });
+
+  document.querySelector('main').addEventListener('input', updateAll);
+  document.querySelector('main').addEventListener('change', updateAll);
+  updateAll();
+</script>
+</body>
+</html>

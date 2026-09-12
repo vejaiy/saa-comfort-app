@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Instruction Manual | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260911f">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260912c">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260911f"></script>
-<script src="../assets/js/supabase-config.js?v=20260911f"></script>
-<script src="../assets/js/auth.js?v=20260911f"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260912c"></script>
+<script src="../assets/js/supabase-config.js?v=20260912c"></script>
+<script src="../assets/js/auth.js?v=20260912c"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -27,8 +27,8 @@
         <option value="">Jump to page&hellip;</option>
         <option value="dashboard.html">Dashboard</option>
         <option value="calendar.html">Dispatch Calendar</option>
-        <option value="new-install.html">New Install</option>
-        <option value="replacement.html">Replacement</option>
+        <option value="quotation.html">Quotation</option>
+        <option value="repair.html">Repair</option>
         <option value="condenser-change.html">Condenser Change</option>
         <option value="coil-change.html">Coil Change</option>
         <option value="furnace-change.html">Furnace Change</option>
@@ -44,7 +44,7 @@
         <option value="tool-list.html">Tool List</option>
         <option value="receipts.html">Receipts</option>
       </select>
-      <a class="btn btn-ghost btn-sm" href="dashboard.html">Employee</a>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Dashboard</a>
       <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
       <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
     </div>
@@ -53,17 +53,40 @@
 <main class="container" style="padding:26px 20px 60px">
 
 <div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Instruction Manual</div>
-<h1>Instruction Manual</h1>
-<div class="stub-note card" style="max-width:520px;margin:20px auto">
-  <div style="font-size:2rem">🚧</div>
-  <h3>Coming soon</h3>
-  <p class="muted">A library of equipment installation manuals isn't loaded yet. Drop PDFs into this section (or link to manufacturer sites) once you're ready to build it out.</p>
-  <a class="btn btn-ghost" href="dashboard.html">&larr; Back to Dashboard</a>
+<div class="page-title-row">
+  <h1>Instruction Manual</h1>
 </div>
+<div class="note-box blue">Equipment installation/service manuals, synced from the office computer's Manuals folder. Click a title to open or download it.</div>
+<div id="manuals-list"></div>
+<p class="muted" id="manuals-empty" hidden>No manuals synced yet.</p>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260911f"></script>
-<script src="../assets/js/worksheet.js?v=20260911f"></script>
-
+<script src="../assets/js/pricing-data.js?v=20260912c"></script>
+<script src="../assets/js/worksheet.js?v=20260912c"></script>
+<script src="../assets/js/manuals-db.js?v=20260912c"></script>
+<script>
+  (async () => {
+    const list = document.getElementById('manuals-list');
+    const empty = document.getElementById('manuals-empty');
+    try {
+      const manuals = await saaManualsFetchAll();
+      if (!manuals.length) { empty.hidden = false; return; }
+      list.innerHTML = manuals.map(m => {
+        const sizeKb = m.file_size_bytes ? Math.round(m.file_size_bytes / 1024).toLocaleString() + ' KB' : '';
+        const updated = m.uploaded_at ? new Date(m.uploaded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+        return `<a class="manual-row" href="../assets/manuals/${encodeURIComponent(m.filename)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">
+          <div>
+            <div class="name">📄 ${m.title}</div>
+            <div class="meta">${[sizeKb, updated ? 'Updated ' + updated : ''].filter(Boolean).join(' &middot; ')}</div>
+          </div>
+          <span class="btn btn-ghost btn-sm">Open ↗</span>
+        </a>`;
+      }).join('');
+    } catch (e) {
+      empty.hidden = false;
+      empty.textContent = 'Could not load the manuals list.';
+    }
+  })();
+</script>
 </body>
 </html>

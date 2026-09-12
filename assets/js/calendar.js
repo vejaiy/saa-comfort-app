@@ -513,7 +513,7 @@ async function saaCalOpenJobDrawer(apptId) {
   const startMin = saaCalMinutesFromTimeStr(appt.start_datetime);
   const endMin = saaCalMinutesFromTimeStr(appt.end_datetime);
   const timeStr = (startMin != null && endMin != null) ? `${saaCalFormatClock(startMin)} – ${saaCalFormatClock(endMin)}` : "Not yet scheduled";
-  const jobNum = "J-" + String(appt.job_id || "").slice(0, 8).toUpperCase();
+  const jobNum = appt.job.job_number || ("J-" + String(appt.job_id || "").slice(0, 8).toUpperCase());
   const address = appt.customer.billing_address || appt.job.job_address || "—";
   const phone = appt.customer.phone || "";
 

@@ -153,6 +153,31 @@ async function saaCalFindOrCreateCustomer(firstName, lastName, phone, address) {
  * existing customer picked from search) or `newCustomer: {firstName,
  * lastName, phone, address}` (search found nobody, so find-or-create one).
  */
+/** Pulls the plain date and HH:MM back out of one of our naive
+ *  "<date>T<HH>:<MM>:00" timestamp strings (see saaCalTimeStr in
+ *  calendar.js) so they can also be written onto jobs.scheduled_date /
+ *  jobs.scheduled_time — that's what makes a job scheduled from the
+ *  calendar show its correct Scheduled Date/Time on the Jobs List too. */
+function _saaCalSplitDatetime(dtStr) {
+  const m = String(dtStr || "").match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
+  return m ? { date: m[1], time: m[2] } : { date: null, time: null };
+}
+
+/** Same sequential job-number scheme as jobs-db.js's _saaJobsNextJobNumber
+ *  (duplicated for the same reason every other cross-file helper here is —
+ *  calendar.html doesn't load jobs-db.js) — a job created from the New
+ *  Service popup gets a real J-2026-0001-style number too, not just one
+ *  created from the Jobs List. */
+async function _saaCalNextJobNumber() {
+  const year = new Date().getFullYear();
+  const { count, error } = await _saaClient
+    .from("jobs")
+    .select("id", { count: "exact", head: true })
+    .like("job_number", `J-${year}-%`);
+  if (error) throw error;
+  return `J-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
+}
+
 async function saaCalCreateJobWithAppointment(payload) {
   try {
     let customerId = payload.customerId || null;
@@ -169,9 +194,13 @@ async function saaCalCreateJobWithAppointment(payload) {
     if (payload.technicianId && payload.startDatetime) status = "scheduled";
     else if (payload.technicianId) status = "assigned";
 
+    const { date: schedDate, time: schedTime } = _saaCalSplitDatetime(payload.startDatetime);
+    const jobNumber = await _saaCalNextJobNumber();
+
     const { data: job, error: jErr } = await _saaClient
       .from("jobs")
       .insert({
+        job_number: jobNumber,
         customer_id: customerId,
         job_type: payload.appointmentTypeKey,
         status,
@@ -179,6 +208,8 @@ async function saaCalCreateJobWithAppointment(payload) {
         priority: payload.priority || "normal",
         job_address: payload.jobAddress || null,
         assigned_technician_id: payload.technicianId || null,
+        scheduled_date: schedDate,
+        scheduled_time: schedTime,
         notes: payload.notes || null,
       })
       .select("id")
@@ -218,9 +249,10 @@ async function saaCalUpdateAppointmentSchedule({ appointmentId, jobId, technicia
     if (aErr) throw aErr;
 
     if (jobId) {
+      const { date: schedDate, time: schedTime } = _saaCalSplitDatetime(startDatetime);
       const { error: jErr } = await _saaClient
         .from("jobs")
-        .update({ assigned_technician_id: technicianId || null, status: "scheduled" })
+        .update({ assigned_technician_id: technicianId || null, status: "scheduled", scheduled_date: schedDate, scheduled_time: schedTime })
         .eq("id", jobId);
       if (jErr) throw jErr;
     }

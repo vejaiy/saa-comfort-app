@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dashboard | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260911f">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260912c">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260911f"></script>
-<script src="../assets/js/supabase-config.js?v=20260911f"></script>
-<script src="../assets/js/auth.js?v=20260911f"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260912c"></script>
+<script src="../assets/js/supabase-config.js?v=20260912c"></script>
+<script src="../assets/js/auth.js?v=20260912c"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -27,8 +27,8 @@
         <option value="">Jump to page&hellip;</option>
         <option value="dashboard.html" selected>Dashboard</option>
         <option value="calendar.html">Dispatch Calendar</option>
-        <option value="new-install.html">New Install</option>
-        <option value="replacement.html">Replacement</option>
+        <option value="quotation.html">Quotation</option>
+        <option value="repair.html">Repair</option>
         <option value="condenser-change.html">Condenser Change</option>
         <option value="coil-change.html">Coil Change</option>
         <option value="furnace-change.html">Furnace Change</option>
@@ -44,7 +44,7 @@
         <option value="tool-list.html">Tool List</option>
         <option value="receipts.html">Receipts</option>
       </select>
-      <a class="btn btn-ghost btn-sm" href="dashboard.html">Employee</a>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Dashboard</a>
       <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
       <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
     </div>
@@ -60,34 +60,38 @@
   <a class="btn btn-navy" href="https://www.manualjcalculator.com/#sample" target="_blank" rel="noopener">Manual J Calculator ↗</a>
 </div>
 
-<div class="tool-grid" style="margin-bottom:28px">
-  <a class="card category-card" href="calendar.html" style="display:flex;align-items:center;gap:18px;text-decoration:none">
-    <div class="icon-wrap" style="flex:0 0 auto;font-size:26px">📅</div>
+<div class="card dash-calendar-card" style="margin-bottom:20px">
+  <div class="dash-calendar-head">
     <div>
-      <h3 style="margin-bottom:2px">Dispatch Calendar</h3>
+      <h3 style="margin-bottom:2px">📅 Dispatch Calendar</h3>
       <p class="muted" style="margin:0">The operational center — technician schedule, customer, job, and status all in one drag-and-drop board.</p>
     </div>
-  </a>
-  <a class="card category-card" href="jobs.html" style="display:flex;align-items:center;gap:18px;text-decoration:none">
-    <div class="icon-wrap" style="flex:0 0 auto;font-size:26px">🗂️</div>
-    <div>
-      <h3 style="margin-bottom:2px">Jobs</h3>
-      <p class="muted" style="margin:0">Every job's full record — customer, equipment, diagnosis, quote, actual cost, invoice, and payments.</p>
-    </div>
-  </a>
+    <a class="btn btn-ghost btn-sm" href="calendar.html" target="_blank" rel="noopener">Open Full Calendar ↗</a>
+  </div>
+  <div class="dash-calendar-embed">
+    <iframe src="calendar.html" title="Dispatch Calendar" loading="lazy"></iframe>
+  </div>
 </div>
+
+<a class="card category-card" href="jobs.html" style="display:flex;align-items:center;gap:18px;text-decoration:none;margin-bottom:28px">
+  <div class="icon-wrap" style="flex:0 0 auto;font-size:26px">🗂️</div>
+  <div>
+    <h3 style="margin-bottom:2px">Jobs</h3>
+    <p class="muted" style="margin:0">Every job's full record — customer, equipment, diagnosis, quote, actual cost, invoice, and payments.</p>
+  </div>
+</a>
 
 <h2 style="font-size:1.1rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted)">Quotation Worksheets</h2>
 <div class="tool-grid" style="margin-bottom:32px">
-      <a class="tool-card" href="new-install.html" style="text-decoration:none">
-        <div class="icon">🏗️</div>
-        <h3 style="margin-bottom:0">New Installation</h3>
-        <p class="muted" style="margin:0">Full system build for new construction or homes without ductwork.</p>
+      <a class="tool-card" href="quotation.html" style="text-decoration:none">
+        <div class="icon">🧾</div>
+        <h3 style="margin-bottom:0">Quotation</h3>
+        <p class="muted" style="margin:0">New installation or full system replacement — pick the type on the worksheet.</p>
       </a>
-      <a class="tool-card" href="replacement.html" style="text-decoration:none">
-        <div class="icon">🔁</div>
-        <h3 style="margin-bottom:0">Replacement</h3>
-        <p class="muted" style="margin:0">Full condenser + coil + furnace system changeout.</p>
+      <a class="tool-card" href="repair.html" style="text-decoration:none">
+        <div class="icon">🩹</div>
+        <h3 style="margin-bottom:0">Repair</h3>
+        <p class="muted" style="margin:0">Component-level repair estimate — condenser, fan coil, or furnace parts and labor.</p>
       </a>
       <a class="tool-card" href="condenser-change.html" style="text-decoration:none">
         <div class="icon">🌀</div>
@@ -161,8 +165,8 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260911f"></script>
-<script src="../assets/js/worksheet.js?v=20260911f"></script>
+<script src="../assets/js/pricing-data.js?v=20260912c"></script>
+<script src="../assets/js/worksheet.js?v=20260912c"></script>
 
 </body>
 </html>

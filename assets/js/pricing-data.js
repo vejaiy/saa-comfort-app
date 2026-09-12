@@ -116,12 +116,60 @@ const FURNACE_MATERIALS = [
   { group: "MATERIALS", category: "Equipment",  item: "Furnace unit (tier below)", unit: "EA", qty: 1, price: 1500, notes: "Sized to duct system and BTU load", included: true, tierLinked: true },
   { group: "MATERIALS", category: "Venting",    item: "Flue / vent pipe extension", unit: "LOT", qty: 1, price: 60, notes: "Category I or PVC intake/exhaust depending on tier", included: false },
   { group: "MATERIALS", category: "Gas",        item: "Gas line / flex connector", unit: "EA", qty: 1, price: 35, notes: "Sized to furnace BTU input", included: true },
+  { group: "MATERIALS", category: "Gas",        item: "Gas line pipe & pipe fitting", unit: "EA", qty: 1, price: 15, notes: "Black iron pipe/fittings for the gas line run", included: true },
   { group: "MATERIALS", category: "Electrical", item: "Electrical whip / dedicated circuit", unit: "EA", qty: 0, price: 35, included: false },
   { group: "MATERIALS", category: "Drainage",   item: "Condensate drain / PVC (high-efficiency only)", unit: "LOT", qty: 0, price: 20, notes: "Required for 90%+ AFUE units", included: false },
   { group: "MATERIALS", category: "Air",        item: "Air filter", unit: "EA", qty: 1, price: 20, included: true },
   { group: "MATERIALS", category: "Permits",    item: "Permit/inspection allowance", unit: "LOT", qty: 1, price: 50, included: false },
   { group: "MATERIALS", category: "Disposable", item: "Old equipment disposal fee", unit: "EA", qty: 1, price: 75, included: false },
   { group: "MATERIALS", category: "Electrical", item: "Wire nuts / misc electrical", unit: "Bag", qty: 1, price: 10, included: true },
+];
+
+/* ---- Repair worksheet (employee/repair.html, added 2026-09-12) ----
+   Component-level repair items for a Condenser, Fan Coil, or Furnace
+   that needs targeted parts/labor rather than a full unit swap. Every
+   row defaults included:false ("Included" toggle) — a repair worksheet
+   starts as a blank template per system, and the technician switches on
+   only the parts this specific job actually needs (switching a row on
+   defaults its Qty to 1, see renderLineItemTable's showBuyColumn/
+   default-qty behavior in worksheet.js). qty/price below are Claude's
+   starter estimates (no source pricing sheet existed for repairs, same
+   situation the Furnace Change worksheet was in) — treat as templates
+   to review and adjust to Vijayan's real part costs and labor rates.
+   "buy" defaults false (assumed on-truck stock); the technician flips
+   it on for anything that needs to be ordered before the job can close. */
+const REPAIR_CONDENSER_ITEMS = [
+  { category: "Compressor", item: "Replace compressor", unit: "EA", qty: 1, price: 950, included: false, buy: false },
+  { category: "Condenser Motor", item: "Replace condenser fan motor", unit: "EA", qty: 1, price: 275, included: false, buy: false },
+  { category: "Electrical Components", item: "Diagnose and replace electrical parts", unit: "EA", qty: 1, price: 100, included: false, buy: false },
+  { category: "Capacitor", item: "Replace run capacitor", unit: "EA", qty: 1, price: 45, included: false, buy: false },
+  { category: "Contactor", item: "Replace contactor", unit: "EA", qty: 1, price: 35, included: false, buy: false },
+  { category: "Relay", item: "Replace relay", unit: "EA", qty: 1, price: 25, included: false, buy: false },
+  { category: "Start Capacitor", item: "Replace start capacitor / hard start kit", unit: "EA", qty: 1, price: 65, included: false, buy: false },
+  { category: "Electric Whip", item: "Replace electric whip", unit: "EA", qty: 1, price: 40, included: false, buy: false },
+  { category: "Coil Repair", item: "Repair condenser coil leak", unit: "EA", qty: 1, price: 225, included: false, buy: false },
+  { category: "TXV", item: "Replace TXV (thermostatic expansion valve)", unit: "EA", qty: 1, price: 150, included: false, buy: false },
+  { category: "Filter Drier", item: "Replace filter drier", unit: "EA", qty: 1, price: 45, included: false, buy: false },
+  { category: "Reversing Valve", item: "Replace reversing valve", unit: "EA", qty: 1, price: 225, included: false, buy: false },
+];
+
+const REPAIR_FANCOIL_ITEMS = [
+  { category: "Coil Repair", item: "Repair evaporator coil leak", unit: "EA", qty: 1, price: 225, included: false, buy: false },
+  { category: "TXV, Flowrator", item: "Replace TXV or flowrator", unit: "EA", qty: 1, price: 150, included: false, buy: false },
+  { category: "PCB", item: "Replace control board (PCB)", unit: "EA", qty: 1, price: 225, included: false, buy: false },
+  { category: "Drainline", item: "Repair/replace drain line section", unit: "EA", qty: 1, price: 75, included: false, buy: false },
+  { category: "Drainline Clean", item: "Clear and flush drain line", unit: "EA", qty: 1, price: 60, included: false, buy: false },
+];
+
+const REPAIR_FURNACE_ITEMS = [
+  { category: "Igniter", item: "Replace hot surface igniter", unit: "EA", qty: 1, price: 45, included: false, buy: false },
+  { category: "Flame Sensor", item: "Replace/clean flame sensor", unit: "EA", qty: 1, price: 35, included: false, buy: false },
+  { category: "Gas Valve", item: "Replace gas valve", unit: "EA", qty: 1, price: 225, included: false, buy: false },
+  { category: "Blower Motor", item: "Replace blower motor", unit: "EA", qty: 1, price: 325, included: false, buy: false },
+  { category: "Control Board", item: "Replace furnace control board", unit: "EA", qty: 1, price: 225, included: false, buy: false },
+  { category: "Draft Inducer Motor", item: "Replace draft inducer motor", unit: "EA", qty: 1, price: 225, included: false, buy: false },
+  { category: "Heat Exchanger", item: "Replace cracked heat exchanger", unit: "EA", qty: 1, price: 850, included: false, buy: false },
+  { category: "Thermocouple", item: "Replace thermocouple", unit: "EA", qty: 1, price: 35, included: false, buy: false },
 ];
 
 /* ---- Plenum Change worksheet (source: 'Plenum Change' rows 3-31) ---- */

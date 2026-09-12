@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jobs | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260911f">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260912c">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260911f"></script>
-<script src="../assets/js/supabase-config.js?v=20260911f"></script>
-<script src="../assets/js/auth.js?v=20260911f"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260912c"></script>
+<script src="../assets/js/supabase-config.js?v=20260912c"></script>
+<script src="../assets/js/auth.js?v=20260912c"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -27,8 +27,8 @@
         <option value="">Jump to page&hellip;</option>
         <option value="dashboard.html">Dashboard</option>
         <option value="calendar.html">Dispatch Calendar</option>
-        <option value="new-install.html">New Install</option>
-        <option value="replacement.html">Replacement</option>
+        <option value="quotation.html">Quotation</option>
+        <option value="repair.html">Repair</option>
         <option value="condenser-change.html">Condenser Change</option>
         <option value="coil-change.html">Coil Change</option>
         <option value="furnace-change.html">Furnace Change</option>
@@ -44,7 +44,7 @@
         <option value="tool-list.html">Tool List</option>
         <option value="receipts.html">Receipts</option>
       </select>
-      <a class="btn btn-ghost btn-sm" href="dashboard.html">Employee</a>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Dashboard</a>
       <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
       <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
     </div>
@@ -93,6 +93,16 @@
 <div class="modal-overlay" id="jb-new-modal" hidden>
   <div class="modal-card cal-newsvc-card">
     <h3>New Job</h3>
+
+    <div style="margin-bottom:10px">
+      <button type="button" class="btn btn-ghost btn-sm" id="jbn-from-quote-btn">&#8617; Start from a Quote</button>
+      <div id="jbn-quote-linked" hidden style="margin-top:8px;font-size:.85rem"></div>
+      <div class="cal-cust-search-wrap" id="jbn-quote-search-wrap" hidden style="margin-top:8px">
+        <input type="text" id="jbn-quote-search" placeholder="Search by quote #, customer name, or phone&hellip;" autocomplete="off">
+        <div class="cal-cust-results" id="jbn-quote-results" hidden></div>
+      </div>
+    </div>
+
     <div class="field cal-cust-search-wrap">
       <label>Customer</label>
       <input type="text" id="jbn-cust-search" placeholder="Type a name or phone&hellip;" autocomplete="off">
@@ -124,13 +134,15 @@
     <div class="field"><label>What's the issue? (short title)</label><input type="text" id="jbn-title" placeholder="e.g. No cooling"></div>
 
     <div class="field"><label>Service Address</label><input type="text" id="jbn-address"></div>
-    <div class="field-row">
+    <div class="field-row field-row-3">
       <div class="field"><label>City</label><input type="text" id="jbn-city"></div>
+      <div class="field"><label>State</label><input type="text" id="jbn-state" value="TX" maxlength="2" style="text-transform:uppercase"></div>
       <div class="field"><label>ZIP</label><input type="text" id="jbn-zip"></div>
     </div>
-    <div class="field-row">
+    <div class="field-row field-row-3">
       <div class="field"><label>Technician</label><select id="jbn-tech"></select></div>
       <div class="field"><label>Scheduled Date</label><input type="date" id="jbn-date"></div>
+      <div class="field"><label>Scheduled Time</label><input type="time" id="jbn-time"></div>
     </div>
     <div class="field">
       <label>Priority</label>
@@ -172,25 +184,89 @@
           </div>
           <div class="field-row">
             <div class="field"><label>Scheduled Date</label><input type="date" id="jbd-scheduled"></div>
-            <div class="field"><label>Completion Date</label><input type="date" id="jbd-completed"></div>
+            <div class="field"><label>Scheduled Time</label><input type="time" id="jbd-time"></div>
           </div>
+          <div class="field"><label>Completion Date</label><input type="date" id="jbd-completed"></div>
           <div class="field"><label>Service Address</label><input type="text" id="jbd-address"></div>
-          <div class="field-row">
+          <div class="field-row field-row-3">
             <div class="field"><label>City</label><input type="text" id="jbd-city"></div>
+            <div class="field"><label>State</label><input type="text" id="jbd-state" maxlength="2" style="text-transform:uppercase"></div>
             <div class="field"><label>ZIP</label><input type="text" id="jbd-zip"></div>
           </div>
         </div>
 
         <div class="drawer-section">
           <h4>Equipment</h4>
-          <div class="field-row">
-            <div class="field"><label>Manufacturer</label><input type="text" id="jbd-eq-brand"></div>
-            <div class="field"><label>Model</label><input type="text" id="jbd-eq-model"></div>
+
+        <div class="jb-eq-block" data-eqtype="condenser">
+          <div class="jb-eq-head">
+            <button type="button" class="btn btn-ghost btn-sm jb-eq-toggle-btn">+ Add Condenser</button>
+            <button type="button" class="jb-eq-lock-btn" hidden></button>
           </div>
-          <div class="field-row">
-            <div class="field"><label>Serial Number</label><input type="text" id="jbd-eq-serial"></div>
-            <div class="field"><label>Refrigerant</label><input type="text" id="jbd-eq-refrigerant"></div>
+          <div class="jb-eq-fields" hidden>
+            <div class="field-row">
+              <div class="field"><label>Manufacturer</label><input type="text" class="jb-eq-brand"></div>
+              <div class="field"><label>Model</label><input type="text" class="jb-eq-model"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Serial Number</label><input type="text" class="jb-eq-serial"></div>
+              <div class="field"><label>Refrigerant</label><input type="text" class="jb-eq-refrigerant"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Tonnage</label><input type="number" step="0.5" class="jb-eq-tonnage"></div>
+              <div class="field"><label>Install Year</label><input type="number" class="jb-eq-installyear"></div>
+            </div>
+            <div class="field"><label>Warranty Status</label><select class="jb-eq-warranty">
+              <option value="unknown">Unknown</option><option value="active">Active</option><option value="expired">Expired</option>
+            </select></div>
           </div>
+        </div>
+        <div class="jb-eq-block" data-eqtype="coil">
+          <div class="jb-eq-head">
+            <button type="button" class="btn btn-ghost btn-sm jb-eq-toggle-btn">+ Add Coil</button>
+            <button type="button" class="jb-eq-lock-btn" hidden></button>
+          </div>
+          <div class="jb-eq-fields" hidden>
+            <div class="field-row">
+              <div class="field"><label>Manufacturer</label><input type="text" class="jb-eq-brand"></div>
+              <div class="field"><label>Model</label><input type="text" class="jb-eq-model"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Serial Number</label><input type="text" class="jb-eq-serial"></div>
+              <div class="field"><label>Refrigerant</label><input type="text" class="jb-eq-refrigerant"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Tonnage</label><input type="number" step="0.5" class="jb-eq-tonnage"></div>
+              <div class="field"><label>Install Year</label><input type="number" class="jb-eq-installyear"></div>
+            </div>
+            <div class="field"><label>Warranty Status</label><select class="jb-eq-warranty">
+              <option value="unknown">Unknown</option><option value="active">Active</option><option value="expired">Expired</option>
+            </select></div>
+          </div>
+        </div>
+        <div class="jb-eq-block" data-eqtype="furnace">
+          <div class="jb-eq-head">
+            <button type="button" class="btn btn-ghost btn-sm jb-eq-toggle-btn">+ Add Furnace</button>
+            <button type="button" class="jb-eq-lock-btn" hidden></button>
+          </div>
+          <div class="jb-eq-fields" hidden>
+            <div class="field-row">
+              <div class="field"><label>Manufacturer</label><input type="text" class="jb-eq-brand"></div>
+              <div class="field"><label>Model</label><input type="text" class="jb-eq-model"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Serial Number</label><input type="text" class="jb-eq-serial"></div>
+              <div class="field"><label>Refrigerant</label><input type="text" class="jb-eq-refrigerant"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Tonnage</label><input type="number" step="0.5" class="jb-eq-tonnage"></div>
+              <div class="field"><label>Install Year</label><input type="number" class="jb-eq-installyear"></div>
+            </div>
+            <div class="field"><label>Warranty Status</label><select class="jb-eq-warranty">
+              <option value="unknown">Unknown</option><option value="active">Active</option><option value="expired">Expired</option>
+            </select></div>
+          </div>
+        </div>
         </div>
 
         <div class="drawer-section">
@@ -198,6 +274,20 @@
           <div class="field"><label>Problem Description</label><textarea id="jbd-problem" rows="2"></textarea></div>
           <div class="field"><label>Inspection Findings</label><textarea id="jbd-findings" rows="2"></textarea></div>
           <div class="field"><label>Recommended Action</label><textarea id="jbd-recommend" rows="2"></textarea></div>
+        </div>
+
+        <div class="drawer-section">
+          <h4>Photos</h4>
+          <button type="button" class="btn btn-ghost btn-sm" id="jbd-add-photos-btn">📷 Add Photos</button>
+          <div class="jb-photo-grid" id="jbd-photos-grid"><span class="jb-photo-empty">No photos yet.</span></div>
+        </div>
+
+        <div class="drawer-section">
+          <h4>Inspection</h4>
+          <div class="jb-insp-summary">
+            <span id="jbd-insp-summary" class="muted" style="font-size:.85rem">Not started</span>
+            <button type="button" class="btn btn-ghost btn-sm" id="jbd-open-inspection-btn">✅ Open Inspection Checklist</button>
+          </div>
         </div>
       </div>
 
@@ -253,13 +343,50 @@
   </div>
 </div>
 
+<!-- ============ Inspection checklist modal ============ -->
+<div class="modal-overlay" id="jb-inspection-modal" hidden>
+  <div class="modal-card" style="max-width:620px">
+    <h3>Inspection Checklist</h3>
+    <p class="muted" style="font-size:.85rem;margin-bottom:4px">Check off each item as it's verified. Use the camera button to attach a photo to a specific item.</p>
+    <ul class="jb-insp-list" id="jb-insp-list"></ul>
+    <div class="modal-close-row">
+      <button type="button" class="btn btn-navy btn-sm" id="jb-insp-save-btn">Save Inspection</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="jb-insp-close-btn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Camera capture modal (Photos + per-Inspection-item photos) ============ -->
+<div class="modal-overlay" id="cam-modal" hidden>
+  <div class="modal-card">
+    <h3>Take Photos</h3>
+    <div id="cam-live-wrap">
+      <video id="cam-video" autoplay playsinline muted></video>
+      <div style="margin-top:8px"><button type="button" class="btn btn-navy btn-sm" id="cam-shoot-btn">📸 Capture</button></div>
+    </div>
+    <p class="muted" id="cam-nolive-note" style="font-size:.85rem" hidden>Camera isn't available here — choose photos from files instead.</p>
+    <canvas id="cam-canvas" hidden></canvas>
+    <div class="cam-strip" id="cam-strip"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
+      <label class="btn btn-ghost btn-sm" style="cursor:pointer">📁 Choose from Files<input type="file" id="cam-file-input" accept="image/*" multiple style="display:none"></label>
+      <span class="muted" id="cam-count" style="font-size:.82rem">0 photos</span>
+    </div>
+    <div class="modal-close-row">
+      <button type="button" class="btn btn-navy btn-sm" id="cam-done-btn">Save Photos</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="cam-cancel-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div id="jb-toast" class="cal-toast" hidden></div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260911f"></script>
-<script src="../assets/js/worksheet.js?v=20260911f"></script>
-<script src="../assets/js/jobs-db.js?v=20260911f"></script>
-<script src="../assets/js/print-invoice.js?v=20260911f"></script>
-<script src="../assets/js/jobs.js?v=20260911f"></script>
+<script src="../assets/js/pricing-data.js?v=20260912c"></script>
+<script src="../assets/js/worksheet.js?v=20260912c"></script>
+<script src="../assets/js/jobs-db.js?v=20260912c"></script>
+<script src="../assets/js/job-photos-db.js?v=20260912c"></script>
+<script src="../assets/js/camera-capture.js?v=20260912c"></script>
+<script src="../assets/js/print-invoice.js?v=20260912c"></script>
+<script src="../assets/js/jobs.js?v=20260912c"></script>
 </body>
 </html>
