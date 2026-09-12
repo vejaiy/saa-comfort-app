@@ -5,14 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260912c">
-
+<link rel="stylesheet" href="../assets/css/style.css?v=20260912d">
+<script>
+if (new URLSearchParams(location.search).get('embed') === '1') {
+  document.documentElement.classList.add('saa-embed');
+}
+</script>
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260912c"></script>
-<script src="../assets/js/supabase-config.js?v=20260912c"></script>
-<script src="../assets/js/auth.js?v=20260912c"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260912d"></script>
+<script src="../assets/js/supabase-config.js?v=20260912d"></script>
+<script src="../assets/js/auth.js?v=20260912d"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -68,6 +72,11 @@
   <button type="button" class="btn btn-ghost btn-sm" id="cal-next-btn">&rarr;</button>
   <span class="cal-date-label" id="cal-date-label"></span>
   <input type="date" id="cal-date-input" style="width:auto">
+  <div class="cal-view-toggle" id="cal-view-toggle">
+    <button type="button" class="cal-view-btn active" data-view="day">Day</button>
+    <button type="button" class="cal-view-btn" data-view="week">Week</button>
+    <button type="button" class="cal-view-btn" data-view="month">Month</button>
+  </div>
 </div>
 
 <div class="cal-summary-strip" id="cal-summary-strip"></div>
@@ -77,12 +86,13 @@
   <div class="cal-unscheduled-row" id="cal-unscheduled-row"></div>
 </div>
 
-<div class="cal-grid-wrap">
+<div class="cal-grid-wrap" id="cal-day-view-wrap">
   <div class="cal-grid-scroll">
     <div class="cal-grid-hours" id="cal-grid-hours-row"></div>
     <div id="cal-grid-body"></div>
   </div>
 </div>
+<div id="cal-altview-wrap" hidden></div>
 
 <div class="cal-legend">
   <span><span class="dot" style="background:var(--st-scheduled)"></span>Scheduled</span>
@@ -93,7 +103,7 @@
   <span><span class="dot" style="background:var(--st-cancelled)"></span>Cancelled</span>
   <span><span class="dot" style="background:var(--st-no_show)"></span>No Show</span>
 </div>
-<p class="muted" style="font-size:.8rem;margin-top:10px">Day view only for now — Week/Month views, filters, and recurring-maintenance suggestions are planned for a follow-up pass.</p>
+<p class="muted" style="font-size:.8rem;margin-top:10px">Day view shows technician tracks with full drag-and-drop; Week and Month are quick overviews — click any day in either to jump to its Day view.</p>
 
 <!-- ============ New Service popup ============ -->
 <div class="modal-overlay" id="cal-newsvc-modal" hidden>
@@ -237,9 +247,9 @@
 <div id="cal-toast" class="cal-toast" hidden></div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260912c"></script>
-<script src="../assets/js/worksheet.js?v=20260912c"></script>
-<script src="../assets/js/calendar-db.js?v=20260912c"></script>
-<script src="../assets/js/calendar.js?v=20260912c"></script>
+<script src="../assets/js/pricing-data.js?v=20260912d"></script>
+<script src="../assets/js/worksheet.js?v=20260912d"></script>
+<script src="../assets/js/calendar-db.js?v=20260912d"></script>
+<script src="../assets/js/calendar.js?v=20260912d"></script>
 </body>
 </html>

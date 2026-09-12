@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Repair | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260912c">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260912d">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260912c"></script>
-<script src="../assets/js/supabase-config.js?v=20260912c"></script>
-<script src="../assets/js/auth.js?v=20260912c"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260912d"></script>
+<script src="../assets/js/supabase-config.js?v=20260912d"></script>
+<script src="../assets/js/auth.js?v=20260912d"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -54,7 +54,7 @@
 
 <div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Repair</div>
 <div class="page-title-row"><h1>Repair</h1></div>
-<div class="note-box blue">Component-level repair estimate for a Condenser, Fan Coil, or Furnace. Toggle on the system that needs work, then switch on and price each part it needs — quantities default to 1 the moment a part is included. Save at the bottom when you're done.</div>
+<div class="note-box blue">Component-level repair estimate for a Condenser, Fan Coil, or Furnace. Toggle on the system that needs work, then switch on and price each part it needs — quantities default to 1 the moment a part is included. Update the repair list at the top or bottom when you're done.</div>
 
 
 <div class="card" style="margin-bottom:22px">
@@ -71,7 +71,9 @@
     <div class="field" style="max-width:220px"><label>Quote #</label><input type="text" id="q-number" readonly placeholder="Assigned when saved" style="background:#f3f5f7;color:var(--muted)"></div>
   </div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px">
+    <button type="button" class="btn btn-navy btn-sm" id="save-quote-btn">Update Repair List</button>
     <button type="button" class="btn btn-ghost btn-sm" id="retrieve-quote-btn">Retrieve Saved Quote&hellip;</button>
+    <button type="button" class="btn btn-outline btn-sm" id="reset-quote-btn">Reset</button>
     <span id="save-status" class="muted" style="font-size:.85rem"></span>
   </div>
 </div>
@@ -137,14 +139,16 @@
 </div>
 
 <div class="card" style="margin-top:20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-  <button type="button" class="btn btn-navy btn-sm" id="save-quote-btn">Save Repair</button>
-  <span id="save-status" class="muted" style="font-size:.85rem"></span>
+  <button type="button" class="btn btn-navy btn-sm" id="print-quote-btn">Print Quote</button>
+  <button type="button" class="btn btn-navy btn-sm" id="save-quote-btn-bottom">Update Repair List</button>
+  <span id="save-status-bottom" class="muted" style="font-size:.85rem"></span>
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260912c"></script>
-<script src="../assets/js/worksheet.js?v=20260912c"></script>
-<script src="../assets/js/quotes-db.js?v=20260912c"></script>
+<script src="../assets/js/pricing-data.js?v=20260912d"></script>
+<script src="../assets/js/worksheet.js?v=20260912d"></script>
+<script src="../assets/js/print-quote.js?v=20260912d"></script>
+<script src="../assets/js/quotes-db.js?v=20260912d"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
   saaAttachPhoneMask(document.getElementById('q-phone'));
@@ -155,9 +159,9 @@
   // just always saved with quoteType "repair".
   let _saaCurrentQuoteId = null;
 
-  const condenserDetail = renderLineItemTable(document.getElementById('detail-rep-condenser'), REPAIR_CONDENSER_ITEMS, { allowAddRow: true, showBuyColumn: true, showGroupSubtotals: false });
-  const fancoilDetail = renderLineItemTable(document.getElementById('detail-rep-fancoil'), REPAIR_FANCOIL_ITEMS, { allowAddRow: true, showBuyColumn: true, showGroupSubtotals: false });
-  const furnaceDetail = renderLineItemTable(document.getElementById('detail-rep-furnace'), REPAIR_FURNACE_ITEMS, { allowAddRow: true, showBuyColumn: true, showGroupSubtotals: false });
+  const condenserDetail = renderLineItemTable(document.getElementById('detail-rep-condenser'), REPAIR_CONDENSER_ITEMS, { allowAddRow: true, allowRemoveRow: true, showBuyColumn: true, showGroupSubtotals: false });
+  const fancoilDetail = renderLineItemTable(document.getElementById('detail-rep-fancoil'), REPAIR_FANCOIL_ITEMS, { allowAddRow: true, allowRemoveRow: true, showBuyColumn: true, showGroupSubtotals: false });
+  const furnaceDetail = renderLineItemTable(document.getElementById('detail-rep-furnace'), REPAIR_FURNACE_ITEMS, { allowAddRow: true, allowRemoveRow: true, showBuyColumn: true, showGroupSubtotals: false });
 
   function updateAll() {
     const condenserOn = document.getElementById('tgl-rep-condenser').checked;
@@ -179,6 +183,17 @@
     const grandTotal = (condenserOn ? condenserTotal : 0) + (fancoilOn ? fancoilTotal : 0) + (furnaceOn ? furnaceTotal : 0);
     document.getElementById('grand-total').textContent = fmtMoney(grandTotal);
 
+    const lineItems = [];
+    if (condenserOn && condenserTotal > 0) {
+      lineItems.push({ name: 'Condenser Repair', desc: 'Compressor, motor, electrical, and refrigerant-circuit parts.', price: condenserTotal });
+    }
+    if (fancoilOn && fancoilTotal > 0) {
+      lineItems.push({ name: 'Fan Coil Repair', desc: 'Coil, metering device, control board, and drainline parts.', price: fancoilTotal });
+    }
+    if (furnaceOn && furnaceTotal > 0) {
+      lineItems.push({ name: 'Furnace Repair', desc: 'Ignition, gas, blower, and control parts.', price: furnaceTotal });
+    }
+
     window._saaGetQuote = function () {
       const firstName = document.getElementById('q-first').value.trim();
       const lastName = document.getElementById('q-last').value.trim();
@@ -192,22 +207,49 @@
         address: document.getElementById('q-address').value,
         date: document.getElementById('q-date').value,
         quoteNumber: document.getElementById('q-number').value,
+        lineItems: lineItems,
         grandTotal: grandTotal,
       };
     }
   }
 
-  // ---- Save Repair ----
-  document.getElementById('save-quote-btn').addEventListener('click', async () => {
-    const btn = document.getElementById('save-quote-btn');
-    const status = document.getElementById('save-status');
+  document.getElementById('print-quote-btn').addEventListener('click', () => {
+    printFormalQuote(window._saaGetQuote());
+  });
+
+  // ---- Update Repair List (top + bottom buttons share one flow) ----
+  function setSaveStatus(msg) {
+    document.getElementById('save-status').textContent = msg;
+    document.getElementById('save-status-bottom').textContent = msg;
+  }
+  function setSaveButtonsDisabled(disabled) {
+    document.getElementById('save-quote-btn').disabled = disabled;
+    document.getElementById('save-quote-btn-bottom').disabled = disabled;
+  }
+  async function doSaveQuote() {
     const quote = window._saaGetQuote();
     if (!quote.firstName && !quote.lastName && !quote.phone) {
-      status.textContent = 'Enter a first name, last name, or phone number first.';
+      setSaveStatus('Enter a first name, last name, or phone number first.');
       return;
     }
-    btn.disabled = true;
-    status.textContent = 'Saving…';
+    // Only check for a duplicate when this save would CREATE a new repair
+    // record — once one is loaded/saved (_saaCurrentQuoteId set), saving
+    // again is an update, never a duplicate of itself.
+    if (!_saaCurrentQuoteId) {
+      const dup = await saaFindDuplicateQuotes({
+        firstName: quote.firstName, lastName: quote.lastName, phone: quote.phone, quoteType: quote.quoteType,
+      });
+      if (dup.ok && dup.quotes.length) {
+        const nums = dup.quotes.map(q => q.quote_number || 'unnumbered').join(', ');
+        const proceed = await saaConfirm(
+          `A saved repair record already exists for this customer (${nums}). Save this as another one anyway?`,
+          { title: 'Possible duplicate repair', okLabel: 'Save Anyway' }
+        );
+        if (!proceed) { setSaveStatus('Save cancelled.'); return; }
+      }
+    }
+    setSaveButtonsDisabled(true);
+    setSaveStatus('Saving…');
     const result = await saaSaveQuote({
       quoteId: _saaCurrentQuoteId,
       quoteType: quote.quoteType,
@@ -218,14 +260,22 @@
       total: quote.grandTotal,
       formState: saaSerializeFormState(),
     });
-    btn.disabled = false;
+    setSaveButtonsDisabled(false);
     if (result.ok) {
       _saaCurrentQuoteId = result.quoteId;
       document.getElementById('q-number').value = result.quoteNumber || '';
-      status.textContent = 'Saved as ' + (result.quoteNumber || 'quote') + '.';
+      setSaveStatus('Saved as ' + (result.quoteNumber || 'quote') + '.');
     } else {
-      status.textContent = 'Error: ' + result.error;
+      setSaveStatus('Error: ' + result.error);
     }
+  }
+  document.getElementById('save-quote-btn').addEventListener('click', doSaveQuote);
+  document.getElementById('save-quote-btn-bottom').addEventListener('click', doSaveQuote);
+
+  // ---- Reset ----
+  document.getElementById('reset-quote-btn').addEventListener('click', async () => {
+    const ok = await saaConfirm('Reset this worksheet to its default values? Any unsaved changes will be lost.', { title: 'Reset worksheet', okLabel: 'Reset' });
+    if (ok) location.reload();
   });
 
   // ---- Retrieve Quote ----
@@ -252,33 +302,20 @@
     const res = await saaSearchQuotes({ firstName, lastName, phone });
     if (!res.ok) { status.textContent = 'Error: ' + res.error; return; }
     status.textContent = res.results.length + ' match' + (res.results.length === 1 ? '' : 'es') + ' found.';
-    if (!res.results.length) {
-      results.innerHTML = '<div class="quote-result-empty">No saved quotes match.</div>';
-      return;
-    }
-    results.innerHTML = res.results.map(q => {
-      const c = q.customer || {};
-      const name = [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Unnamed';
-      const when = q.updated_at ? new Date(q.updated_at).toLocaleDateString('en-US') : '';
-      return `<div class="quote-result-row" data-quote-id="${q.id}">
-        <div>
-          <div class="name">${name}${c.phone ? ' — ' + saaFormatPhone(c.phone) : ''}</div>
-          <div class="meta">${q.quote_number || 'No #'} &middot; ${q.quote_type || ''} &middot; ${q.job_address || ''} &middot; ${when}</div>
-        </div>
-        <div class="name">${fmtMoney(q.total || 0)}</div>
-      </div>`;
-    }).join('');
-    results.querySelectorAll('.quote-result-row').forEach(row => {
-      row.addEventListener('click', async () => {
+    saaRenderQuoteResults(results, res.results, {
+      onLoad: async (quoteId) => {
         status.textContent = 'Loading…';
-        const loaded = await saaLoadQuote(row.dataset.quoteId);
+        const loaded = await saaLoadQuote(quoteId);
         if (!loaded.ok) { status.textContent = 'Error: ' + loaded.error; return; }
         if (loaded.quote.form_state) saaApplyFormState(loaded.quote.form_state);
         _saaCurrentQuoteId = loaded.quote.id;
         document.getElementById('q-number').value = loaded.quote.quote_number || '';
         document.getElementById('retrieve-modal').hidden = true;
         updateAll();
-      });
+      },
+      onDeleted: () => {
+        document.getElementById('rq-search-btn').click();
+      },
     });
   });
 

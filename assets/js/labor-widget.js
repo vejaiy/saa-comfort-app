@@ -5,7 +5,7 @@ function initLaborWidget(mountEl) {
   mountEl.innerHTML = `
     <div class="worksheet-wrap">
       <table class="worksheet">
-        <thead><tr><th>Role</th><th>Cost / Hr</th><th>Hours</th><th>Total</th></tr></thead>
+        <thead><tr><th>Role</th><th class="num">Cost / Hr</th><th class="num">Hours</th><th class="num">Total</th></tr></thead>
         <tbody class="lw-body"></tbody>
         <tfoot><tr><td colspan="3">Subtotal</td><td class="num lw-total">$0.00</td></tr></tfoot>
       </table>

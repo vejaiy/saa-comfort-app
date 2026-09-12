@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dashboard | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260912c">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260912d">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260912c"></script>
-<script src="../assets/js/supabase-config.js?v=20260912c"></script>
-<script src="../assets/js/auth.js?v=20260912c"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260912d"></script>
+<script src="../assets/js/supabase-config.js?v=20260912d"></script>
+<script src="../assets/js/auth.js?v=20260912d"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -69,7 +69,7 @@
     <a class="btn btn-ghost btn-sm" href="calendar.html" target="_blank" rel="noopener">Open Full Calendar ↗</a>
   </div>
   <div class="dash-calendar-embed">
-    <iframe src="calendar.html" title="Dispatch Calendar" loading="lazy"></iframe>
+    <iframe src="calendar.html?embed=1" title="Dispatch Calendar" loading="lazy"></iframe>
   </div>
 </div>
 
@@ -92,26 +92,6 @@
         <div class="icon">🩹</div>
         <h3 style="margin-bottom:0">Repair</h3>
         <p class="muted" style="margin:0">Component-level repair estimate — condenser, fan coil, or furnace parts and labor.</p>
-      </a>
-      <a class="tool-card" href="condenser-change.html" style="text-decoration:none">
-        <div class="icon">🌀</div>
-        <h3 style="margin-bottom:0">Condenser Change</h3>
-        <p class="muted" style="margin:0">Outdoor condensing unit swap, priced by tonnage.</p>
-      </a>
-      <a class="tool-card" href="coil-change.html" style="text-decoration:none">
-        <div class="icon">❄️</div>
-        <h3 style="margin-bottom:0">Coil Change</h3>
-        <p class="muted" style="margin:0">Evaporator coil replacement worksheet.</p>
-      </a>
-      <a class="tool-card" href="furnace-change.html" style="text-decoration:none">
-        <div class="icon">🔥</div>
-        <h3 style="margin-bottom:0">Furnace Change</h3>
-        <p class="muted" style="margin:0">Furnace replacement across efficiency tiers.</p>
-      </a>
-      <a class="tool-card" href="plenum-change.html" style="text-decoration:none">
-        <div class="icon">📦</div>
-        <h3 style="margin-bottom:0">Plenum Change</h3>
-        <p class="muted" style="margin:0">Supply/return plenum + duct collar pricing.</p>
       </a>
       <a class="tool-card" href="drainline-maintenance.html" style="text-decoration:none">
         <div class="icon">💧</div>
@@ -147,6 +127,26 @@
 
 <h2 style="font-size:1.1rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted)">Resources</h2>
 <div class="tool-grid">
+      <a class="tool-card" href="condenser-change.html" style="text-decoration:none">
+        <div class="icon">🌀</div>
+        <h3 style="margin-bottom:0">Condenser Change</h3>
+        <p class="muted" style="margin:0">Outdoor condensing unit swap, priced by tonnage.</p>
+      </a>
+      <a class="tool-card" href="coil-change.html" style="text-decoration:none">
+        <div class="icon">❄️</div>
+        <h3 style="margin-bottom:0">Coil Change</h3>
+        <p class="muted" style="margin:0">Evaporator coil replacement worksheet.</p>
+      </a>
+      <a class="tool-card" href="furnace-change.html" style="text-decoration:none">
+        <div class="icon">🔥</div>
+        <h3 style="margin-bottom:0">Furnace Change</h3>
+        <p class="muted" style="margin:0">Furnace replacement across efficiency tiers.</p>
+      </a>
+      <a class="tool-card" href="plenum-change.html" style="text-decoration:none">
+        <div class="icon">📦</div>
+        <h3 style="margin-bottom:0">Plenum Change</h3>
+        <p class="muted" style="margin:0">Supply/return plenum + duct collar pricing.</p>
+      </a>
       <a class="tool-card stub" href="instruction-manual.html" style="text-decoration:none">
         <div class="icon">📖</div>
         <h3 style="margin-bottom:0">Instruction Manual</h3>
@@ -165,8 +165,8 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260912c"></script>
-<script src="../assets/js/worksheet.js?v=20260912c"></script>
+<script src="../assets/js/pricing-data.js?v=20260912d"></script>
+<script src="../assets/js/worksheet.js?v=20260912d"></script>
 
 </body>
 </html>

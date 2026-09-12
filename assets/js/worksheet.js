@@ -84,6 +84,12 @@ function renderLineItemTable(mountEl, rows, opts) {
   const addRowBtn = opts.allowAddRow
     ? `<button type="button" class="btn btn-ghost btn-sm" id="${mountEl.id}-addrow" style="margin-top:10px">+ Add line item</button>`
     : "";
+  const removeRowBtn = opts.allowRemoveRow
+    ? `<button type="button" class="btn btn-ghost btn-sm" id="${mountEl.id}-removerow" style="margin-top:10px"${rows.length === 0 ? " disabled" : ""}>&minus; Remove line item</button>`
+    : "";
+  const rowButtonsHtml = (addRowBtn || removeRowBtn)
+    ? `<div style="display:flex;gap:8px;flex-wrap:wrap">${addRowBtn}${removeRowBtn}</div>`
+    : "";
 
   mountEl.innerHTML = `
     ${linkedPicker}
@@ -91,7 +97,7 @@ function renderLineItemTable(mountEl, rows, opts) {
       <table class="worksheet">
         <thead><tr>
           <th>Category</th><th>Item</th><th>Unit</th><th>Qty</th>
-          <th>Unit $</th><th>Ext.</th><th>Included</th>${opts.showBuyColumn ? "<th>Buy</th>" : ""}
+          <th class="num">Unit $</th><th class="num">Ext.</th><th>Included</th>${opts.showBuyColumn ? "<th>Buy</th>" : ""}
         </tr></thead>
         <tbody>${rowsHtml}</tbody>
         <tfoot><tr>
@@ -102,13 +108,22 @@ function renderLineItemTable(mountEl, rows, opts) {
       </table>
     </div>
     ${groupSubtotalsHtml}
-    ${addRowBtn}
+    ${rowButtonsHtml}
   `;
 
   if (opts.allowAddRow) {
     mountEl.querySelector(`#${mountEl.id}-addrow`).addEventListener("click", () => {
       rows.push({ group: "MATERIALS", category: "", item: "New item — edit me", unit: "EA", qty: 1, price: 0, included: true, buy: false });
       renderLineItemTable(mountEl, rows, opts);
+    });
+  }
+  if (opts.allowRemoveRow) {
+    const removeBtn = mountEl.querySelector(`#${mountEl.id}-removerow`);
+    removeBtn.addEventListener("click", () => {
+      if (rows.length > 0) {
+        rows.pop();
+        renderLineItemTable(mountEl, rows, opts);
+      }
     });
   }
 
@@ -206,7 +221,7 @@ function renderFlatPriceTable(mountEl, rows) {
   mountEl.innerHTML = `
     <div class="worksheet-wrap">
       <table class="worksheet">
-        <thead><tr><th>Item</th><th>Unit</th><th>Qty</th><th>Unit Cost</th><th>Ext. Cost</th></tr></thead>
+        <thead><tr><th>Item</th><th>Unit</th><th>Qty</th><th class="num">Unit Cost</th><th class="num">Ext. Cost</th></tr></thead>
         <tbody>${rowsHtml}</tbody>
         <tfoot><tr><td colspan="4">Total</td><td class="num" data-total="flat">$0.00</td></tr></tfoot>
       </table>
@@ -285,5 +300,41 @@ function saaAttachPhoneMask(el) {
   el.addEventListener("input", () => {
     const formatted = saaFormatPhone(el.value);
     if (formatted !== el.value) el.value = formatted;
+  });
+}
+
+/* ============================================================
+   Generic Yes/Cancel confirmation modal — used before saving a
+   likely-duplicate quote/job, before deleting one, and anywhere else
+   a page needs the office to confirm an action rather than a jarring
+   native confirm() popup. Reuses the same .modal-overlay/.modal-card
+   styling as every other modal in the app (Retrieve Quote, Photos,
+   Inspection, the calendar's schedule-conflict modal).
+   Returns a Promise<boolean> — true if the office clicked Continue.
+   ============================================================ */
+function saaConfirm(message, opts) {
+  opts = opts || {};
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal-card">
+        <h3>${opts.title || "Please confirm"}</h3>
+        <p class="muted" style="margin-bottom:16px;white-space:pre-line">${message}</p>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button type="button" class="btn btn-ghost btn-sm" data-act="cancel">${opts.cancelLabel || "Cancel"}</button>
+          <button type="button" class="btn btn-navy btn-sm" data-act="ok">${opts.okLabel || "Continue"}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    function done(result) {
+      overlay.remove();
+      resolve(result);
+    }
+    overlay.querySelector('[data-act="cancel"]').addEventListener("click", () => done(false));
+    overlay.querySelector('[data-act="ok"]').addEventListener("click", () => done(true));
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) done(false);
+    });
   });
 }

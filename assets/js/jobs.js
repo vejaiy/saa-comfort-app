@@ -285,6 +285,12 @@ async function jbSaveNewJob() {
     payload.newCustomer = { firstName: c.first_name, lastName: c.last_name, phone: c.phone, address: c.billing_address, city: c.billing_city, zip: c.billing_zip };
   } else {
     payload.customerId = _jbSelectedCust.id;
+    const dup = await saaJobsFindDuplicateJobs({ customerId: _jbSelectedCust.id, phone: _jbSelectedCust.customer && _jbSelectedCust.customer.phone, jobType: payload.jobType });
+    if (dup.ok && dup.jobs.length) {
+      const nums = dup.jobs.map((j) => j.job_number || "unnumbered").join(", ");
+      const proceed = await saaConfirm(`This customer already has an open ${saaJobTypeLabel(payload.jobType)} job (${nums}). Create another job anyway?`, { title: "Possible duplicate job", okLabel: "Create Anyway" });
+      if (!proceed) { statusEl.textContent = "Not created."; return; }
+    }
   }
   statusEl.textContent = "Saving…";
   const res = await saaJobsCreateJob(payload);
@@ -331,7 +337,7 @@ async function jbRenderQuoteSection(job) {
 }
 
 async function jbSearchCustomerQuotes(job, query) {
-  const quotes = await saaJobsFetchCustomerQuotes(job.customer_id);
+  const quotes = await saaJobsFetchCustomerQuotes(job.customer_id, job.customer && job.customer.phone);
   const q = (query || "").toLowerCase();
   const filtered = q ? quotes.filter((qt) => (qt.quote_number || "").toLowerCase().includes(q) || (qt.quote_type || "").toLowerCase().includes(q)) : quotes;
   const box = document.getElementById("jbd-quote-results");
@@ -777,6 +783,22 @@ async function jbCloseDetail() {
   modal.hidden = true;
 }
 
+/** Removes a job that turned out to be a duplicate (or was created in
+ *  error) — deletes its appointment, photos, invoice/payments, and clears
+ *  the job_id back-link on any quote that had been converted into it. */
+async function jbDeleteCurrentJob() {
+  if (!_jbCurrentJob) return;
+  const ok = await saaConfirm(`Delete job ${_jbCurrentJob.job_number || ""} for ${_jbCurrentJob.customer ? _jbCustName(_jbCurrentJob.customer) : "this customer"}? This can't be undone.`, { title: "Delete job", okLabel: "Delete", cancelLabel: "Cancel" });
+  if (!ok) return;
+  const jobToDelete = _jbCurrentJob;
+  const res = await saaJobsDeleteJob(jobToDelete.id);
+  if (!res.ok) { document.getElementById("jbd-status-msg").textContent = "Error: " + res.error; return; }
+  _jbCurrentJob = null;
+  document.getElementById("jb-detail-modal").hidden = true;
+  _jbToast("Job deleted.");
+  await jbLoadAll();
+}
+
 /* ============================== Wire up on load ============================== */
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -813,6 +835,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   document.getElementById("jbd-save-btn").addEventListener("click", jbSaveDetail);
   document.getElementById("jbd-close-btn").addEventListener("click", jbCloseDetail);
+  document.getElementById("jbd-delete-btn").addEventListener("click", jbDeleteCurrentJob);
   document.getElementById("jb-detail-close-btn").addEventListener("click", jbCloseDetail);
   document.getElementById("jb-detail-modal").addEventListener("click", (e) => {
     if (e.target.id === "jb-detail-modal") jbCloseDetail(); // clicked the backdrop, not the card

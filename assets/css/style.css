@@ -118,6 +118,11 @@ textarea { resize: vertical; }
 .emp-shell { background: var(--bg); min-height: 100vh; }
 .emp-header { background: var(--navy); color: #fff; padding: 18px 0; }
 .emp-header .container { display: flex; align-items: center; justify-content: space-between; }
+/* Dashboard embeds calendar.html?embed=1 in an iframe — that copy of the
+   page shouldn't show its own duplicate nav bar (the dashboard already
+   has one). See the inline script gen_calendar.py adds to <head>. */
+html.saa-embed .emp-header { display: none; }
+html.saa-embed main.container { padding-top: 6px; }
 .tool-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 @media (max-width: 900px) { .tool-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 600px) { .tool-grid { grid-template-columns: 1fr; } }
@@ -326,8 +331,59 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .appt-card.st-cancelled { background: var(--st-cancelled); }
 .appt-card.st-no_show { background: var(--st-no_show); }
 
+/* Right-edge handle that lets a dispatcher drag an appointment's end time
+   without moving its start time — a thin strip the width of the card so
+   it's easy to grab without needing pixel precision. */
+.appt-resize-handle { position: absolute; top: 0; right: 0; bottom: 0; width: 8px; cursor: ew-resize; }
+.appt-resize-handle::after { content: ""; position: absolute; top: 50%; right: 2px; width: 3px; height: 60%; transform: translateY(-50%); border-right: 2px solid rgba(255,255,255,.6); }
+.appt-card.resizing { opacity: .85; box-shadow: 0 0 0 2px rgba(15,36,57,.5); }
+
 .cal-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; font-size: .78rem; color: var(--muted); }
 .cal-legend .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+
+/* ---- Day / Week / Month view toggle ---- */
+.cal-view-toggle { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-left: auto; }
+.cal-view-btn { border: none; background: #fff; color: var(--navy); font-size: .82rem; font-weight: 700; padding: 6px 14px; cursor: pointer; border-right: 1px solid var(--line); }
+.cal-view-btn:last-child { border-right: none; }
+.cal-view-btn.active { background: var(--navy); color: #fff; }
+
+/* ---- Week view: 7 agenda columns ---- */
+.cal-week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
+.cal-week-day { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); min-height: 220px; display: flex; flex-direction: column; }
+.cal-week-day.is-today { border-color: var(--navy); box-shadow: 0 0 0 1px var(--navy) inset; }
+.cal-week-daylabel { font-size: .82rem; font-weight: 800; color: var(--navy); padding: 8px 10px; border-bottom: 1px solid var(--line); background: #fafbfc; cursor: pointer; }
+.cal-week-daylabel span { color: var(--muted); font-weight: 700; margin-left: 4px; }
+.cal-week-daybody { padding: 8px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+.cal-week-appt { border-radius: 6px; padding: 5px 7px; font-size: .74rem; line-height: 1.3; color: #fff; cursor: pointer; }
+.cal-week-appt .t { font-weight: 800; display: block; }
+.cal-week-appt .n { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-week-appt .tech { display: block; opacity: .85; font-size: .7rem; }
+.cal-week-appt.st-scheduled { background: var(--st-scheduled); color: #3a2c00; }
+.cal-week-appt.st-en_route { background: var(--st-en_route); }
+.cal-week-appt.st-on_site { background: var(--st-on_site); }
+.cal-week-appt.st-waiting_parts { background: var(--st-waiting_parts); }
+.cal-week-appt.st-completed { background: var(--st-completed); }
+.cal-week-appt.st-cancelled { background: var(--st-cancelled); }
+.cal-week-appt.st-no_show { background: var(--st-no_show); }
+.cal-week-empty { color: var(--muted); font-size: .78rem; padding: 4px 2px; }
+
+/* ---- Month view: traditional calendar grid ---- */
+.cal-month-head { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--muted); margin-bottom: 4px; }
+.cal-month-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(90px, auto); gap: 6px; }
+.cal-month-cell { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.cal-month-cell.is-outside { background: #fafbfc; opacity: .55; }
+.cal-month-cell.is-today { border-color: var(--navy); box-shadow: 0 0 0 1px var(--navy) inset; }
+.cal-month-daynum { font-size: .8rem; font-weight: 800; color: var(--navy); }
+.cal-month-chips { display: flex; flex-direction: column; gap: 3px; }
+.cal-month-chip { border-radius: 4px; padding: 2px 5px; font-size: .68rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.cal-month-chip.st-scheduled { background: var(--st-scheduled); color: #3a2c00; }
+.cal-month-chip.st-en_route { background: var(--st-en_route); }
+.cal-month-chip.st-on_site { background: var(--st-on_site); }
+.cal-month-chip.st-waiting_parts { background: var(--st-waiting_parts); }
+.cal-month-chip.st-completed { background: var(--st-completed); }
+.cal-month-chip.st-cancelled { background: var(--st-cancelled); }
+.cal-month-chip.st-no_show { background: var(--st-no_show); }
+.cal-month-more { font-size: .68rem; color: var(--muted); padding: 1px 3px; }
 
 /* ---- New Service popup (compact, not a giant form) ---- */
 .cal-newsvc-card { max-width: 460px; }
@@ -459,6 +515,20 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .jb-photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .jb-photo-thumb .jb-photo-del { position: absolute; top: 2px; right: 2px; background: rgba(20, 30, 40, .72); color: #fff; border: 0; border-radius: 999px; width: 20px; height: 20px; line-height: 20px; text-align: center; font-size: .78rem; cursor: pointer; padding: 0; }
 .jb-photo-empty { color: var(--muted); font-size: .82rem; }
+
+/* ===== Dispatch Calendar: Week/Month views on narrow screens (round 5) =====
+   7 columns is fine on a desktop monitor but too cramped on a tablet or
+   phone — collapse to a 2-day/3-per-row grid instead of shrinking text
+   until it's unreadable. Cells stay clickable either way. */
+@media (max-width: 860px) {
+  .cal-week-grid { grid-template-columns: repeat(2, 1fr); }
+  .cal-month-head { display: none; }
+  .cal-month-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 480px) {
+  .cal-week-grid { grid-template-columns: 1fr; }
+  .cal-month-grid { grid-template-columns: repeat(2, 1fr); }
+}
 
 /* ===== Job Card: Inspection checklist (round 3) ===== */
 .jb-insp-summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

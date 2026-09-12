@@ -281,16 +281,38 @@ function _saaJobsAddMinutes(hhmm, minutes) {
  *  that date/time (defaulting to 9:00 AM and the type's usual duration,
  *  or 60 minutes, if no time was entered); otherwise its appointment is
  *  cleared back to no start time, which is exactly what puts it back in
- *  the Unscheduled Jobs queue. */
+ *  the Unscheduled Jobs queue.
+ *
+ *  If the start time being saved is the SAME one already on the
+ *  appointment, the existing end_datetime is kept as-is instead of being
+ *  recomputed from the job type's default duration — otherwise saving
+ *  the Job Card for an unrelated reason (a note, a status change) after
+ *  a dispatcher had dragged the appointment's right edge on the calendar
+ *  to lengthen/shorten it would silently snap the duration back to
+ *  default every time. Duration only resets to default when the start
+ *  time actually changes (a real reschedule) or there was no existing
+ *  appointment time to begin with. */
 async function saaJobsSyncAppointmentSchedule(jobId, { technicianId, scheduledDate, scheduledTime, jobType }) {
   try {
     let start = null, end = null;
     if (technicianId && scheduledDate) {
       const time = scheduledTime || "09:00";
-      const durations = await saaJobsFetchAppointmentTypes();
-      const duration = durations[jobType] || 60;
       start = _saaJobsTimeStr(scheduledDate, time);
-      end = _saaJobsTimeStr(scheduledDate, _saaJobsAddMinutes(time, duration));
+
+      const { data: existing, error: exErr } = await _saaClient
+        .from("appointments")
+        .select("start_datetime,end_datetime")
+        .eq("job_id", jobId)
+        .maybeSingle();
+      if (exErr) throw exErr;
+
+      if (existing && existing.start_datetime === start && existing.end_datetime) {
+        end = existing.end_datetime;
+      } else {
+        const durations = await saaJobsFetchAppointmentTypes();
+        const duration = durations[jobType] || 60;
+        end = _saaJobsTimeStr(scheduledDate, _saaJobsAddMinutes(time, duration));
+      }
     }
     const { error } = await _saaClient
       .from("appointments")
@@ -443,15 +465,112 @@ async function saaJobsUpdateJob(jobId, fields) {
 }
 
 /** That customer's saved quotes, for the Job Card's "link a saved
- *  quote" search (auto-fills Quoted Amount once one is picked). */
-async function saaJobsFetchCustomerQuotes(customerId) {
+ *  quote" search (auto-fills Quoted Amount once one is picked).
+ *
+ *  A job's customer and a quote's customer are matched/created
+ *  separately (saaJobsFindOrCreateCustomer here vs.
+ *  saaFindOrCreateCustomer in quotes-db.js), both by exact
+ *  first+last+phone — so the same real person typed slightly
+ *  differently (name capitalization, a trailing space) on the
+ *  Quotation page vs. the New Job popup ends up as two different
+ *  customer rows, and a plain customer_id match here finds nothing
+ *  even though a saved quote exists. Phone numbers go through the
+ *  same input mask (saaAttachPhoneMask) everywhere, so they're the
+ *  more reliable match: when the direct customer_id lookup comes up
+ *  empty and a phone number is available, also pull quotes for any
+ *  OTHER customer row sharing that exact phone number. */
+async function saaJobsFetchCustomerQuotes(customerId, phone) {
   const { data, error } = await _saaClient
     .from("quotes")
-    .select("id,quote_number,quote_type,total,updated_at")
+    .select("id,quote_number,quote_type,total,updated_at,customer_id")
     .eq("customer_id", customerId)
     .order("updated_at", { ascending: false });
   if (error) throw error;
-  return data || [];
+  if ((data || []).length || !phone) return data || [];
+
+  const { data: sameCust, error: custErr } = await _saaClient
+    .from("customers")
+    .select("id")
+    .eq("phone", phone);
+  if (custErr) throw custErr;
+  const otherIds = (sameCust || []).map((c) => c.id).filter((id) => id !== customerId);
+  if (!otherIds.length) return [];
+
+  const { data: byPhone, error: phoneErr } = await _saaClient
+    .from("quotes")
+    .select("id,quote_number,quote_type,total,updated_at,customer_id")
+    .in("customer_id", otherIds)
+    .order("updated_at", { ascending: false });
+  if (phoneErr) throw phoneErr;
+  return byPhone || [];
+}
+
+/** Same customer-then-phone-fallback matching as saaJobsFetchCustomerQuotes,
+ *  used to warn a dispatcher before they create a second job for a customer
+ *  that already has an open job of the same type. "Open" excludes
+ *  completed/cancelled jobs — a repeat repair call after a job is closed
+ *  out is a legitimate new job, not a duplicate. */
+async function saaJobsFindDuplicateJobs({ customerId, phone, jobType, excludeId }) {
+  try {
+    if (!customerId) return { ok: true, jobs: [] };
+    const openStatuses = ["new", "assigned", "scheduled", "in_progress"];
+    const { data: direct, error: dErr } = await _saaClient
+      .from("jobs")
+      .select("id,job_number,job_type,status,scheduled_date")
+      .eq("customer_id", customerId)
+      .eq("job_type", jobType || "");
+    if (dErr) throw dErr;
+    let rows = direct || [];
+    if (!rows.length && phone) {
+      const { data: sameCust, error: cErr } = await _saaClient.from("customers").select("id").eq("phone", phone);
+      if (cErr) throw cErr;
+      const otherIds = (sameCust || []).map((c) => c.id).filter((id) => id !== customerId);
+      if (otherIds.length) {
+        const { data: byPhone, error: pErr } = await _saaClient
+          .from("jobs")
+          .select("id,job_number,job_type,status,scheduled_date")
+          .in("customer_id", otherIds)
+          .eq("job_type", jobType || "");
+        if (pErr) throw pErr;
+        rows = byPhone || [];
+      }
+    }
+    const openJobs = rows.filter((j) => j.id !== excludeId && openStatuses.includes(j.status));
+    return { ok: true, jobs: openJobs };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+/** Deletes a job and everything that hangs off it — its payments, invoice,
+ *  photos, and calendar appointment — and clears the job_id back-link on
+ *  any quote that had been converted into it. Used by the "remove a
+ *  duplicate job" flow (New Job popup warning, and a Delete Job button on
+ *  the Job Card itself). */
+async function saaJobsDeleteJob(jobId) {
+  try {
+    const { data: invoices, error: invErr } = await _saaClient.from("invoices").select("id").eq("job_id", jobId);
+    if (invErr) throw invErr;
+    for (const inv of invoices || []) {
+      const { error: payErr } = await _saaClient.from("payments").delete().eq("invoice_id", inv.id);
+      if (payErr) throw payErr;
+    }
+    if ((invoices || []).length) {
+      const { error: delInvErr } = await _saaClient.from("invoices").delete().eq("job_id", jobId);
+      if (delInvErr) throw delInvErr;
+    }
+    const { error: photoErr } = await _saaClient.from("job_photos").delete().eq("job_id", jobId);
+    if (photoErr) throw photoErr;
+    const { error: apptErr } = await _saaClient.from("appointments").delete().eq("job_id", jobId);
+    if (apptErr) throw apptErr;
+    const { error: quoteErr } = await _saaClient.from("quotes").update({ job_id: null }).eq("job_id", jobId);
+    if (quoteErr) throw quoteErr;
+    const { error: jobErr } = await _saaClient.from("jobs").delete().eq("id", jobId);
+    if (jobErr) throw jobErr;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
 }
 
 async function saaJobsLinkQuote(jobId, quoteId) {

@@ -37,6 +37,33 @@ function _saaCalDayBounds(dateStr) {
   return { start, end: `${y}-${m}-${d}T00:00:00` };
 }
 
+/** Attaches job + customer + technician to a flat list of appointment
+ *  rows — shared by the day/week/month/unscheduled fetchers below so
+ *  the join-in-JS logic lives in exactly one place. */
+async function _saaCalHydrateAppts(rawAppts, technicians) {
+  const jobIds = [...new Set((rawAppts || []).map((a) => a.job_id).filter(Boolean))];
+  const { data: jobs, error: e4 } = jobIds.length
+    ? await _saaClient.from("jobs").select("*").in("id", jobIds)
+    : { data: [], error: null };
+  if (e4) throw e4;
+
+  const custIds = [...new Set((jobs || []).map((j) => j.customer_id).filter(Boolean))];
+  const { data: customers, error: e5 } = custIds.length
+    ? await _saaClient.from("customers").select("id,first_name,last_name,phone,billing_address").in("id", custIds)
+    : { data: [], error: null };
+  if (e5) throw e5;
+
+  const jobsById = Object.fromEntries((jobs || []).map((j) => [j.id, j]));
+  const custById = Object.fromEntries((customers || []).map((c) => [c.id, c]));
+  const techById = Object.fromEntries((technicians || []).map((t) => [t.id, t]));
+
+  return (rawAppts || []).map((a) => {
+    const job = jobsById[a.job_id] || {};
+    const customer = custById[job.customer_id] || {};
+    return Object.assign({}, a, { job, customer, technician: techById[a.technician_id] || null });
+  });
+}
+
 /**
  * Loads everything the day-dispatch view needs for one calendar date:
  * active technicians, that day's scheduled appointments, and the
@@ -54,34 +81,43 @@ async function saaCalFetchDayData(dateStr) {
   if (e1) throw e1;
   if (e2) throw e2;
 
-  const allAppts = [].concat(scheduled || [], unscheduled || []);
-  const jobIds = [...new Set(allAppts.map((a) => a.job_id).filter(Boolean))];
-  const { data: jobs, error: e4 } = jobIds.length
-    ? await _saaClient.from("jobs").select("*").in("id", jobIds)
-    : { data: [], error: null };
-  if (e4) throw e4;
-
-  const custIds = [...new Set((jobs || []).map((j) => j.customer_id).filter(Boolean))];
-  const { data: customers, error: e5 } = custIds.length
-    ? await _saaClient.from("customers").select("id,first_name,last_name,phone,billing_address").in("id", custIds)
-    : { data: [], error: null };
-  if (e5) throw e5;
-
-  const jobsById = Object.fromEntries((jobs || []).map((j) => [j.id, j]));
-  const custById = Object.fromEntries((customers || []).map((c) => [c.id, c]));
-  const techById = Object.fromEntries((technicians || []).map((t) => [t.id, t]));
-
-  function hydrate(a) {
-    const job = jobsById[a.job_id] || {};
-    const customer = custById[job.customer_id] || {};
-    return Object.assign({}, a, { job, customer, technician: techById[a.technician_id] || null });
-  }
-
+  const hydrated = await _saaCalHydrateAppts([].concat(scheduled || [], unscheduled || []), technicians);
+  const schedIds = new Set((scheduled || []).map((a) => a.id));
   return {
     technicians: technicians || [],
-    scheduled: (scheduled || []).map(hydrate),
-    unscheduled: (unscheduled || []).map(hydrate),
+    scheduled: hydrated.filter((a) => schedIds.has(a.id)),
+    unscheduled: hydrated.filter((a) => !schedIds.has(a.id)),
   };
+}
+
+/**
+ * Loads scheduled appointments for an arbitrary date range
+ * [startDateStr, endDateStrExclusive) — backs the Week and Month views,
+ * which show many days at once instead of one day's technician tracks.
+ * Doesn't include the Unscheduled queue (those have no date to place them
+ * in a range) — see saaCalFetchUnscheduled for that.
+ */
+async function saaCalFetchRangeData(startDateStr, endDateStrExclusive) {
+  const start = `${startDateStr}T00:00:00`;
+  const end = `${endDateStrExclusive}T00:00:00`;
+  const [{ data: scheduled, error: e1 }, technicians] = await Promise.all([
+    _saaClient.from("appointments").select("*").gte("start_datetime", start).lt("start_datetime", end),
+    saaCalFetchTechnicians(),
+  ]);
+  if (e1) throw e1;
+  return { technicians: technicians || [], scheduled: await _saaCalHydrateAppts(scheduled || [], technicians) };
+}
+
+/** Just the Unscheduled Jobs queue, hydrated — used by Week/Month views
+ *  (which fetch scheduled appointments a different way than Day view's
+ *  saaCalFetchDayData) so the queue still shows regardless of view. */
+async function saaCalFetchUnscheduled() {
+  const [{ data: unscheduled, error: e2 }, technicians] = await Promise.all([
+    _saaClient.from("appointments").select("*").is("start_datetime", null),
+    saaCalFetchTechnicians(),
+  ]);
+  if (e2) throw e2;
+  return await _saaCalHydrateAppts(unscheduled || [], technicians);
 }
 
 /**

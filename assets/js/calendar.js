@@ -1,14 +1,19 @@
 /* ============================================================
-   SAA Comfort Air LLC — Dispatch Calendar (day view)
+   SAA Comfort Air LLC — Dispatch Calendar
    The operational center: technician rows, drag-and-drop
-   rescheduling (time / technician / both in one move), the New
-   Service popup with fast customer search, an Unscheduled Jobs
-   queue, a Job Details drawer, and one-click follow-up
-   scheduling. See calendar-db.js for all Supabase access.
+   rescheduling (time / technician / both in one move, plus
+   dragging an appointment's right edge to change its end time),
+   Day/Week/Month views, the New Service popup with fast customer
+   search, an Unscheduled Jobs queue, a Job Details drawer, and
+   one-click follow-up scheduling. See calendar-db.js for all
+   Supabase access.
 
-   Phase 1 (this file): Day view only. Week/Month views, filters,
-   recurring-maintenance suggestions, and the mobile technician
-   view are intentionally out of scope for this pass.
+   Day view is the only one with technician tracks and drag-and-
+   drop (that's where minute-level dispatch precision matters);
+   Week and Month are agenda-style overviews for seeing the spread
+   of work at a glance — clicking a day in either jumps to Day view
+   for that date. Filters and recurring-maintenance suggestions are
+   still out of scope for this pass.
    ============================================================ */
 
 const SAA_CAL_DAY_START_HOUR = 7;
@@ -25,6 +30,7 @@ const SAA_CAL_FOLLOWUP_TYPES = [
 ];
 
 let saaCalCurrentDate = "";
+let saaCalViewMode = "day"; // "day" | "week" | "month"
 let saaCalTechnicians = [];
 let saaCalAppointmentTypes = [];
 let saaCalTypesByKey = {};
@@ -106,7 +112,7 @@ function saaCalCustName(customer) {
 async function saaCalInit() {
   saaCalCurrentDate = saaCalTodayStr();
   document.getElementById("cal-date-input").value = saaCalCurrentDate;
-  document.getElementById("cal-date-label").textContent = saaCalFormatDateLabel(saaCalCurrentDate);
+  saaCalUpdateDateLabel();
 
   saaCalTechnicians = await saaCalFetchTechnicians();
   saaCalAppointmentTypes = await saaCalFetchAppointmentTypes();
@@ -125,7 +131,7 @@ async function saaCalInit() {
 function saaCalSetDate(dateStr) {
   saaCalCurrentDate = dateStr;
   document.getElementById("cal-date-input").value = dateStr;
-  document.getElementById("cal-date-label").textContent = saaCalFormatDateLabel(dateStr);
+  saaCalUpdateDateLabel();
   saaCalLoadAndRender();
 }
 function saaCalShiftDate(deltaDays) {
@@ -134,14 +140,166 @@ function saaCalShiftDate(deltaDays) {
   saaCalSetDate(_saaCalDateObjToStr(d));
 }
 
+/** Prev/Next button behavior depends on which view is showing: a day at
+ *  a time in Day view, a week at a time in Week view, a month at a time
+ *  in Month view. dir is -1 (back) or 1 (forward). */
+function saaCalNavigate(dir) {
+  if (saaCalViewMode === "day") { saaCalShiftDate(dir); return; }
+  if (saaCalViewMode === "week") { saaCalShiftDate(dir * 7); return; }
+  const d = new Date(saaCalCurrentDate + "T12:00:00");
+  d.setMonth(d.getMonth() + dir, 1); // land on the 1st first so e.g. Jan 31 -> Feb doesn't overflow into March
+  saaCalSetDate(_saaCalDateObjToStr(d));
+}
+
+function saaCalUpdateDateLabel() {
+  const label = document.getElementById("cal-date-label");
+  if (saaCalViewMode === "week") {
+    const start = _saaCalWeekStart(saaCalCurrentDate);
+    const end = new Date(start); end.setDate(end.getDate() + 6);
+    label.textContent = `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+  } else if (saaCalViewMode === "month") {
+    const d = new Date(saaCalCurrentDate + "T12:00:00");
+    label.textContent = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  } else {
+    label.textContent = saaCalFormatDateLabel(saaCalCurrentDate);
+  }
+}
+
+/** Switches between Day / Week / Month. Day view alone has technician
+ *  tracks + drag-and-drop; Week/Month share one agenda-style container. */
+function saaCalSetView(mode) {
+  if (saaCalViewMode === mode) return;
+  saaCalViewMode = mode;
+  document.querySelectorAll(".cal-view-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === mode));
+  document.getElementById("cal-day-view-wrap").hidden = mode !== "day";
+  document.getElementById("cal-altview-wrap").hidden = mode === "day";
+  saaCalUpdateDateLabel();
+  saaCalLoadAndRender();
+}
+
+function _saaCalWeekStart(dateStr) {
+  const d = new Date(dateStr + "T12:00:00");
+  d.setDate(d.getDate() - d.getDay()); // back up to Sunday
+  return d;
+}
+async function saaCalFetchWeekRange(dateStr) {
+  const start = _saaCalWeekStart(dateStr);
+  const end = new Date(start); end.setDate(end.getDate() + 7);
+  return saaCalFetchRangeData(_saaCalDateObjToStr(start), _saaCalDateObjToStr(end));
+}
+async function saaCalFetchMonthRange(dateStr) {
+  const d = new Date(dateStr + "T12:00:00");
+  const gridStart = new Date(d.getFullYear(), d.getMonth(), 1);
+  gridStart.setDate(gridStart.getDate() - gridStart.getDay());
+  const gridEnd = new Date(gridStart); gridEnd.setDate(gridEnd.getDate() + 42);
+  return saaCalFetchRangeData(_saaCalDateObjToStr(gridStart), _saaCalDateObjToStr(gridEnd));
+}
+
 async function saaCalLoadAndRender() {
-  const data = await saaCalFetchDayData(saaCalCurrentDate);
-  saaCalTechnicians = data.technicians;
-  saaCalScheduled = data.scheduled;
-  saaCalUnscheduled = data.unscheduled;
+  if (saaCalViewMode === "day") {
+    const data = await saaCalFetchDayData(saaCalCurrentDate);
+    saaCalTechnicians = data.technicians;
+    saaCalScheduled = data.scheduled;
+    saaCalUnscheduled = data.unscheduled;
+    saaCalRenderSummaryStrip();
+    saaCalRenderUnscheduledQueue();
+    saaCalRenderDayGrid();
+    return;
+  }
+  const [rangeData, unscheduled] = await Promise.all([
+    saaCalViewMode === "week" ? saaCalFetchWeekRange(saaCalCurrentDate) : saaCalFetchMonthRange(saaCalCurrentDate),
+    saaCalFetchUnscheduled(),
+  ]);
+  saaCalTechnicians = rangeData.technicians;
+  saaCalScheduled = rangeData.scheduled;
+  saaCalUnscheduled = unscheduled;
   saaCalRenderSummaryStrip();
   saaCalRenderUnscheduledQueue();
-  saaCalRenderDayGrid();
+  if (saaCalViewMode === "week") saaCalRenderWeekView(saaCalScheduled);
+  else saaCalRenderMonthView(saaCalScheduled);
+}
+
+/* ============================== WEEK / MONTH VIEWS ============================== */
+
+function saaCalRenderWeekView(scheduled) {
+  const wrap = document.getElementById("cal-altview-wrap");
+  const weekStart = _saaCalWeekStart(saaCalCurrentDate);
+  const todayStr = saaCalTodayStr();
+  let html = '<div class="cal-week-grid">';
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart); d.setDate(d.getDate() + i);
+    const dateStr = _saaCalDateObjToStr(d);
+    const dayAppts = scheduled
+      .filter((a) => String(a.start_datetime || "").slice(0, 10) === dateStr)
+      .sort((a, b) => saaCalMinutesFromTimeStr(a.start_datetime) - saaCalMinutesFromTimeStr(b.start_datetime));
+    const cardsHtml = dayAppts.length ? dayAppts.map((a) => {
+      const type = saaCalTypesByKey[a.job.job_type] || {};
+      const startMin = saaCalMinutesFromTimeStr(a.start_datetime);
+      return `<div class="cal-week-appt st-${a.status}" data-appt-id="${a.id}">
+        <span class="t">${saaCalFormatClock(startMin)}</span>
+        <span class="n">${type.icon || ""} ${_saaCalEsc(saaCalCustName(a.customer))}</span>
+        <span class="tech">${a.technician ? _saaCalEsc(a.technician.name) : "Unassigned"}</span>
+      </div>`;
+    }).join("") : '<div class="cal-week-empty">Nothing scheduled</div>';
+    html += `<div class="cal-week-day${dateStr === todayStr ? " is-today" : ""}" data-date="${dateStr}">
+      <div class="cal-week-daylabel" data-date="${dateStr}">${d.toLocaleDateString("en-US", { weekday: "short" })} <span>${d.getDate()}</span></div>
+      <div class="cal-week-daybody">${cardsHtml}</div>
+    </div>`;
+  }
+  html += "</div>";
+  wrap.innerHTML = html;
+  wrap.querySelectorAll(".cal-week-daylabel").forEach((el) => {
+    el.addEventListener("click", () => { saaCalSetView("day"); saaCalSetDate(el.dataset.date); });
+  });
+  wrap.querySelectorAll(".cal-week-appt").forEach((el) => {
+    el.addEventListener("click", () => saaCalOpenJobDrawer(el.dataset.apptId));
+  });
+}
+
+function saaCalRenderMonthView(scheduled) {
+  const wrap = document.getElementById("cal-altview-wrap");
+  const cur = new Date(saaCalCurrentDate + "T12:00:00");
+  const month = cur.getMonth();
+  const todayStr = saaCalTodayStr();
+  const gridStart = new Date(cur.getFullYear(), month, 1);
+  gridStart.setDate(gridStart.getDate() - gridStart.getDay());
+
+  const byDate = {};
+  scheduled.forEach((a) => {
+    const ds = String(a.start_datetime || "").slice(0, 10);
+    (byDate[ds] = byDate[ds] || []).push(a);
+  });
+
+  let html = '<div class="cal-month-head">' + ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => `<div>${d}</div>`).join("") + "</div>";
+  html += '<div class="cal-month-grid">';
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(gridStart); d.setDate(d.getDate() + i);
+    const dateStr = _saaCalDateObjToStr(d);
+    const inMonth = d.getMonth() === month;
+    const dayAppts = (byDate[dateStr] || []).sort((a, b) => saaCalMinutesFromTimeStr(a.start_datetime) - saaCalMinutesFromTimeStr(b.start_datetime));
+    const shown = dayAppts.slice(0, 3);
+    const moreCount = dayAppts.length - shown.length;
+    const chips = shown.map((a) => {
+      const type = saaCalTypesByKey[a.job.job_type] || {};
+      return `<div class="cal-month-chip st-${a.status}" data-appt-id="${a.id}">${type.icon || ""} ${_saaCalEsc(saaCalCustName(a.customer))}</div>`;
+    }).join("") + (moreCount > 0 ? `<div class="cal-month-more">+${moreCount} more</div>` : "");
+    html += `<div class="cal-month-cell${inMonth ? "" : " is-outside"}${dateStr === todayStr ? " is-today" : ""}" data-date="${dateStr}">
+      <div class="cal-month-daynum">${d.getDate()}</div>
+      <div class="cal-month-chips">${chips}</div>
+    </div>`;
+  }
+  html += "</div>";
+  wrap.innerHTML = html;
+  wrap.querySelectorAll(".cal-month-cell").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      if (e.target.closest(".cal-month-chip")) return;
+      saaCalSetView("day");
+      saaCalSetDate(el.dataset.date);
+    });
+  });
+  wrap.querySelectorAll(".cal-month-chip").forEach((el) => {
+    el.addEventListener("click", (e) => { e.stopPropagation(); saaCalOpenJobDrawer(el.dataset.apptId); });
+  });
 }
 
 /* ============================== SUMMARY STRIP ============================== */
@@ -234,6 +392,7 @@ function saaCalApptCardHtml(appt, lane, totalLanes) {
   return `<div class="appt-card st-${appt.status}" draggable="true" data-appt-id="${appt.id}" style="left:${left}%;width:${width}%;${vertical}" title="${_saaCalEsc(saaCalCustName(appt.customer))} — ${_saaCalEsc(appt.job.title || "")}">
     <div class="appt-title">${type.icon || ""} ${_saaCalEsc(saaCalCustName(appt.customer))}</div>
     <div class="appt-sub">${_saaCalEsc(appt.job.title || type.label || "")}</div>
+    <div class="appt-resize-handle" title="Drag to change the end time"></div>
   </div>`;
 }
 
@@ -280,6 +439,77 @@ function saaCalRenderDayGrid() {
       saaCalHandleDrop(tech.id, minutes);
     });
   });
+
+  body.querySelectorAll(".appt-resize-handle").forEach((handle) => {
+    handle.addEventListener("mousedown", saaCalStartResize);
+    // A plain click (no drag) on the handle shouldn't also open the Job
+    // Details drawer via the document-level .appt-card click handler below.
+    handle.addEventListener("click", (e) => e.stopPropagation());
+  });
+}
+
+/* ============================== RESIZE (drag right edge = change end time) ============================== */
+
+/**
+ * Dragging an appointment card's right-edge handle changes its end time
+ * (duration) without moving its start time or technician. Implemented
+ * with plain mouse events rather than HTML5 drag-and-drop — that's what
+ * the whole-card move above uses, and layering another native drag
+ * source inside a draggable="true" card would fight it — so the handle's
+ * mousedown disables the card's native dragging for the gesture instead.
+ */
+function saaCalStartResize(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const card = e.target.closest(".appt-card");
+  if (!card) return;
+  const appt = saaCalScheduled.find((a) => a.id === card.dataset.apptId);
+  if (!appt) return;
+  const track = card.closest(".cal-tech-track");
+  if (!track) return;
+  const trackRect = track.getBoundingClientRect();
+
+  card.draggable = false;
+  card.classList.add("resizing");
+  const startMin = saaCalMinutesFromTimeStr(appt.start_datetime);
+  const origEndMin = saaCalMinutesFromTimeStr(appt.end_datetime);
+  let newEndMin = origEndMin;
+
+  function onMove(ev) {
+    const pct = (ev.clientX - trackRect.left) / trackRect.width;
+    let minutes = SAA_CAL_DAY_START_HOUR * 60 + Math.round((pct * SAA_CAL_TOTAL_MINUTES) / SAA_CAL_SLOT_MINUTES) * SAA_CAL_SLOT_MINUTES;
+    minutes = Math.max(startMin + SAA_CAL_SLOT_MINUTES, Math.min(minutes, SAA_CAL_DAY_END_HOUR * 60));
+    newEndMin = minutes;
+    const leftPct = saaCalPct(startMin);
+    const widthPct = Math.max(saaCalPct(newEndMin) - leftPct, 3);
+    card.style.width = widthPct + "%";
+  }
+  function onUp() {
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onUp);
+    card.draggable = true;
+    card.classList.remove("resizing");
+    if (newEndMin !== origEndMin) saaCalFinishResize(appt, newEndMin);
+  }
+  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mouseup", onUp);
+}
+
+async function saaCalFinishResize(appt, newEndMin) {
+  const res = await saaCalUpdateAppointmentSchedule({
+    appointmentId: appt.id,
+    jobId: appt.job_id,
+    technicianId: appt.technician_id,
+    startDatetime: appt.start_datetime,
+    endDatetime: saaCalTimeStr(saaCalCurrentDate, newEndMin),
+  });
+  if (res.ok) {
+    await saaCalLoadAndRender();
+    saaCalShowToast(`Appointment now ends at ${saaCalFormatClock(newEndMin)}`);
+  } else {
+    alert("Error: " + res.error);
+    await saaCalLoadAndRender();
+  }
 }
 
 /* ============================== DRAG & DROP ============================== */
@@ -290,6 +520,12 @@ document.addEventListener("dragstart", (e) => {
     saaCalDragPayload = { kind: "scheduled", id: card.dataset.apptId };
     e.dataTransfer.setData("text/plain", card.dataset.apptId);
     e.dataTransfer.effectAllowed = "move";
+    // Pin the drag image's hotspot to the box's top-left corner instead of
+    // wherever inside the card the dispatcher happened to grab it — that's
+    // what makes the appointment land exactly under the cursor on drop
+    // (the drop math below reads the cursor position as the box's left
+    // edge) instead of appearing to land "off" from where it was dropped.
+    if (e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(card, 0, 0);
     card.classList.add("dragging");
     return;
   }
@@ -298,6 +534,7 @@ document.addEventListener("dragstart", (e) => {
     saaCalDragPayload = { kind: "unscheduled", id: uCard.dataset.apptId };
     e.dataTransfer.setData("text/plain", uCard.dataset.apptId);
     e.dataTransfer.effectAllowed = "move";
+    if (e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(uCard, 0, 0);
     uCard.classList.add("drag-ghost");
   }
 });
@@ -554,11 +791,14 @@ document.addEventListener("click", (e) => {
 /* ============================== STATIC HANDLERS (wired once) ============================== */
 
 function saaCalWireStaticHandlers() {
-  document.getElementById("cal-prev-btn").addEventListener("click", () => saaCalShiftDate(-1));
-  document.getElementById("cal-next-btn").addEventListener("click", () => saaCalShiftDate(1));
+  document.getElementById("cal-prev-btn").addEventListener("click", () => saaCalNavigate(-1));
+  document.getElementById("cal-next-btn").addEventListener("click", () => saaCalNavigate(1));
   document.getElementById("cal-today-btn").addEventListener("click", () => saaCalSetDate(saaCalTodayStr()));
   document.getElementById("cal-date-input").addEventListener("change", (e) => saaCalSetDate(e.target.value));
   document.getElementById("cal-new-service-btn").addEventListener("click", () => saaCalOpenNewServicePopup({}));
+  document.querySelectorAll(".cal-view-btn").forEach((btn) => {
+    btn.addEventListener("click", () => saaCalSetView(btn.dataset.view));
+  });
 
   document.getElementById("ns-cust-search").addEventListener("input", (e) => {
     clearTimeout(saaCalSearchTimer);

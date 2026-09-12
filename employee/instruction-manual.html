@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Instruction Manual | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260912c">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260912d">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260912c"></script>
-<script src="../assets/js/supabase-config.js?v=20260912c"></script>
-<script src="../assets/js/auth.js?v=20260912c"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260912d"></script>
+<script src="../assets/js/supabase-config.js?v=20260912d"></script>
+<script src="../assets/js/auth.js?v=20260912d"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -61,9 +61,9 @@
 <p class="muted" id="manuals-empty" hidden>No manuals synced yet.</p>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260912c"></script>
-<script src="../assets/js/worksheet.js?v=20260912c"></script>
-<script src="../assets/js/manuals-db.js?v=20260912c"></script>
+<script src="../assets/js/pricing-data.js?v=20260912d"></script>
+<script src="../assets/js/worksheet.js?v=20260912d"></script>
+<script src="../assets/js/manuals-db.js?v=20260912d"></script>
 <script>
   (async () => {
     const list = document.getElementById('manuals-list');
@@ -74,7 +74,12 @@
       list.innerHTML = manuals.map(m => {
         const sizeKb = m.file_size_bytes ? Math.round(m.file_size_bytes / 1024).toLocaleString() + ' KB' : '';
         const updated = m.uploaded_at ? new Date(m.uploaded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-        return `<a class="manual-row" href="../assets/manuals/${encodeURIComponent(m.filename)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">
+        // download (not target="_blank") so the browser hands the file to
+        // the OS/downloads bar instead of rendering it inline in a tab —
+        // that's what lets a PDF/DOCX/XLSX manual open in the desktop's
+        // own associated app (Acrobat, Word, Excel, ...) rather than the
+        // browser's built-in viewer when the office clicks Open.
+        return `<a class="manual-row" href="../assets/manuals/${encodeURIComponent(m.filename)}" download="${m.filename}" style="text-decoration:none;color:inherit">
           <div>
             <div class="name">📄 ${m.title}</div>
             <div class="meta">${[sizeKb, updated ? 'Updated ' + updated : ''].filter(Boolean).join(' &middot; ')}</div>

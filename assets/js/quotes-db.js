@@ -135,6 +135,90 @@ async function saaSearchQuotes({ firstName, lastName, phone }) {
   }
 }
 
+/**
+ * Looks for saved quotes already on file for this exact customer
+ * (first+last+phone) with the same quote type — used to warn the office
+ * before creating what looks like a duplicate quote, rather than after
+ * the fact. excludeId skips the quote currently being edited (updating
+ * an existing quote is never a "duplicate" of itself).
+ * returns: { ok: true, quotes: [...] } | { ok: false, error }
+ */
+async function saaFindDuplicateQuotes({ firstName, lastName, phone, quoteType, excludeId }) {
+  try {
+    const { data: existing, error: findErr } = await _saaClient
+      .from("customers")
+      .select("id")
+      .eq("first_name", firstName || "")
+      .eq("last_name", lastName || "")
+      .eq("phone", phone || "")
+      .limit(1);
+    if (findErr) throw findErr;
+    if (!existing || !existing.length) return { ok: true, quotes: [] };
+
+    const { data: quotes, error: qErr } = await _saaClient
+      .from("quotes")
+      .select("id, quote_number, quote_type, total, updated_at")
+      .eq("customer_id", existing[0].id)
+      .eq("quote_type", quoteType || "");
+    if (qErr) throw qErr;
+    return { ok: true, quotes: (quotes || []).filter((q) => q.id !== excludeId) };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+/** returns: { ok: true } | { ok: false, error } */
+async function saaDeleteQuote(quoteId) {
+  try {
+    const { error } = await _saaClient.from("quotes").delete().eq("id", quoteId);
+    if (error) throw error;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+/**
+ * Renders Retrieve Saved Quote's search results into `container`
+ * (normally #rq-results) — shared by the Quotation and Repair pages so
+ * both list/load/delete a saved quote identically. Clicking a row loads
+ * it (onLoad(quoteId)); its Delete button asks for confirmation, deletes
+ * it, then calls onDeleted(quoteId) so the caller can re-run the search.
+ */
+function saaRenderQuoteResults(container, results, { onLoad, onDeleted }) {
+  if (!results.length) {
+    container.innerHTML = '<div class="quote-result-empty">No saved quotes match.</div>';
+    return;
+  }
+  container.innerHTML = results.map((q) => {
+    const c = q.customer || {};
+    const name = [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unnamed";
+    const when = q.updated_at ? new Date(q.updated_at).toLocaleDateString("en-US") : "";
+    return `<div class="quote-result-row" data-quote-id="${q.id}">
+      <div>
+        <div class="name">${name}${c.phone ? " — " + saaFormatPhone(c.phone) : ""}</div>
+        <div class="meta">${q.quote_number || "No #"} &middot; ${q.quote_type || ""} &middot; ${q.job_address || ""} &middot; ${when}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="name">${fmtMoney(q.total || 0)}</div>
+        <button type="button" class="btn btn-ghost btn-sm" data-del-quote="${q.id}" title="Delete this saved quote">Delete</button>
+      </div>
+    </div>`;
+  }).join("");
+  container.querySelectorAll("[data-del-quote]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const ok = await saaConfirm("Delete this saved quote? This can't be undone.", { title: "Delete saved quote", okLabel: "Delete" });
+      if (!ok) return;
+      const result = await saaDeleteQuote(btn.dataset.delQuote);
+      if (result.ok && onDeleted) onDeleted(btn.dataset.delQuote);
+    });
+  });
+  container.querySelectorAll(".quote-result-row").forEach((row) => {
+    row.addEventListener("click", () => onLoad(row.dataset.quoteId));
+  });
+}
+
 /** returns: { ok: true, quote } | { ok: false, error } */
 async function saaLoadQuote(quoteId) {
   try {
