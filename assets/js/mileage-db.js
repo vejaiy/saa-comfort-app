@@ -40,11 +40,29 @@
 
 /** Builds a full postal address string from a job's own address fields,
  *  the same four columns the Job Card's Service Address fields write to.
- *  Returns null if there's not even a street address to work with. */
+ *  Returns null if there's not even a street address to work with.
+ *  Round 16 follow-up (2026-09-13): some jobs have the city/state/zip
+ *  typed directly into the Service Address field itself (in addition to
+ *  their own City/State/Zip fields), which used to make this function
+ *  glue the same city/state/zip onto the end a second time — showing up
+ *  as a garbled, duplicated "Trip: ... Pearland, TX , 77584, Pearland,
+ *  TX 77584" line. Now each city/state/zip piece is only appended if it
+ *  isn't already present somewhere in the address text. */
 function saaMileageJobAddress(job) {
   if (!job || !job.job_address) return null;
-  const cityStateZip = [job.job_city, [job.job_state, job.job_zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
-  return [job.job_address, cityStateZip].filter(Boolean).join(", ");
+  const addr = job.job_address.trim();
+  const lower = addr.toLowerCase();
+  const present = (v) => !!v && lower.includes(String(v).trim().toLowerCase());
+  const parts = [];
+  if (job.job_city && !present(job.job_city)) parts.push(job.job_city);
+  const stateMissing = job.job_state && !present(job.job_state);
+  const zipMissing = job.job_zip && !present(job.job_zip);
+  if (stateMissing && zipMissing) parts.push([job.job_state, job.job_zip].join(" "));
+  else {
+    if (stateMissing) parts.push(job.job_state);
+    if (zipMissing) parts.push(job.job_zip);
+  }
+  return [addr, parts.join(", ")].filter(Boolean).join(", ");
 }
 
 /* ---- Google Maps loading + distance lookup ---- */
@@ -161,13 +179,19 @@ async function _saaGeocodeQuery(url) {
  *  including, in practice, SAA's own office address, which is used as the
  *  "from" point for every technician's first leg of every single day. A
  *  hard failure there would break mileage calculation constantly. So on a
- *  zero-result freeform lookup, this now retries two more ways before
+ *  zero-result freeform lookup, this now retries several more ways before
  *  giving up: Nominatim's *structured* query params (street/city/state/
  *  postalcode split out, rather than one string it has to parse itself --
  *  documented to succeed in cases a freeform query misses), then a
  *  freeform retry with the house number stripped off (street-level
- *  accuracy is plenty for a mileage estimate). Each retry still respects
- *  the 1-request/sec throttle Nominatim's usage policy requires. */
+ *  accuracy is plenty for a mileage estimate). Round 17 (2026-09-13):
+ *  confirmed in production that some brand-new-subdivision streets aren't
+ *  in OpenStreetMap's data AT ALL yet (not just the house number), so the
+ *  first three tiers still came up empty for SAA's own office address --
+ *  added a ZIP-centroid tier and, below that, a city-centroid tier, since
+ *  those are essentially always present even when a specific street isn't.
+ *  Each retry still respects the 1-request/sec throttle Nominatim's usage
+ *  policy requires. */
 async function _saaGeocodeAddress(address) {
   const key = String(address || "").trim().toLowerCase();
   if (!key) throw new Error("No address to look up.");
@@ -194,6 +218,31 @@ async function _saaGeocodeAddress(address) {
       loc = await _saaGeocodeQuery("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=" +
         encodeURIComponent(`${streetNoNumber}, ${parts.city}, ${parts.state} ${parts.zip}`));
     }
+  }
+
+  // Round 17 (2026-09-13) reliability fix: Tiers 1-3 above all assume the
+  // *street* itself is in OpenStreetMap's data somewhere, just maybe not
+  // this exact house number. That assumption turned out to be wrong for
+  // some brand-new subdivisions (confirmed in production against SAA's own
+  // office address) -- the street name itself isn't mapped yet, so every
+  // prior tier comes back empty. ZIP codes and city/state, unlike a brand
+  // new street, are essentially always present in OpenStreetMap (they come
+  // from the US Census TIGER dataset), so falling back to the ZIP's -- or
+  // failing that, the city's -- approximate center still gets a usable
+  // mileage estimate instead of forcing a manual entry every time a job is
+  // in a newer development. This is a few miles less precise than a real
+  // street-level match, which is an acceptable trade-off for an expense
+  // estimate; a console note is left for anyone debugging a mileage number
+  // that looks off.
+  if (!loc && parts && parts.zip) {
+    await _saaFreeRouteThrottle();
+    loc = await _saaGeocodeQuery("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&postalcode=" + encodeURIComponent(parts.zip));
+    if (loc) console.warn(`Mileage: "${address}" isn't in OpenStreetMap's data yet — used the approximate center of ZIP ${parts.zip} instead. Distance may be off by a few miles.`);
+  }
+  if (!loc && parts && parts.city && parts.state) {
+    await _saaFreeRouteThrottle();
+    loc = await _saaGeocodeQuery("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&city=" + encodeURIComponent(parts.city) + "&state=" + encodeURIComponent(parts.state));
+    if (loc) console.warn(`Mileage: "${address}" isn't in OpenStreetMap's data yet — used the approximate center of ${parts.city}, ${parts.state} instead. Distance may be off by several miles.`);
   }
 
   if (!loc) throw new Error(`Couldn't find the address "${address}" — double check it, or type the mileage in by hand.`);
