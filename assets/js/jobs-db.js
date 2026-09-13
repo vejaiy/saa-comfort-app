@@ -277,10 +277,12 @@ function _saaJobsAddMinutes(hhmm, minutes) {
  *  1) status_history.completed — set automatically the moment the status
  *     is changed to Completed (see saaJobsUpdateJob), or manually edited —
  *     shown as the confirmed local HH:MM.
- *  2) otherwise, for a job already marked Completed from before this
- *     tracking existed, an ESTIMATE based on calendar duration: Scheduled
- *     Time plus that job type's usual appointment length — flagged so the
- *     UI can label it "(estimated)" until the tech confirms/edits it.
+ *  2) otherwise, for ANY job with a Scheduled Time (regardless of current
+ *     status — new/scheduled/in_progress and a Completed job from before
+ *     this tracking existed all land here), an ESTIMATE of when the job
+ *     card should end: Scheduled Time plus that job type's usual
+ *     appointment length — flagged so the UI can label it "(estimated)"
+ *     until the tech confirms/edits it or the job is actually completed.
  * returns { time: "HH:MM"|"", isEstimate: bool }
  */
 async function saaJobsGetCompletedTime(job) {
@@ -290,7 +292,7 @@ async function saaJobsGetCompletedTime(job) {
       return { time: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`, isEstimate: false };
     }
   }
-  if (job && job.status === "completed" && job.scheduled_time) {
+  if (job && job.scheduled_time) {
     const durations = await saaJobsFetchAppointmentTypes();
     const duration = durations[job.job_type] || 60;
     return { time: _saaJobsAddMinutes(job.scheduled_time, duration), isEstimate: true };

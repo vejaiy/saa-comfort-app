@@ -317,6 +317,33 @@ function jbComputeProfit() {
     <div class="jb-profit-row"><span>Total Actual Cost</span><strong>${fmtMoney(totalActual)}</strong></div>
     <div class="jb-profit-row"><span>Gross Profit</span><strong class="${profit < 0 ? "jb-negative" : ""}">${fmtMoney(profit)}</strong></div>
     <div class="jb-profit-row"><span>Gross Margin %</span><strong class="${marginPct < 0 ? "jb-negative" : ""}">${marginPct.toFixed(1)}%</strong></div>`;
+  jbUpdateInvoiceQuoteFlag();
+}
+
+/** Flags when the current Invoice's Amount Total has drifted from the
+ *  job's own Quoted Amount -- e.g. the linked quote was changed after the
+ *  invoice was already generated, or the invoice amount was hand-edited.
+ *  Purely informational (doesn't block Save/Update anything); re-run on
+ *  every Quoted-Amount edit (via jbComputeProfit's oninput wiring) and
+ *  every invoice render/update so it never goes stale. */
+function jbUpdateInvoiceQuoteFlag() {
+  const flag = document.getElementById("jbd-invoice-quote-flag");
+  const quotedEl = document.getElementById("jbd-quoted");
+  if (!flag || !quotedEl) return;
+  const quoted = parseFloat(quotedEl.value) || 0;
+  if (!_jbCurrentInvoice || !quoted) {
+    flag.hidden = true;
+    return;
+  }
+  const invoiceAmt = Number(_jbCurrentInvoice.amount_total || 0);
+  const diff = invoiceAmt - quoted;
+  if (Math.abs(diff) < 0.01) {
+    flag.hidden = true;
+    return;
+  }
+  flag.hidden = false;
+  flag.className = "jb-badge jb-flag-mismatch";
+  flag.textContent = `⚠️ Invoice ${diff > 0 ? "+" : "−"}${fmtMoney(Math.abs(diff))} vs Quote`;
 }
 
 async function jbRenderQuoteSection(job) {
@@ -338,9 +365,14 @@ async function jbRenderQuoteSection(job) {
 }
 
 async function jbSearchCustomerQuotes(job, query) {
+  // saaJobsFetchCustomerQuotes already orders newest-first (updated_at
+  // desc) -- capping to 5 here (a follow-up to Round 6 item 8) is what
+  // gives a focus-with-nothing-typed click a short, useful "latest to
+  // oldest" list instead of every quote this customer has ever saved.
   const quotes = await saaJobsFetchCustomerQuotes(job.customer_id, job.customer && job.customer.phone);
   const q = (query || "").toLowerCase();
-  const filtered = q ? quotes.filter((qt) => (qt.quote_number || "").toLowerCase().includes(q) || (qt.quote_type || "").toLowerCase().includes(q)) : quotes;
+  const matches = q ? quotes.filter((qt) => (qt.quote_number || "").toLowerCase().includes(q) || (qt.quote_type || "").toLowerCase().includes(q)) : quotes;
+  const filtered = matches.slice(0, 5);
   const box = document.getElementById("jbd-quote-results");
   if (!filtered.length) {
     box.innerHTML = `<div class="muted" style="padding:8px;font-size:.82rem">No saved quotes found for this customer.</div>`;
@@ -360,6 +392,24 @@ async function jbSearchCustomerQuotes(job, query) {
         job.linked_quote_id = el.dataset.id;
         job.linkedQuote = quote;
         document.getElementById("jbd-quoted").value = res.quotedAmount || 0;
+        // Keep the in-memory job object in sync immediately, not just the
+        // DOM field -- saaJobsLinkQuote already wrote quoted_amount to the
+        // database, but jbQuickInvoice()/"Generate Invoice" read straight
+        // off this in-memory `job`, so without this line clicking Invoice
+        // right after picking a quote (before ever clicking Save Job Card)
+        // would build the invoice off the OLD amount. Same class of bug as
+        // the "stale job after Save" fix from the original Jobs Master List
+        // round -- see site-build-notes.md.
+        job.quoted_amount = res.quotedAmount || 0;
+        // Approved Amount has no equivalent field on a quote, so this is a
+        // reasonable default (most jobs approve at the quoted price), not a
+        // real quote field -- only fills it when still blank so a real,
+        // already-entered Approved Amount is never overwritten.
+        const approvedEl = document.getElementById("jbd-approved");
+        if (!parseFloat(approvedEl.value)) {
+          approvedEl.value = res.quotedAmount || 0;
+          job.approved_amount = res.quotedAmount || 0;
+        }
         jbComputeProfit();
         // Auto-populate the job sheet from the quote, same fields the New
         // Job popup's "Start from a Quote" flow fills. Address/city/zip are
@@ -423,6 +473,11 @@ function jbRenderInvoiceBox(job, invoice, payments) {
     box.innerHTML = `<button type="button" class="btn btn-navy btn-sm" id="jbd-gen-invoice-btn">Generate Invoice</button>
       <span class="jb-badge jb-invstatus-none" style="margin-left:8px">Not Invoiced</span>`;
     document.getElementById("jbd-gen-invoice-btn").addEventListener("click", async () => {
+      // Generates off whatever's currently in the Financials section --
+      // Approved Amount, falling back to Quoted Amount (see
+      // saaJobsGetOrCreateInvoice) -- both of which, as of this follow-up,
+      // are kept in sync on `job` the instant a quote is picked, not only
+      // after Save Job Card, so this reflects a just-selected quote too.
       const res = await saaJobsGetOrCreateInvoice(job);
       if (res.ok) {
         _jbCurrentInvoice = res.invoice;
@@ -433,6 +488,7 @@ function jbRenderInvoiceBox(job, invoice, payments) {
         _jbToast(res.error, true);
       }
     });
+    jbUpdateInvoiceQuoteFlag();
     return;
   }
   const paid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
@@ -513,6 +569,7 @@ function jbRenderInvoiceBox(job, invoice, payments) {
       _jbToast(res.error, true);
     }
   });
+  jbUpdateInvoiceQuoteFlag();
 }
 
 /* ============================== Equipment (Condenser / Coil / Furnace) ============================== */
@@ -983,6 +1040,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ---- Job Card wiring — present on both jobs.html and calendar.html ----
   document.getElementById("jbd-quote-search").addEventListener("input", (e) => {
     if (_jbCurrentJob) jbSearchCustomerQuotes(_jbCurrentJob, e.target.value);
+  });
+  // Round 6 follow-up: show this customer's saved quotes (up to 5, newest
+  // first) the moment the field is focused, not only once something is
+  // typed -- most of the time the office just wants to pick from a short
+  // recent list rather than search by quote number/type.
+  document.getElementById("jbd-quote-search").addEventListener("focus", (e) => {
+    if (_jbCurrentJob && !e.target.value.trim()) jbSearchCustomerQuotes(_jbCurrentJob, "");
   });
   document.getElementById("jbd-save-btn").addEventListener("click", jbSaveDetail);
   document.getElementById("jbd-close-btn").addEventListener("click", jbCloseDetail);

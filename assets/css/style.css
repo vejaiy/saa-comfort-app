@@ -455,6 +455,12 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .jobs-table tr.jb-row:hover { background: #f5f8fa; }
 
 .jb-badge { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: .72rem; font-weight: 700; background: #eef3f6; color: var(--muted); white-space: nowrap; }
+/* .jb-badge's own `display` overrides the browser's default [hidden]
+   rule (same class of bug already fixed once for .modal-overlay -- see
+   site-build-notes.md) -- only the invoice/quote mismatch flag actually
+   gets toggled via the hidden attribute rather than being conditionally
+   included in a template string, so it's the one that needs this. */
+.jb-badge[hidden] { display: none; }
 .jb-pri-low { background: #eef3f6; color: var(--muted); }
 .jb-pri-normal { background: #e7f0fb; color: #1a4c8a; }
 .jb-pri-high { background: #fdeee0; color: #b3611a; }
@@ -469,6 +475,7 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .jb-pay-partial { background: #fdf3d8; color: #8a6d1a; }
 .jb-pay-paid { background: #e3f6ee; color: var(--ok); }
 .jb-invstatus-none { background: #eef3f6; color: var(--muted); }
+.jb-flag-mismatch { background: #fdf3d8; color: #8a6d1a; text-transform: none; letter-spacing: normal; font-size: .72rem; margin-left: 8px; }
 
 .jb-detail-card { max-width: 940px; }
 .jb-detail-card .job-num { color: var(--muted); font-size: .82rem; }
