@@ -637,7 +637,7 @@ function saaCalOpenNewServicePopup(ctx) {
   document.getElementById("ns-selected-cust").hidden = true;
   document.getElementById("ns-cust-results").hidden = true;
   document.getElementById("ns-newcust-form").hidden = true;
-  ["ns-newcust-first", "ns-newcust-last", "ns-newcust-phone", "ns-newcust-address"].forEach((id) => { document.getElementById(id).value = ""; });
+  ["ns-newcust-first", "ns-newcust-last", "ns-newcust-phone", "ns-newcust-address", "ns-newcust-city", "ns-newcust-zip"].forEach((id) => { document.getElementById(id).value = ""; });
   document.getElementById("ns-title").value = "";
   document.getElementById("ns-status").textContent = "";
   saaCalRenderTypeGrid();
@@ -672,9 +672,10 @@ function saaCalRenderCustResults(results, query) {
     if (lastServiceLine) metaParts.push("Last Service: " + lastServiceLine);
     if (equipLine) metaParts.push("Equipment: " + equipLine);
     if (warrantyLine) metaParts.push("Warranty: " + warrantyLine);
+    const addrLine = [c.billing_address, [c.billing_city, c.billing_zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
     return `<div class="cal-cust-result" data-idx="${i}">
       <div class="name">${_saaCalEsc(lastFirst)}</div>
-      ${c.billing_address ? `<div class="addr">${_saaCalEsc(c.billing_address)}</div>` : ""}
+      ${addrLine ? `<div class="addr">${_saaCalEsc(addrLine)}</div>` : ""}
       ${c.phone ? `<div class="phone">${_saaCalEsc(saaFormatPhone(c.phone))}</div>` : ""}
       ${metaParts.length ? `<div class="svc-meta">${_saaCalEsc(metaParts.join(" · "))}</div>` : ""}
     </div>`;
@@ -694,8 +695,9 @@ function saaCalSelectCustomer(result) {
   const equipLine = result.equipment ? `${result.equipment.brand || ""} ${result.equipment.tonnage ? result.equipment.tonnage + " Ton" : ""}`.trim() : "No equipment on file";
   const warrantyLine = result.equipment ? (result.equipment.warranty_status === "active" ? "Active" : result.equipment.warranty_status === "expired" ? "Expired" : "Unknown") : "—";
   const box = document.getElementById("ns-selected-cust");
+  const addrLine = [c.billing_address, [c.billing_city, c.billing_zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
   box.innerHTML = `<div class="name">${_saaCalEsc(saaCalCustName(c))}${result.isNew ? ' <span class="muted" style="font-weight:400;font-size:.76rem">(new customer)</span>' : ""}</div>
-    <div class="row">📍 ${_saaCalEsc(c.billing_address || "No address on file")}</div>
+    <div class="row">📍 ${_saaCalEsc(addrLine || "No address on file")}</div>
     <div class="row">📞 ${_saaCalEsc(c.phone ? saaFormatPhone(c.phone) : "—")}</div>
     <div class="row">🔧 ${_saaCalEsc(equipLine)}</div>
     <div class="row">🛡️ Warranty: ${_saaCalEsc(warrantyLine)}</div>`;
@@ -703,15 +705,31 @@ function saaCalSelectCustomer(result) {
   document.getElementById("ns-cust-search").value = saaCalCustName(c);
 }
 
-/** Search found nobody — reveal the compact "new customer" mini-form. */
+/** Search found nobody — reveal the compact "new customer" mini-form.
+ *  Best-guess prefill from what was typed: a phone-number-shaped query
+ *  goes to Phone; otherwise it's a name, split on whitespace so "John
+ *  Smith" correctly fills First=John/Last=Smith, and a single word (the
+ *  common case while still typing a name) fills First name rather than
+ *  Last — every field stays editable regardless. Previously this always
+ *  dropped the whole query into Last Name and left First Name blank,
+ *  even for a single word, which is backwards for the common case of
+ *  starting to type someone's first name. */
 function saaCalOpenNewCustomerForm(query) {
   document.getElementById("ns-cust-results").hidden = true;
   const q = (query || "").trim();
   const looksLikePhone = /^[\d\s\-().]{7,}$/.test(q);
-  document.getElementById("ns-newcust-first").value = "";
-  document.getElementById("ns-newcust-last").value = looksLikePhone ? "" : q;
+  let first = "", last = "";
+  if (!looksLikePhone && q) {
+    const parts = q.split(/\s+/);
+    if (parts.length > 1) { first = parts[0]; last = parts.slice(1).join(" "); }
+    else { first = q; }
+  }
+  document.getElementById("ns-newcust-first").value = first;
+  document.getElementById("ns-newcust-last").value = last;
   document.getElementById("ns-newcust-phone").value = looksLikePhone ? q : "";
   document.getElementById("ns-newcust-address").value = "";
+  document.getElementById("ns-newcust-city").value = "";
+  document.getElementById("ns-newcust-zip").value = "";
   document.getElementById("ns-newcust-form").hidden = false;
   document.getElementById("ns-newcust-first").focus();
 }
@@ -721,13 +739,15 @@ function saaCalUseNewCustomer() {
   const last = document.getElementById("ns-newcust-last").value.trim();
   const phone = document.getElementById("ns-newcust-phone").value.trim();
   const address = document.getElementById("ns-newcust-address").value.trim();
+  const city = document.getElementById("ns-newcust-city").value.trim();
+  const zip = document.getElementById("ns-newcust-zip").value.trim();
   if (!first && !last && !phone) {
     document.getElementById("ns-status").textContent = "Enter at least a name or phone number for the new customer.";
     return;
   }
   saaCalSelectCustomer({
     isNew: true,
-    customer: { first_name: first || null, last_name: last || null, phone: phone || null, billing_address: address || null },
+    customer: { first_name: first || null, last_name: last || null, phone: phone || null, billing_address: address || null, billing_city: city || null, billing_zip: zip || null },
     equipment: null,
     lastJob: null,
   });
@@ -831,13 +851,21 @@ function saaCalWireStaticHandlers() {
     const sc = saaCalSelectedCustomer;
     const res = await saaCalCreateJobWithAppointment({
       customerId: sc.isNew ? null : sc.customer.id,
-      newCustomer: sc.isNew ? { firstName: sc.customer.first_name, lastName: sc.customer.last_name, phone: sc.customer.phone, address: sc.customer.billing_address } : null,
+      newCustomer: sc.isNew ? { firstName: sc.customer.first_name, lastName: sc.customer.last_name, phone: sc.customer.phone, address: sc.customer.billing_address, city: sc.customer.billing_city, zip: sc.customer.billing_zip } : null,
       title: document.getElementById("ns-title").value.trim(),
       appointmentTypeKey: saaCalSelectedTypeKey,
       priority: saaCalGetSelectedPriority(),
       technicianId: techId,
       startDatetime, endDatetime,
       jobAddress: sc.customer.billing_address || null,
+      // Round 7: carry the customer's City/ZIP onto the new job too, not
+      // just the freeform Address string -- this is what makes the Job
+      // Card's separate City/State/ZIP fields show up already filled
+      // instead of needing the office to retype what's already in the
+      // address, and what was causing ZIP in particular to sit blank
+      // (there was previously no field to even capture it here).
+      jobCity: sc.customer.billing_city || null,
+      jobZip: sc.customer.billing_zip || null,
     });
     if (res.ok) {
       document.getElementById("cal-newsvc-modal").hidden = true;

@@ -133,7 +133,7 @@ async function saaCalSearchCustomers(query) {
 
   const { data: customers, error } = await _saaClient
     .from("customers")
-    .select("id,first_name,last_name,phone,billing_address")
+    .select("id,first_name,last_name,phone,billing_address,billing_city,billing_zip")
     .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,phone.ilike.%${q}%`)
     .limit(6);
   if (error) throw error;
@@ -162,7 +162,7 @@ async function saaCalSearchCustomers(query) {
  * row either way. Only used when the New Service popup's search found
  * no match and the dispatcher filled in the "new customer" mini-form.
  */
-async function saaCalFindOrCreateCustomer(firstName, lastName, phone, address) {
+async function saaCalFindOrCreateCustomer(firstName, lastName, phone, address, city, zip) {
   const { data: existing, error: findErr } = await _saaClient
     .from("customers")
     .select("id")
@@ -175,7 +175,7 @@ async function saaCalFindOrCreateCustomer(firstName, lastName, phone, address) {
 
   const { data: created, error: createErr } = await _saaClient
     .from("customers")
-    .insert({ first_name: firstName || null, last_name: lastName || null, phone: phone || null, billing_address: address || null })
+    .insert({ first_name: firstName || null, last_name: lastName || null, phone: phone || null, billing_address: address || null, billing_city: city || null, billing_zip: zip || null })
     .select("id")
     .single();
   if (createErr) throw createErr;
@@ -222,7 +222,7 @@ async function saaCalCreateJobWithAppointment(payload) {
       if (!nc.firstName && !nc.lastName && !nc.phone) {
         return { ok: false, error: "Enter a first name, last name, or phone number for the new customer." };
       }
-      customerId = await saaCalFindOrCreateCustomer(nc.firstName, nc.lastName, nc.phone, nc.address);
+      customerId = await saaCalFindOrCreateCustomer(nc.firstName, nc.lastName, nc.phone, nc.address, nc.city, nc.zip);
     }
     if (!customerId) return { ok: false, error: "Select or add a customer first." };
 
@@ -243,6 +243,14 @@ async function saaCalCreateJobWithAppointment(payload) {
         title: payload.title || "",
         priority: payload.priority || "normal",
         job_address: payload.jobAddress || null,
+        // Round 7: the New Service popup only ever collects one freeform
+        // Address field, but the Job Card shows City/State/ZIP as
+        // separate fields -- without these, City/ZIP always came up
+        // blank on a calendar-created job even when the office had typed
+        // a full address, since there was nowhere for that to land.
+        job_city: payload.jobCity || null,
+        job_state: "TX",
+        job_zip: payload.jobZip || null,
         assigned_technician_id: payload.technicianId || null,
         scheduled_date: schedDate,
         scheduled_time: schedTime,
