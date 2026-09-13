@@ -329,8 +329,15 @@ function jbComputeProfit() {
 function jbUpdateInvoiceQuoteFlag() {
   const flag = document.getElementById("jbd-invoice-quote-flag");
   const quotedEl = document.getElementById("jbd-quoted");
+  const approvedEl = document.getElementById("jbd-approved");
   if (!flag || !quotedEl) return;
-  const quoted = parseFloat(quotedEl.value) || 0;
+  // Same basis as quoteBasis in jbRenderInvoiceBox and the default amount
+  // in saaJobsGetOrCreateInvoice -- Approved Amount wins when set, so a job
+  // approved at a different number than it was quoted doesn't get flagged
+  // as "mismatched" just for matching the number it was actually approved
+  // at (round 7 follow-up, 2026-09-13).
+  const approved = approvedEl ? parseFloat(approvedEl.value) || 0 : 0;
+  const quoted = approved || parseFloat(quotedEl.value) || 0;
   if (!_jbCurrentInvoice || !quoted) {
     flag.hidden = true;
     return;
@@ -343,7 +350,8 @@ function jbUpdateInvoiceQuoteFlag() {
   }
   flag.hidden = false;
   flag.className = "jb-badge jb-flag-mismatch";
-  flag.textContent = `⚠️ Invoice ${diff > 0 ? "+" : "−"}${fmtMoney(Math.abs(diff))} vs Quote`;
+  const basisLabel = approved ? "Approved" : "Quote";
+  flag.textContent = `⚠️ Invoice ${diff > 0 ? "+" : "−"}${fmtMoney(Math.abs(diff))} vs ${basisLabel}`;
 }
 
 async function jbRenderQuoteSection(job) {
@@ -519,17 +527,24 @@ function jbRenderInvoiceBox(job, invoice, payments) {
   // An existing invoice's Amount Total is otherwise frozen at whatever it
   // was when generated (saaJobsGetOrCreateInvoice only defaults a NEW
   // invoice's amount -- an already-existing one is returned untouched) --
-  // so a Draft invoice created before the quote/approved amount was set
-  // (or before a different quote was linked) can sit at a stale number
-  // forever with nothing but the mismatch flag above to notice. Offer a
-  // one-click way to pull in the current Quoted/Approved Amount instead of
-  // retyping it -- Draft only, so a real Sent/Paid invoice is never
-  // touched by this (round 6 follow-up, 2026-09-13).
+  // so it can sit at a stale number forever with nothing but the mismatch
+  // flag above to notice. Offer one-click ways to pull in either basis
+  // instead of retyping it: the Quoted/Approved Amount from the Quote
+  // section, or the Actual Amount (Actual Material + Labor + Other Cost)
+  // from the Financials section above. Both buttons stay visible on every
+  // invoice regardless of status (Draft/Sent/Paid) or whether the amount
+  // already matches -- previously "Use Quoted Amount" disappeared once a
+  // Draft invoice matched or once the invoice was no longer Draft, which
+  // made it unavailable exactly when the office wanted to re-check or
+  // re-apply it; only a $0 basis (nothing to pull in yet) disables a
+  // button, it never hides it (round 7 follow-up, 2026-09-13).
   const quoteBasis = Number(job.approved_amount || job.quoted_amount || 0);
-  const showSyncBtn = invoice.status === "draft" && quoteBasis > 0 && Math.abs(Number(invoice.amount_total || 0) - quoteBasis) >= 0.01;
-  const syncBtnHtml = showSyncBtn
-    ? `<button type="button" class="btn btn-ghost btn-sm" id="jbd-inv-sync-btn" style="margin-top:4px">Use Quoted Amount (${fmtMoney(quoteBasis)})</button>`
-    : "";
+  const actualBasis = Number(job.actual_material_cost || 0) + Number(job.actual_labor_cost || 0) + Number(job.other_cost || 0);
+  const syncBtnHtml = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+      <button type="button" class="btn btn-ghost btn-sm" id="jbd-inv-sync-quote-btn"${quoteBasis > 0 ? "" : " disabled"}>Use Quoted Amount (${fmtMoney(quoteBasis)})</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="jbd-inv-sync-actual-btn"${actualBasis > 0 ? "" : " disabled"}>Use Actual Amount (${fmtMoney(actualBasis)})</button>
+    </div>`;
 
   // Discount and Other Costs (extra charges beyond the quote -- e.g. a
   // part found on-site that wasn't in the original estimate) are both
@@ -605,13 +620,21 @@ function jbRenderInvoiceBox(job, invoice, payments) {
       jbRenderInvoiceBox(job, invoice, payments);
     } else _jbToast(res.error, true);
   });
-  if (showSyncBtn) {
-    // Only updates the field on screen -- the office still clicks Update
-    // Invoice to actually persist it, same "review before you commit"
-    // pattern as everything else here (nothing writes to the database on
-    // its own just because a number changed elsewhere).
-    document.getElementById("jbd-inv-sync-btn").addEventListener("click", () => {
+  // Only updates the field on screen -- the office still clicks Update
+  // Invoice to actually persist it, same "review before you commit"
+  // pattern as everything else here (nothing writes to the database on
+  // its own just because a number changed elsewhere). Disabled buttons
+  // (basis is $0) have nothing to wire up.
+  if (quoteBasis > 0) {
+    document.getElementById("jbd-inv-sync-quote-btn").addEventListener("click", () => {
       document.getElementById("jbd-inv-amount").value = quoteBasis;
+      jbUpdateInvoiceQuoteFlag();
+      recalcInvoiceTotal();
+    });
+  }
+  if (actualBasis > 0) {
+    document.getElementById("jbd-inv-sync-actual-btn").addEventListener("click", () => {
+      document.getElementById("jbd-inv-amount").value = actualBasis;
       jbUpdateInvoiceQuoteFlag();
       recalcInvoiceTotal();
     });
@@ -1032,6 +1055,13 @@ async function jbSaveDetail() {
   }
   _jbEquipByType = await saaJobsFetchEquipmentByType(job.customer_id);
   jbRenderAllEquipment();
+
+  // Refresh the Invoice & Payment box so its "Use Quoted/Actual Amount"
+  // buttons and the vs-Quote flag pick up the Quoted/Approved/Actual Cost
+  // values just saved above, instead of staying stuck at whatever they
+  // were when the Job Card was first opened (round 7 follow-up,
+  // 2026-09-13).
+  if (_jbCurrentInvoice) jbRenderInvoiceBox(job, _jbCurrentInvoice, _jbCurrentPayments);
 
   statusMsg.textContent = "Saved.";
   await jbLoadAll();
