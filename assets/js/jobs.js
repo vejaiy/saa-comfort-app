@@ -1232,6 +1232,17 @@ async function jbSaveDetail() {
         _jbToast(mRes.error, true);
       }
     }
+  } else {
+    // Round 11 follow-up (2026-09-13): "save miles for every job" -- Miles
+    // Driven wasn't touched on this save (still blank, or still whatever it
+    // was when the card opened), so make sure this job has an up-to-date
+    // AUTO leg on file if it now has enough info for one -- e.g. a
+    // technician/date/address just entered above, or a schedule change
+    // saved elsewhere. Never overwrites a manually-set leg (same guard
+    // "Calculate Miles" uses) and runs in the background so it can't slow
+    // down Save Job Card; if the card is reopened before it finishes, the
+    // number just shows up next time.
+    saaMileageEnsureForJob(_jbMileageSnapshot());
   }
 
   statusMsg.textContent = "Saved.";

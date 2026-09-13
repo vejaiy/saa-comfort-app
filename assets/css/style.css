@@ -351,7 +351,7 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 
 /* ---- Week view: 7 agenda columns ---- */
 .cal-week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
-.cal-week-day { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); min-height: 220px; display: flex; flex-direction: column; }
+.cal-week-day { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); min-height: 220px; display: flex; flex-direction: column; cursor: pointer; }
 .cal-week-day.is-today { border-color: var(--navy); box-shadow: 0 0 0 1px var(--navy) inset; }
 .cal-week-daylabel { font-size: .82rem; font-weight: 800; color: var(--navy); padding: 8px 10px; border-bottom: 1px solid var(--line); background: #fafbfc; cursor: pointer; }
 .cal-week-daylabel span { color: var(--muted); font-weight: 700; margin-left: 4px; }

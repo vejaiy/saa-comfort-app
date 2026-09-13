@@ -457,7 +457,8 @@ async function saaJobsCreateJob(payload) {
     if (payload.technicianId && payload.scheduledDate) status = "scheduled";
     else if (payload.technicianId) status = "assigned";
 
-    const jobNumber = await _saaJobsNextJobNumber();
+    const firstNameForNumber = (payload.newCustomer && payload.newCustomer.firstName) || (await _saaCustomerFirstName(customerId));
+    const jobNumber = await _saaJobsNextJobNumber(firstNameForNumber);
 
     const { data: job, error: jErr } = await _saaClient
       .from("jobs")
@@ -504,6 +505,25 @@ async function saaJobsCreateJob(payload) {
     if (payload.linkedQuoteId) {
       const { error: qErr } = await _saaClient.from("quotes").update({ job_id: job.id }).eq("id", payload.linkedQuoteId);
       if (qErr) throw qErr;
+    }
+
+    // Round 11 follow-up (2026-09-13): "save miles for every job" -- a job
+    // created with a technician/date/address already set (e.g. scheduled
+    // right away from the New Job popup) gets its first mileage leg
+    // calculated immediately, same as a reschedule does. Fire-and-forget:
+    // this never blocks or fails job creation, and jobs-db.js is loaded
+    // everywhere mileage-db.js is (jobs.html, calendar.html).
+    if (typeof saaMileageEnsureForJob === "function") {
+      saaMileageEnsureForJob({
+        id: job.id,
+        assigned_technician_id: payload.technicianId || null,
+        scheduled_date: payload.scheduledDate || null,
+        scheduled_time: payload.scheduledTime || null,
+        job_address: payload.jobAddress || null,
+        job_city: payload.jobCity || null,
+        job_state: payload.jobState || "TX",
+        job_zip: payload.jobZip || null,
+      });
     }
 
     return { ok: true, jobId: job.id };
@@ -791,24 +811,36 @@ async function saaJobsToggleEquipmentLock(equipmentId, locked) {
  *  creation — same count-based pattern _saaJobsNextInvoiceNumber already
  *  uses for invoices. Replaces the old "JOB-<uuid8>" display, which was
  *  a random UUID fragment, not sequential or trackable at all. */
-async function _saaJobsNextJobNumber() {
+async function _saaJobsNextJobNumber(firstName) {
   const year = new Date().getFullYear();
   const { count, error } = await _saaClient
     .from("jobs")
     .select("id", { count: "exact", head: true })
     .like("job_number", `J-${year}-%`);
   if (error) throw error;
-  return `J-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
+  const base = `J-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
+  return saaAppendNameSuffix(base, firstName);
 }
 
-async function _saaJobsNextInvoiceNumber() {
+async function _saaJobsNextInvoiceNumber(firstName) {
   const year = new Date().getFullYear();
   const { count, error } = await _saaClient
     .from("invoices")
     .select("id", { count: "exact", head: true })
     .like("invoice_number", `INV-${year}-%`);
   if (error) throw error;
-  return `INV-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
+  const base = `INV-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
+  return saaAppendNameSuffix(base, firstName);
+}
+
+/** Looks up a customer's first name by id for the number-suffix schemes
+ *  above, for the (fairly common) case where a job/invoice is being
+ *  created for an EXISTING customer picked from search rather than typed
+ *  in fresh — so payload.newCustomer.firstName isn't available. */
+async function _saaCustomerFirstName(customerId) {
+  if (!customerId) return null;
+  const { data } = await _saaClient.from("customers").select("first_name").eq("id", customerId).maybeSingle();
+  return data ? data.first_name : null;
 }
 
 /** Fetches the job's most recent invoice, or creates a Draft one if
@@ -826,7 +858,8 @@ async function saaJobsGetOrCreateInvoice(job) {
     if (existing && existing.length) return { ok: true, invoice: existing[0], created: false };
 
     const amount = Number(job.approved_amount || job.quoted_amount || 0);
-    const invoiceNumber = await _saaJobsNextInvoiceNumber();
+    const firstNameForNumber = job.customer ? job.customer.first_name : await _saaCustomerFirstName(job.customer_id);
+    const invoiceNumber = await _saaJobsNextInvoiceNumber(firstNameForNumber);
     const { data: created, error: createErr } = await _saaClient
       .from("invoices")
       .insert({

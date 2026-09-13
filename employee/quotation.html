@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quotation | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260913j">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260913l">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260913j"></script>
-<script src="../assets/js/supabase-config.js?v=20260913j"></script>
-<script src="../assets/js/auth.js?v=20260913j"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260913l"></script>
+<script src="../assets/js/supabase-config.js?v=20260913l"></script>
+<script src="../assets/js/auth.js?v=20260913l"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -255,12 +255,12 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260913j"></script>
-<script src="../assets/js/worksheet.js?v=20260913j"></script>
-<script src="../assets/js/labor-widget.js?v=20260913j"></script>
-<script src="../assets/js/plenum-widget.js?v=20260913j"></script>
-<script src="../assets/js/print-quote.js?v=20260913j"></script>
-<script src="../assets/js/quotes-db.js?v=20260913j"></script>
+<script src="../assets/js/pricing-data.js?v=20260913l"></script>
+<script src="../assets/js/worksheet.js?v=20260913l"></script>
+<script src="../assets/js/labor-widget.js?v=20260913l"></script>
+<script src="../assets/js/plenum-widget.js?v=20260913l"></script>
+<script src="../assets/js/print-quote.js?v=20260913l"></script>
+<script src="../assets/js/quotes-db.js?v=20260913l"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
   saaAttachPhoneMask(document.getElementById('q-phone'));
@@ -409,11 +409,16 @@
       const lineItems = [];
       const equipOnlyTotal = (condenserOn ? condTotal : 0) + (coilOn ? coilTotal : 0) + (furnaceOn ? furnaceTotal : 0);
       const laborLineTotal = laborTotal + overhead;
-      if (equipOnlyTotal > 0) {
-        lineItems.push({ name: 'New HVAC System (Condenser, Coil & Furnace)', desc: systemDesc() || 'New equipment installed and charged to spec.', price: equipOnlyTotal });
-      }
-      if (laborLineTotal > 0) {
-        lineItems.push({ name: 'Labor', desc: 'Installation labor: removal of existing equipment, pressure test, evacuation, refrigerant charge, and startup/commissioning.', price: laborLineTotal });
+      // Equipment + Labor print as ONE combined line item on the formal
+      // quote (2026-09-13 follow-up: Vijayan wants a single "system,
+      // installed" line rather than the cost broken into two rows) --
+      // materialCost/laborCost below still track them separately
+      // internally for the Job Card's Actual Cost defaulting, unchanged.
+      const systemAndLaborTotal = equipOnlyTotal + laborLineTotal;
+      if (systemAndLaborTotal > 0) {
+        const laborDesc = 'Installation labor included: removal of existing equipment, pressure test, evacuation, refrigerant charge, and startup/commissioning.';
+        const combinedDesc = [systemDesc(), laborDesc].filter(Boolean).join(' ');
+        lineItems.push({ name: 'New HVAC System (Condenser, Coil & Furnace) — Installed', desc: combinedDesc || 'New equipment installed and charged to spec.', price: systemAndLaborTotal });
       }
       if (plenumOn) lineItems.push({ name: 'Plenum Change', price: plenumTotal });
       if (drainpanOn) lineItems.push({ name: 'Secondary Drainpan & Float Switch', price: drainpanTotal });

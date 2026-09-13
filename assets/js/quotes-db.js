@@ -44,14 +44,15 @@ async function saaFindOrCreateCustomer(firstName, lastName, phone) {
  *  time a quote is saved; the office never types one in (round 3,
  *  2026-09-12 — previously "Quote #" was a free-text field the office
  *  had to remember to fill in and keep unique themselves). */
-async function _saaNextQuoteNumber() {
+async function _saaNextQuoteNumber(firstName) {
   const year = new Date().getFullYear();
   const { count, error } = await _saaClient
     .from("quotes")
     .select("id", { count: "exact", head: true })
     .like("quote_number", `Q-${year}-%`);
   if (error) throw error;
-  return `Q-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
+  const base = `Q-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
+  return saaAppendNameSuffix(base, firstName);
 }
 
 /**
@@ -96,7 +97,7 @@ async function saaSaveQuote(payload) {
       if (error) throw error;
       return { ok: true, quoteId: data.id, quoteNumber: data.quote_number };
     } else {
-      row.quote_number = await _saaNextQuoteNumber();
+      row.quote_number = await _saaNextQuoteNumber(payload.firstName);
       const { data, error } = await _saaClient.from("quotes").insert(row).select("id,quote_number").single();
       if (error) throw error;
       return { ok: true, quoteId: data.id, quoteNumber: data.quote_number };

@@ -20,13 +20,22 @@
      maintain. Re-running saaMileageRecalcForJob after a schedule change
      (different day, different tech, reordered stops) naturally produces
      the right chain again.
-   - "auto" rows are computed via the Google Maps Distance Matrix API
-     (see _saaMapsEnsureLoaded/saaMileageComputeDistance below); "manual"
-     rows are typed in directly, either overriding an auto-computed leg
-     (same row, same job_id, source flips to 'manual') or as a standalone
-     entry with no job_id at all. A manual override is never silently
-     recomputed back to auto — recalculating again requires an explicit
-     action, so a corrected number sticks.
+   - "auto" rows are computed via the Google Maps Distance Matrix API when
+     a key is configured (see _saaMapsEnsureLoaded/_saaMileageComputeDistanceGoogle
+     below), or otherwise via a free, no-signup OpenStreetMap-based route
+     (Nominatim for geocoding + the public OSRM demo server for driving
+     distance — see _saaMileageComputeDistanceFree). saaMileageComputeDistance
+     picks whichever is available. "manual" rows are typed in directly,
+     either overriding an auto-computed leg (same row, same job_id, source
+     flips to 'manual') or as a standalone entry with no job_id at all. A
+     manual override is never silently recomputed back to auto —
+     recalculating again requires an explicit action, so a corrected
+     number sticks.
+   - Round 11 follow-up (2026-09-13): every job that has enough info
+     (technician + scheduled date + service address) now gets an actual
+     mileage number on file automatically via saaMileageEnsureForJob,
+     called from job creation/reschedule/save everywhere those happen —
+     not just when someone clicks "Calculate Miles" by hand.
    ============================================================ */
 
 /** Builds a full postal address string from a job's own address fields,
@@ -60,10 +69,10 @@ function _saaMapsEnsureLoaded() {
 }
 
 /** Driving distance in miles (rounded to 1 decimal) between two address
- *  strings, via the Distance Matrix API. Throws with a readable message
- *  on any failure (no key configured, no route found, address not
- *  recognized, etc.) — callers should catch and toast this directly. */
-async function saaMileageComputeDistance(originAddress, destAddress) {
+ *  strings, via the Google Distance Matrix API. Throws with a readable
+ *  message on any failure (no key configured, no route found, address
+ *  not recognized, etc.) — callers should catch and toast this directly. */
+async function _saaMileageComputeDistanceGoogle(originAddress, destAddress) {
   await _saaMapsEnsureLoaded();
   return new Promise((resolve, reject) => {
     const service = new google.maps.DistanceMatrixService();
@@ -82,6 +91,92 @@ async function saaMileageComputeDistance(originAddress, destAddress) {
       }
     );
   });
+}
+
+/* ---- Free driving-distance routing (no API key required) ----
+   Round 11 follow-up (2026-09-13): until a Google Maps key is set up,
+   mileage is calculated via free public OpenStreetMap services instead
+   of leaving Miles Driven blank — Nominatim geocodes each address to
+   lat/lng, then the OSRM public demo server returns driving distance
+   between the two points. Both are shared, rate-limited public services
+   (not run by SAA Comfort Air or Anthropic), so lookups are throttled to
+   a polite ~1/second and results are cached (in-memory + localStorage)
+   so the same address is never looked up twice. They can occasionally be
+   slow or briefly unavailable — every failure here surfaces a readable
+   message and Miles Driven can always be typed in by hand as a fallback. */
+
+const _saaGeocodeCache = (() => {
+  try { return JSON.parse(localStorage.getItem("saaGeocodeCacheV1") || "{}"); }
+  catch (e) { return {}; }
+})();
+
+function _saaGeocodeCacheSave() {
+  try { localStorage.setItem("saaGeocodeCacheV1", JSON.stringify(_saaGeocodeCache)); }
+  catch (e) { /* private browsing / storage full — cache just won't persist across loads */ }
+}
+
+let _saaFreeRouteLastCall = 0;
+async function _saaFreeRouteThrottle() {
+  const wait = 1100 - (Date.now() - _saaFreeRouteLastCall);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  _saaFreeRouteLastCall = Date.now();
+}
+
+const _saaFreeRouteUnavailableMsg = "Couldn't reach the free mileage-lookup service right now (it's a shared public service that's occasionally slow or unavailable) — try again in a moment, or type the mileage in by hand.";
+
+/** Address string -> {lat, lon} via Nominatim (OpenStreetMap's free
+ *  geocoder). Cached indefinitely per exact address string. */
+async function _saaGeocodeAddress(address) {
+  const key = String(address || "").trim().toLowerCase();
+  if (!key) throw new Error("No address to look up.");
+  if (_saaGeocodeCache[key]) return _saaGeocodeCache[key];
+  await _saaFreeRouteThrottle();
+  let resp;
+  try {
+    resp = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=" + encodeURIComponent(address), {
+      headers: { Accept: "application/json" },
+    });
+  } catch (e) {
+    throw new Error(_saaFreeRouteUnavailableMsg);
+  }
+  if (!resp.ok) throw new Error(_saaFreeRouteUnavailableMsg);
+  const rows = await resp.json();
+  if (!rows || !rows.length) throw new Error(`Couldn't find the address "${address}" — double check it, or type the mileage in by hand.`);
+  const loc = { lat: parseFloat(rows[0].lat), lon: parseFloat(rows[0].lon) };
+  _saaGeocodeCache[key] = loc;
+  _saaGeocodeCacheSave();
+  return loc;
+}
+
+/** Driving distance in miles (rounded to 1 decimal) between two address
+ *  strings, using free OpenStreetMap geocoding + routing — no API key,
+ *  no cost, no signup. See the block comment above for the tradeoffs. */
+async function _saaMileageComputeDistanceFree(originAddress, destAddress) {
+  const origin = await _saaGeocodeAddress(originAddress);
+  const dest = await _saaGeocodeAddress(destAddress);
+  await _saaFreeRouteThrottle();
+  let resp;
+  try {
+    resp = await fetch(`https://router.project-osrm.org/route/v1/driving/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=false`);
+  } catch (e) {
+    throw new Error(_saaFreeRouteUnavailableMsg);
+  }
+  if (!resp.ok) throw new Error(_saaFreeRouteUnavailableMsg);
+  const json = await resp.json();
+  if (json.code !== "Ok" || !json.routes || !json.routes.length) {
+    throw new Error("Couldn't find a driving route between those two addresses.");
+  }
+  return Math.round((json.routes[0].distance / 1609.344) * 10) / 10; // meters -> miles
+}
+
+/** Driving distance in miles between two address strings — uses Google's
+ *  Distance Matrix API when a key is configured in maps-config.js (most
+ *  accurate/reliable), or the free OpenStreetMap route otherwise. This is
+ *  the one function the rest of this file/app calls; which service
+ *  actually answers is an implementation detail. */
+async function saaMileageComputeDistance(originAddress, destAddress) {
+  if (SAA_MAPS_API_KEY) return _saaMileageComputeDistanceGoogle(originAddress, destAddress);
+  return _saaMileageComputeDistanceFree(originAddress, destAddress);
 }
 
 /* ---- Reads ---- */
@@ -123,10 +218,17 @@ async function saaMileageLegContext(job) {
 }
 
 /** Every mileage_logs row in range, each stitched with its technician's
- *  name and (when tied to one) the job's number/customer — same
+ *  name and (when tied to one) the job's number/title/customer — same
  *  flat-fetch-then-stitch-in-JS pattern the rest of this app's data
- *  layers use. Ordered technician, then date, then leg. */
-async function saaMileageFetchAll({ technicianId, dateFrom, dateTo } = {}) {
+ *  layers use. Ordered technician, then date, then leg.
+ *
+ *  jobQuery (round 11 follow-up, 2026-09-13: "retrievable by job") does a
+ *  free-text, case-insensitive match against the job number, job title,
+ *  and customer name — or, for a standalone entry with no job, the
+ *  destination address/notes — so the office can find every trip tied to
+ *  one job, or every trip for one customer, without having to know a
+ *  date range first. */
+async function saaMileageFetchAll({ technicianId, dateFrom, dateTo, jobQuery } = {}) {
   let query = _saaClient.from("mileage_logs").select("*");
   if (technicianId) query = query.eq("technician_id", technicianId);
   if (dateFrom) query = query.gte("log_date", dateFrom);
@@ -138,21 +240,39 @@ async function saaMileageFetchAll({ technicianId, dateFrom, dateTo } = {}) {
   const jobIds = [...new Set(logs.map((l) => l.job_id).filter(Boolean))];
   const [techRes, jobRes] = await Promise.all([
     techIds.length ? _saaClient.from("technicians").select("id,name").in("id", techIds) : { data: [] },
-    jobIds.length ? _saaClient.from("jobs").select("id,job_number,title").in("id", jobIds) : { data: [] },
+    jobIds.length ? _saaClient.from("jobs").select("id,job_number,title,customer_id").in("id", jobIds) : { data: [] },
   ]);
   const techById = Object.fromEntries((techRes.data || []).map((t) => [t.id, t]));
-  const jobById = Object.fromEntries((jobRes.data || []).map((j) => [j.id, j]));
+  const jobs = jobRes.data || [];
 
-  return logs
-    .map((l) => Object.assign({}, l, {
-      technician: techById[l.technician_id] || null,
-      job: l.job_id ? jobById[l.job_id] || null : null,
-    }))
-    .sort((a, b) =>
-      (a.technician ? a.technician.name : "").localeCompare(b.technician ? b.technician.name : "") ||
-      a.log_date.localeCompare(b.log_date) ||
-      a.leg_order - b.leg_order
-    );
+  const custIds = [...new Set(jobs.map((j) => j.customer_id).filter(Boolean))];
+  const custRes = custIds.length
+    ? await _saaClient.from("customers").select("id,first_name,last_name").in("id", custIds)
+    : { data: [] };
+  const custById = Object.fromEntries((custRes.data || []).map((c) => [c.id, c]));
+  const jobById = Object.fromEntries(jobs.map((j) => [j.id, Object.assign({}, j, { customer: custById[j.customer_id] || null })]));
+
+  let rows = logs.map((l) => Object.assign({}, l, {
+    technician: techById[l.technician_id] || null,
+    job: l.job_id ? jobById[l.job_id] || null : null,
+  }));
+
+  const q = (jobQuery || "").trim().toLowerCase();
+  if (q) {
+    rows = rows.filter((r) => {
+      if (r.job) {
+        const cust = r.job.customer ? `${r.job.customer.first_name || ""} ${r.job.customer.last_name || ""}` : "";
+        return [r.job.job_number, r.job.title, cust].some((s) => (s || "").toLowerCase().includes(q));
+      }
+      return [r.to_address, r.notes].some((s) => (s || "").toLowerCase().includes(q));
+    });
+  }
+
+  return rows.sort((a, b) =>
+    (a.technician ? a.technician.name : "").localeCompare(b.technician ? b.technician.name : "") ||
+    a.log_date.localeCompare(b.log_date) ||
+    a.leg_order - b.leg_order
+  );
 }
 
 /* ---- Writes ---- */
@@ -198,6 +318,26 @@ async function saaMileageRecalcForJob(job, force) {
       .single();
     if (error) throw error;
     return { ok: true, log: data };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+/** Best-effort, silent version of saaMileageRecalcForJob for automatic
+ *  use: called from job creation, drag-and-drop rescheduling, and Job
+ *  Card saves so that EVERY job with enough info on file (technician +
+ *  scheduled date + service address) ends up with a real mileage number
+ *  recorded — not just the ones where someone happens to click
+ *  "Calculate Miles" (round 11 follow-up, 2026-09-13: "Save miles for
+ *  every job"). Never throws and never blocks whatever save triggered
+ *  it — a missing technician/date/address, an address the routing
+ *  service can't find, or the free routing service being briefly down
+ *  all just mean this job's mileage stays as it was (fixable by hand
+ *  from the Job Card or the Mileage page). A manually-set leg is always
+ *  left alone, same guarantee as the "Calculate Miles" button. */
+async function saaMileageEnsureForJob(job) {
+  try {
+    return await saaMileageRecalcForJob(job);
   } catch (e) {
     return { ok: false, error: (e && e.message) || String(e) };
   }

@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mileage | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260913j">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260913l">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260913j"></script>
-<script src="../assets/js/supabase-config.js?v=20260913j"></script>
-<script src="../assets/js/auth.js?v=20260913j"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260913l"></script>
+<script src="../assets/js/supabase-config.js?v=20260913l"></script>
+<script src="../assets/js/auth.js?v=20260913l"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -65,6 +65,7 @@
   <input type="date" id="mp-date-from" title="From date">
   <span class="muted" style="align-self:center">to</span>
   <input type="date" id="mp-date-to" title="To date">
+  <input type="text" id="mp-job-search" placeholder="Search by job #, customer, or trip note&hellip;" style="min-width:220px">
   <button type="button" class="btn btn-ghost btn-sm" id="mp-clear-btn">Clear Filters</button>
 </div>
 
@@ -80,6 +81,18 @@
     <tbody id="mp-tbody"></tbody>
   </table>
   <p class="muted" id="mp-empty" style="text-align:center;padding:30px" hidden>No mileage entries match your filters.</p>
+</div>
+
+<div class="card" style="margin-top:22px;max-width:640px">
+  <h3>Year-End Tax Summary</h3>
+  <p class="muted">Every technician's total miles for a full year, in a form suitable to hand to an accountant or attach to a tax return.</p>
+  <div class="field-row" style="align-items:flex-end">
+    <div class="field" style="max-width:140px"><label>Tax Year</label><input type="number" id="mp-tax-year" placeholder="2026"></div>
+    <button type="button" class="btn btn-navy btn-sm" id="mp-tax-run-btn">Generate Summary</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="mp-tax-print-btn" hidden>Print Summary</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="mp-tax-csv-btn" hidden>Download CSV</button>
+  </div>
+  <div id="mp-tax-results" style="margin-top:14px"></div>
 </div>
 
 <div class="card" style="margin-top:22px;max-width:640px">
@@ -102,11 +115,12 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260913j"></script>
-<script src="../assets/js/worksheet.js?v=20260913j"></script>
-<script src="../assets/js/jobs-db.js?v=20260913j"></script>
-<script src="../assets/js/maps-config.js?v=20260913j"></script>
-<script src="../assets/js/mileage-db.js?v=20260913j"></script>
-<script src="../assets/js/mileage-page.js?v=20260913j"></script>
+<script src="../assets/js/pricing-data.js?v=20260913l"></script>
+<script src="../assets/js/worksheet.js?v=20260913l"></script>
+<script src="../assets/js/jobs-db.js?v=20260913l"></script>
+<script src="../assets/js/maps-config.js?v=20260913l"></script>
+<script src="../assets/js/mileage-db.js?v=20260913l"></script>
+<script src="../assets/js/print-mileage-summary.js?v=20260913l"></script>
+<script src="../assets/js/mileage-page.js?v=20260913l"></script>
 </body>
 </html>

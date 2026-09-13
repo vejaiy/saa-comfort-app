@@ -22,7 +22,9 @@ function _mpFmtDate(d) {
 
 function _mpJobLabel(job) {
   if (!job) return "";
-  return job.job_number ? `${job.job_number}${job.title ? " · " + job.title : ""}` : (job.title || "");
+  const custName = job.customer ? `${job.customer.first_name || ""} ${job.customer.last_name || ""}`.trim() : "";
+  const base = job.job_number ? `${job.job_number}${job.title ? " · " + job.title : ""}` : (job.title || "");
+  return custName ? `${base}${base ? " · " : ""}${custName}` : base;
 }
 
 async function _mpLoadTechnicians() {
@@ -123,25 +125,105 @@ async function _mpLoadEntries() {
   const technicianId = document.getElementById("mp-tech-filter").value || undefined;
   const dateFrom = document.getElementById("mp-date-from").value || undefined;
   const dateTo = document.getElementById("mp-date-to").value || undefined;
-  _mpEntries = await saaMileageFetchAll({ technicianId, dateFrom, dateTo });
+  const jobQuery = document.getElementById("mp-job-search").value.trim() || undefined;
+  _mpEntries = await saaMileageFetchAll({ technicianId, dateFrom, dateTo, jobQuery });
   _mpRenderTable();
   _mpRenderTotals();
+}
+
+/* ---- Year-End Tax Summary ---- */
+
+let _mpLastTaxSummary = null;
+
+function _mpCsvField(v) {
+  const s = String(v == null ? "" : v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+async function _mpRunTaxSummary() {
+  const yearInput = document.getElementById("mp-tax-year");
+  const resultsEl = document.getElementById("mp-tax-results");
+  const printBtn = document.getElementById("mp-tax-print-btn");
+  const csvBtn = document.getElementById("mp-tax-csv-btn");
+  const year = parseInt(yearInput.value, 10) || new Date().getFullYear();
+  yearInput.value = year;
+  resultsEl.innerHTML = '<span class="muted">Generating&hellip;</span>';
+  printBtn.hidden = true;
+  csvBtn.hidden = true;
+
+  const entries = await saaMileageFetchAll({ dateFrom: `${year}-01-01`, dateTo: `${year}-12-31` });
+  const byTech = {};
+  let grandTotal = 0, tripCountTotal = 0;
+  for (const e of entries) {
+    const name = e.technician ? e.technician.name : "Unassigned";
+    if (!byTech[name]) byTech[name] = { technicianName: name, tripCount: 0, miles: 0 };
+    byTech[name].tripCount += 1;
+    byTech[name].miles += Number(e.miles) || 0;
+    tripCountTotal += 1;
+    grandTotal += Number(e.miles) || 0;
+  }
+  const rows = Object.values(byTech).sort((a, b) => b.miles - a.miles);
+  _mpLastTaxSummary = { year, rows, grandTotal, tripCountTotal, generatedOn: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) };
+
+  if (!rows.length) {
+    resultsEl.innerHTML = `<p class="muted">No mileage logged for ${year} yet.</p>`;
+    return;
+  }
+  resultsEl.innerHTML = `
+    <table class="jobs-table">
+      <thead><tr><th>Technician</th><th>Trips</th><th>Total Miles</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr><td>${r.technicianName}</td><td>${r.tripCount}</td><td>${r.miles.toFixed(1)}</td></tr>`).join("")}
+        <tr style="font-weight:800;border-top:2px solid var(--navy)"><td>Company Total</td><td>${tripCountTotal}</td><td>${grandTotal.toFixed(1)}</td></tr>
+      </tbody>
+    </table>`;
+  printBtn.hidden = false;
+  csvBtn.hidden = false;
+}
+
+function _mpDownloadTaxCsv() {
+  if (!_mpLastTaxSummary) return;
+  const { year, rows, grandTotal, tripCountTotal } = _mpLastTaxSummary;
+  const lines = [["Technician", "Trips", "Total Miles"].join(",")];
+  rows.forEach((r) => lines.push([_mpCsvField(r.technicianName), r.tripCount, r.miles.toFixed(1)].join(",")));
+  lines.push([_mpCsvField("Company Total"), tripCountTotal, grandTotal.toFixed(1)].join(","));
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `SAA-mileage-tax-summary-${year}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
   // auth.js's guard reveals the body once signed-in; give it a tick.
   await _mpLoadTechnicians();
   await _mpLoadEntries();
+  document.getElementById("mp-tax-year").value = new Date().getFullYear();
 
   document.getElementById("mp-tech-filter").addEventListener("change", _mpLoadEntries);
   document.getElementById("mp-date-from").addEventListener("change", _mpLoadEntries);
   document.getElementById("mp-date-to").addEventListener("change", _mpLoadEntries);
+  let _mpSearchTimer = null;
+  document.getElementById("mp-job-search").addEventListener("input", () => {
+    clearTimeout(_mpSearchTimer);
+    _mpSearchTimer = setTimeout(_mpLoadEntries, 250);
+  });
   document.getElementById("mp-clear-btn").addEventListener("click", () => {
     document.getElementById("mp-tech-filter").value = "";
     document.getElementById("mp-date-from").value = "";
     document.getElementById("mp-date-to").value = "";
+    document.getElementById("mp-job-search").value = "";
     _mpLoadEntries();
   });
+
+  document.getElementById("mp-tax-run-btn").addEventListener("click", _mpRunTaxSummary);
+  document.getElementById("mp-tax-print-btn").addEventListener("click", () => {
+    if (_mpLastTaxSummary) printMileageSummary(_mpLastTaxSummary);
+  });
+  document.getElementById("mp-tax-csv-btn").addEventListener("click", _mpDownloadTaxCsv);
 
   document.getElementById("mp-add-btn").addEventListener("click", async () => {
     const status = document.getElementById("mp-add-status");

@@ -248,11 +248,20 @@ function saaCalRenderWeekView(scheduled) {
   }
   html += "</div>";
   wrap.innerHTML = html;
-  wrap.querySelectorAll(".cal-week-daylabel").forEach((el) => {
-    el.addEventListener("click", () => { saaCalSetView("day"); saaCalSetDate(el.dataset.date); });
+  // Round 11 follow-up (2026-09-13): clicking ANYWHERE in a day's box
+  // opens that day's Day view, not just the small "Sun 13" label --
+  // mirrors saaCalRenderMonthView's .cal-month-cell click handler below,
+  // including its guard so clicking an actual appointment card still
+  // opens that job instead of navigating away.
+  wrap.querySelectorAll(".cal-week-day").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      if (e.target.closest(".cal-week-appt")) return;
+      saaCalSetView("day");
+      saaCalSetDate(el.dataset.date);
+    });
   });
   wrap.querySelectorAll(".cal-week-appt").forEach((el) => {
-    el.addEventListener("click", () => saaCalOpenJobDrawer(el.dataset.apptId));
+    el.addEventListener("click", (e) => { e.stopPropagation(); saaCalOpenJobDrawer(el.dataset.apptId); });
   });
 }
 

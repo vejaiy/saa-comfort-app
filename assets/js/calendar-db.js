@@ -204,14 +204,15 @@ function _saaCalSplitDatetime(dtStr) {
  *  calendar.html doesn't load jobs-db.js) — a job created from the New
  *  Service popup gets a real J-2026-0001-style number too, not just one
  *  created from the Jobs List. */
-async function _saaCalNextJobNumber() {
+async function _saaCalNextJobNumber(firstName) {
   const year = new Date().getFullYear();
   const { count, error } = await _saaClient
     .from("jobs")
     .select("id", { count: "exact", head: true })
     .like("job_number", `J-${year}-%`);
   if (error) throw error;
-  return `J-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
+  const base = `J-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
+  return saaAppendNameSuffix(base, firstName);
 }
 
 async function saaCalCreateJobWithAppointment(payload) {
@@ -231,7 +232,11 @@ async function saaCalCreateJobWithAppointment(payload) {
     else if (payload.technicianId) status = "assigned";
 
     const { date: schedDate, time: schedTime } = _saaCalSplitDatetime(payload.startDatetime);
-    const jobNumber = await _saaCalNextJobNumber();
+    // jobs-db.js is loaded on every page calendar-db.js is (see gen_calendar.py),
+    // so its _saaCustomerFirstName lookup helper is reused here rather than
+    // duplicated, unlike _saaCalNextJobNumber above.
+    const firstNameForNumber = (payload.newCustomer && payload.newCustomer.firstName) || (await _saaCustomerFirstName(customerId));
+    const jobNumber = await _saaCalNextJobNumber(firstNameForNumber);
 
     const { data: job, error: jErr } = await _saaClient
       .from("jobs")
@@ -273,6 +278,21 @@ async function saaCalCreateJobWithAppointment(payload) {
       .single();
     if (aErr) throw aErr;
 
+    // Round 11 follow-up (2026-09-13): "save miles for every job" -- see
+    // the matching comment in jobs-db.js's saaJobsCreateJob. Fire-and-forget.
+    if (typeof saaMileageEnsureForJob === "function") {
+      saaMileageEnsureForJob({
+        id: job.id,
+        assigned_technician_id: payload.technicianId || null,
+        scheduled_date: schedDate,
+        scheduled_time: schedTime,
+        job_address: payload.jobAddress || null,
+        job_city: payload.jobCity || null,
+        job_state: "TX",
+        job_zip: payload.jobZip || null,
+      });
+    }
+
     return { ok: true, jobId: job.id, appointmentId: appt.id };
   } catch (e) {
     return { ok: false, error: (e && e.message) || String(e) };
@@ -299,6 +319,21 @@ async function saaCalUpdateAppointmentSchedule({ appointmentId, jobId, technicia
         .update({ assigned_technician_id: technicianId || null, status: "scheduled", scheduled_date: schedDate, scheduled_time: schedTime })
         .eq("id", jobId);
       if (jErr) throw jErr;
+
+      // Round 11 follow-up (2026-09-13): a drag-and-drop reschedule changes
+      // which day/technician/leg-order a job's mileage belongs under, so
+      // its auto leg (never a manually-set one -- saaMileageRecalcForJob's
+      // own guard handles that) is refreshed to match right away rather
+      // than being left pointing at the old day. Needs the job's address,
+      // which isn't part of this payload, so it's re-fetched fresh.
+      if (typeof saaMileageEnsureForJob === "function") {
+        const { data: freshJob } = await _saaClient
+          .from("jobs")
+          .select("id,assigned_technician_id,scheduled_date,scheduled_time,job_address,job_city,job_state,job_zip")
+          .eq("id", jobId)
+          .maybeSingle();
+        if (freshJob) saaMileageEnsureForJob(freshJob);
+      }
     }
     return { ok: true };
   } catch (e) {

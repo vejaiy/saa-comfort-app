@@ -35,3 +35,17 @@ async function saaIsAuthed() {
   const { data: { session } } = await _saaClient.auth.getSession();
   return !!session;
 }
+
+/** Round 11 follow-up (2026-09-13): "generate and rename existing quote,
+ *  job, invoice with customer first name at the end so it would be easy
+ *  to identify" — appends "-FirstName" to a generated record number
+ *  (Q-2026-0004 -> Q-2026-0004-Sreedhar), stripped of anything but
+ *  letters/digits so a messy name never breaks the format. Left
+ *  unsuffixed when there's no first name on file (e.g. a customer added
+ *  with only a phone number) rather than appending a blank or
+ *  placeholder. Shared by quotes-db.js, jobs-db.js, and calendar-db.js's
+ *  number-generation functions — all three load auth.js first. */
+function saaAppendNameSuffix(base, firstName) {
+  const clean = String(firstName || "").replace(/[^a-zA-Z0-9]/g, "");
+  return clean ? `${base}-${clean}` : base;
+}
