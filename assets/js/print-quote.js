@@ -39,14 +39,20 @@ function printFormalQuote(opts) {
   const info = SAA_QUOTE_INFO;
   const ref = (opts.quoteNumber || "").trim() || _saaQuoteRef();
   const deposit = (opts.grandTotal || 0) / 2;
-  const itemsHtml = (opts.lineItems || []).filter(li => li && li.price > 0).map(li => `
-        <tr>
-          <td>
-            <div class="li-name">${_saaEsc(li.name)}</div>
-            ${li.desc ? `<div class="li-desc">${_saaEsc(li.desc)}</div>` : ""}
-          </td>
-          <td class="num">${fmtMoney(li.price)}</td>
-        </tr>`).join("") || `<tr><td class="muted">No line items selected.</td><td class="num">$0.00</td></tr>`;
+  // Round 14 (2026-09-13): "merge all items in quotation Itemized price
+  // into one. combine the description as well. quote single value
+  // instead of itemized quote." -- every toggled-on line item's name/
+  // description is folded into ONE combined description block, and the
+  // customer sees a single total price instead of a per-item breakdown
+  // (the per-item $ amounts still drive that total internally, they're
+  // just not shown here anymore).
+  const includedItems = (opts.lineItems || []).filter(li => li && li.price > 0);
+  const combinedDesc = includedItems.map(li => `
+          <div class="li-name">${_saaEsc(li.name)}</div>
+          ${li.desc ? `<div class="li-desc">${_saaEsc(li.desc)}</div>` : ""}`).join("");
+  const itemsHtml = includedItems.length
+    ? `<tr><td>${combinedDesc}</td><td class="num" style="font-weight:800;font-size:.98rem;white-space:nowrap">${fmtMoney(opts.grandTotal || 0)}</td></tr>`
+    : `<tr><td class="muted">No line items selected.</td><td class="num">$0.00</td></tr>`;
 
   const html = `<!doctype html>
 <html lang="en">
@@ -136,12 +142,11 @@ function printFormalQuote(opts) {
   </div>
 
   <section>
-    <h2>1. Itemized Price</h2>
+    <h2>1. Price</h2>
     <table class="items">
-      <thead><tr><th>Description</th><th class="num">Price</th></tr></thead>
+      <thead><tr><th>Description</th><th class="num">Quote Total</th></tr></thead>
       <tbody>
         ${itemsHtml}
-        <tr class="total-row"><td>Quote Total</td><td class="num">${fmtMoney(opts.grandTotal || 0)}</td></tr>
       </tbody>
     </table>
   </section>
