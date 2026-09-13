@@ -505,7 +505,7 @@ function jbRenderInvoiceBox(job, invoice, payments) {
     <div class="field"><label>Amount Total</label><input type="number" step="0.01" id="jbd-inv-amount" value="${invoice.amount_total || 0}"></div>
     <div style="display:flex;gap:8px;margin:6px 0 10px">
       <button type="button" class="btn btn-ghost btn-sm" id="jbd-inv-save-btn">Update Invoice</button>
-      <button type="button" class="btn btn-outline btn-sm" id="jbd-inv-print-btn">Print Invoice</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="jbd-inv-print-btn">Print Invoice</button>
       <span class="jb-badge jb-pay-${paymentStatus}">${_jbPaymentLabel[paymentStatus]}</span>
     </div>
     <div class="jb-payments-list">${paymentsHtml}</div>

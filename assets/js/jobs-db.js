@@ -548,11 +548,21 @@ async function saaJobsUpdateJob(jobId, fields) {
  *  differently (name capitalization, a trailing space) on the
  *  Quotation page vs. the New Job popup ends up as two different
  *  customer rows, and a plain customer_id match here finds nothing
- *  even though a saved quote exists. Phone numbers go through the
- *  same input mask (saaAttachPhoneMask) everywhere, so they're the
- *  more reliable match: when the direct customer_id lookup comes up
- *  empty and a phone number is available, also pull quotes for any
- *  OTHER customer row sharing that exact phone number. */
+ *  even though a saved quote exists. When the direct customer_id
+ *  lookup comes up empty and a phone number is available, also pull
+ *  quotes for any OTHER customer row sharing that same phone number.
+ *
+ *  Found live (2026-09-13, Sriram Ranganathan): this fallback used to
+ *  compare phone numbers as exact strings, on the assumption that
+ *  saaAttachPhoneMask formats every phone the same way everywhere --
+ *  but a customer row created before the mask existed, or via a path
+ *  that doesn't apply it, can have digits-only ("8327037680") sitting
+ *  right next to a masked duplicate ("832-703-7680") for the same real
+ *  person, and an exact string match treats those as different phone
+ *  numbers, silently missing the other row's quotes. Now compares
+ *  DIGITS ONLY, so formatting differences can't hide a match. The
+ *  customers table is small (one HVAC office's clientele), so pulling
+ *  every phone to compare client-side is cheap. */
 async function saaJobsFetchCustomerQuotes(customerId, phone) {
   const { data, error } = await _saaClient
     .from("quotes")
@@ -562,12 +572,17 @@ async function saaJobsFetchCustomerQuotes(customerId, phone) {
   if (error) throw error;
   if ((data || []).length || !phone) return data || [];
 
-  const { data: sameCust, error: custErr } = await _saaClient
+  const digitsOnly = (p) => (p || "").replace(/\D/g, "");
+  const targetDigits = digitsOnly(phone);
+  if (!targetDigits) return [];
+
+  const { data: allCust, error: custErr } = await _saaClient
     .from("customers")
-    .select("id")
-    .eq("phone", phone);
+    .select("id,phone");
   if (custErr) throw custErr;
-  const otherIds = (sameCust || []).map((c) => c.id).filter((id) => id !== customerId);
+  const otherIds = (allCust || [])
+    .filter((c) => c.id !== customerId && digitsOnly(c.phone) === targetDigits)
+    .map((c) => c.id);
   if (!otherIds.length) return [];
 
   const { data: byPhone, error: phoneErr } = await _saaClient
