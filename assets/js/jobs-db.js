@@ -144,20 +144,43 @@ async function saaJobsSearchCustomers(query) {
   return data || [];
 }
 
-/** Find-or-create a customer by exact first+last+phone — same rule
- *  quotes-db.js and calendar-db.js use, so a customer created from any
- *  of the three pages lands as one row. Duplicated here rather than
- *  shared since jobs.html doesn't load those files. */
+/** Digits-only comparison key for phone numbers -- "248-494-0509" and
+ *  "2484940509" are the same customer. Matching on the raw string used to
+ *  silently create a second customer row whenever the same person's number
+ *  was typed with different punctuation (round 12 follow-up, 2026-09-13 --
+ *  confirmed to have bitten a real customer). Same helper duplicated in
+ *  quotes-db.js/calendar-db.js since none of these files are shared/loaded
+ *  together. */
+function _saaJobsPhoneKey(phone) {
+  return String(phone || "").replace(/\D/g, "");
+}
+
+/** Find-or-create a customer by first+last name plus a normalized-phone
+ *  match — same rule quotes-db.js and calendar-db.js use, so a customer
+ *  created from any of the three pages lands as one row. Duplicated here
+ *  rather than shared since jobs.html doesn't load those files.
+ *  Backfills an existing matched customer's blank address/city/zip fields
+ *  when new values are provided, same as the other two copies. */
 async function saaJobsFindOrCreateCustomer({ firstName, lastName, phone, email, address, city, zip }) {
-  const { data: existing, error: findErr } = await _saaClient
+  const { data: candidates, error: findErr } = await _saaClient
     .from("customers")
-    .select("id")
+    .select("id,phone,email,billing_address,billing_city,billing_zip")
     .eq("first_name", firstName || "")
-    .eq("last_name", lastName || "")
-    .eq("phone", phone || "")
-    .limit(1);
+    .eq("last_name", lastName || "");
   if (findErr) throw findErr;
-  if (existing && existing.length) return existing[0].id;
+  const phoneKey = _saaJobsPhoneKey(phone);
+  const existing = (candidates || []).find((c) => _saaJobsPhoneKey(c.phone) === phoneKey);
+  if (existing) {
+    const patch = {};
+    if (email && !existing.email) patch.email = email;
+    if (address && !existing.billing_address) patch.billing_address = address;
+    if (city && !existing.billing_city) patch.billing_city = city;
+    if (zip && !existing.billing_zip) patch.billing_zip = zip;
+    if (Object.keys(patch).length) {
+      await _saaClient.from("customers").update(patch).eq("id", existing.id);
+    }
+    return existing.id;
+  }
 
   const { data: created, error: createErr } = await _saaClient
     .from("customers")

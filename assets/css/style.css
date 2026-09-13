@@ -391,12 +391,19 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .cal-newsvc-card { max-width: 460px; }
 .cal-cust-search-wrap { position: relative; }
 .cal-cust-results { position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; background: #fff; border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); max-height: 260px; overflow-y: auto; z-index: 20; }
-.cal-cust-result { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f0f3f6; }
+.cal-cust-result { padding: 8px 12px; border-bottom: 1px solid #f0f3f6; display: flex; align-items: flex-start; flex-wrap: wrap; gap: 4px 8px; }
 .cal-cust-result:last-child { border-bottom: none; }
 .cal-cust-result:hover { background: #f5f8fa; }
+.cal-cust-result-main { cursor: pointer; flex: 1 1 auto; min-width: 140px; }
 .cal-cust-result .name { font-weight: 700; font-size: .9rem; }
 .cal-cust-result .addr, .cal-cust-result .phone { font-size: .8rem; color: var(--muted); }
 .cal-cust-result .svc-meta { font-size: .76rem; color: var(--muted); margin-top: 2px; }
+.cal-cust-result-actions { display: flex; gap: 4px; flex: 0 0 auto; }
+.cal-cust-result-actions .btn { padding: 2px 8px; font-size: .74rem; }
+.cal-cust-edit-form { flex: 1 0 100%; background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; margin-top: 6px; }
+.cal-cust-edit-form .field-row { gap: 8px; margin-bottom: 6px; }
+.cal-cust-edit-form .field { margin-bottom: 0; }
+.cal-cust-edit-form label { font-size: .74rem; }
 .cal-selected-cust { background: #f5f8fa; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 8px; font-size: .85rem; }
 .cal-selected-cust .name { font-weight: 700; color: var(--navy); }
 .cal-selected-cust .row { color: var(--muted); margin-top: 2px; }

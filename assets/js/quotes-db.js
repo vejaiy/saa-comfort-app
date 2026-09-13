@@ -18,20 +18,49 @@
    instead of creating a duplicate.
    ============================================================ */
 
-async function saaFindOrCreateCustomer(firstName, lastName, phone) {
-  const { data: existing, error: findErr } = await _saaClient
+/** Digits-only comparison key for phone numbers -- "248-494-0509" and
+ *  "2484940509" are the same customer. Matching on the raw string (as this
+ *  function used to) silently created a second customer row every time the
+ *  same person's number was typed with different punctuation (round 12
+ *  follow-up, 2026-09-13 -- confirmed to have bitten a real customer twice).
+ *  Same helper duplicated in jobs-db.js/calendar-db.js since none of these
+ *  files are shared/loaded together. */
+function _saaPhoneKey(phone) {
+  return String(phone || "").replace(/\D/g, "");
+}
+
+/** address/city/state/zip are optional -- when provided they fill in the
+ *  customer's billing_* columns, and (round 12 follow-up) also backfill an
+ *  EXISTING matched customer's address fields if those are still blank, so
+ *  picking the same customer up again from a different intake point doesn't
+ *  leave their address permanently empty. */
+async function saaFindOrCreateCustomer(firstName, lastName, phone, address, city, state, zip) {
+  const { data: candidates, error: findErr } = await _saaClient
     .from("customers")
-    .select("id")
+    .select("id,phone,billing_address,billing_city,billing_state,billing_zip")
     .eq("first_name", firstName || "")
-    .eq("last_name", lastName || "")
-    .eq("phone", phone || "")
-    .limit(1);
+    .eq("last_name", lastName || "");
   if (findErr) throw findErr;
-  if (existing && existing.length) return existing[0].id;
+  const phoneKey = _saaPhoneKey(phone);
+  const existing = (candidates || []).find((c) => _saaPhoneKey(c.phone) === phoneKey);
+  if (existing) {
+    const patch = {};
+    if (address && !existing.billing_address) patch.billing_address = address;
+    if (city && !existing.billing_city) patch.billing_city = city;
+    if (state && !existing.billing_state) patch.billing_state = state;
+    if (zip && !existing.billing_zip) patch.billing_zip = zip;
+    if (Object.keys(patch).length) {
+      await _saaClient.from("customers").update(patch).eq("id", existing.id);
+    }
+    return existing.id;
+  }
 
   const { data: created, error: createErr } = await _saaClient
     .from("customers")
-    .insert({ first_name: firstName || null, last_name: lastName || null, phone: phone || null })
+    .insert({
+      first_name: firstName || null, last_name: lastName || null, phone: phone || null,
+      billing_address: address || null, billing_city: city || null, billing_state: state || null, billing_zip: zip || null,
+    })
     .select("id")
     .single();
   if (createErr) throw createErr;
@@ -73,7 +102,10 @@ async function saaSaveQuote(payload) {
     if (!payload.firstName && !payload.lastName && !payload.phone) {
       return { ok: false, error: "Enter a first name, last name, or phone number first." };
     }
-    const customerId = await saaFindOrCreateCustomer(payload.firstName, payload.lastName, payload.phone);
+    const customerId = await saaFindOrCreateCustomer(
+      payload.firstName, payload.lastName, payload.phone,
+      payload.jobAddress, payload.city, payload.state, payload.zip
+    );
 
     const row = {
       customer_id: customerId,
@@ -259,7 +291,7 @@ async function saaQuotesSearchCustomers(query) {
   if (!q) return [];
   const { data, error } = await _saaClient
     .from("customers")
-    .select("id,first_name,last_name,phone,billing_address,billing_city,billing_zip")
+    .select("id,first_name,last_name,phone,billing_address,billing_city,billing_state,billing_zip")
     .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,phone.ilike.%${q}%`)
     .limit(8);
   if (error) throw error;
@@ -295,7 +327,7 @@ function saaWireQuoteCustomerSearch() {
         <div class="cal-cust-result" data-id="${c.id}">
           <div class="name">${[c.first_name, c.last_name].filter(Boolean).join(" ") || "(no name)"}</div>
           ${c.phone ? `<div class="phone">${saaFormatPhone(c.phone)}</div>` : ""}
-          ${c.billing_address ? `<div class="addr">${[c.billing_address, c.billing_city].filter(Boolean).join(", ")}</div>` : ""}
+          ${c.billing_address ? `<div class="addr">${[c.billing_address, c.billing_city, c.billing_zip].filter(Boolean).join(", ")}</div>` : ""}
         </div>`).join("");
       results.hidden = false;
       results.querySelectorAll(".cal-cust-result[data-id]").forEach((row) => {
@@ -305,7 +337,10 @@ function saaWireQuoteCustomerSearch() {
           document.getElementById("q-first").value = c.first_name || "";
           document.getElementById("q-last").value = c.last_name || "";
           document.getElementById("q-phone").value = c.phone ? saaFormatPhone(c.phone) : "";
-          document.getElementById("q-address").value = [c.billing_address, c.billing_city].filter(Boolean).join(", ") || c.billing_address || "";
+          document.getElementById("q-address").value = c.billing_address || "";
+          if (document.getElementById("q-city")) document.getElementById("q-city").value = c.billing_city || "";
+          if (document.getElementById("q-state")) document.getElementById("q-state").value = c.billing_state || "TX";
+          if (document.getElementById("q-zip")) document.getElementById("q-zip").value = c.billing_zip || "";
           input.value = "";
           results.hidden = true;
           results.innerHTML = "";

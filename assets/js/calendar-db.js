@@ -155,23 +155,41 @@ async function saaCalSearchCustomers(query) {
   return customers.map((c) => ({ customer: c, lastJob: lastJobByCust[c.id] || null, equipment: equipByCust[c.id] || null }));
 }
 
+/** Digits-only comparison key for phone numbers -- see the identical helper
+ *  in quotes-db.js/jobs-db.js for why this replaced exact-string matching
+ *  (round 12 follow-up, 2026-09-13). */
+function _saaCalPhoneKey(phone) {
+  return String(phone || "").replace(/\D/g, "");
+}
+
 /**
- * Find-or-create a customer by exact first name + last name + phone —
- * same matching rule quotes-db.js uses for Save Quote, so a customer
- * created from either the calendar or a quote worksheet lands as one
- * row either way. Only used when the New Service popup's search found
- * no match and the dispatcher filled in the "new customer" mini-form.
+ * Find-or-create a customer by first name + last name plus a
+ * normalized-phone match — same matching rule quotes-db.js uses for Save
+ * Quote, so a customer created from either the calendar or a quote
+ * worksheet lands as one row either way. Only used when the New Service
+ * popup's search found no match and the dispatcher filled in the "new
+ * customer" mini-form. Backfills an existing matched customer's blank
+ * address/city/zip when new values are provided.
  */
 async function saaCalFindOrCreateCustomer(firstName, lastName, phone, address, city, zip) {
-  const { data: existing, error: findErr } = await _saaClient
+  const { data: candidates, error: findErr } = await _saaClient
     .from("customers")
-    .select("id")
+    .select("id,phone,billing_address,billing_city,billing_zip")
     .eq("first_name", firstName || "")
-    .eq("last_name", lastName || "")
-    .eq("phone", phone || "")
-    .limit(1);
+    .eq("last_name", lastName || "");
   if (findErr) throw findErr;
-  if (existing && existing.length) return existing[0].id;
+  const phoneKey = _saaCalPhoneKey(phone);
+  const existing = (candidates || []).find((c) => _saaCalPhoneKey(c.phone) === phoneKey);
+  if (existing) {
+    const patch = {};
+    if (address && !existing.billing_address) patch.billing_address = address;
+    if (city && !existing.billing_city) patch.billing_city = city;
+    if (zip && !existing.billing_zip) patch.billing_zip = zip;
+    if (Object.keys(patch).length) {
+      await _saaClient.from("customers").update(patch).eq("id", existing.id);
+    }
+    return existing.id;
+  }
 
   const { data: created, error: createErr } = await _saaClient
     .from("customers")
@@ -180,6 +198,83 @@ async function saaCalFindOrCreateCustomer(firstName, lastName, phone, address, c
     .single();
   if (createErr) throw createErr;
   return created.id;
+}
+
+/** Update an existing customer's own record — used by the New Service
+ *  popup's inline "Edit" action on a search result (round 12 follow-up,
+ *  2026-09-13: "Add edit button to edit customer information").
+ *  returns: { ok: true } | { ok: false, error } */
+async function saaCalUpdateCustomer(customerId, { firstName, lastName, phone, address, city, zip }) {
+  try {
+    const { error } = await _saaClient
+      .from("customers")
+      .update({
+        first_name: firstName || null,
+        last_name: lastName || null,
+        phone: phone || null,
+        billing_address: address || null,
+        billing_city: city || null,
+        billing_zip: zip || null,
+      })
+      .eq("id", customerId);
+    if (error) throw error;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+/** Delete a customer record outright — used by the New Service popup's
+ *  inline "Delete" action, explicitly so the office can clean up duplicate
+ *  customer rows ("delete option to delete customer or duplicate customers
+ *  no more" — round 12 follow-up, 2026-09-13). A customer with any jobs,
+ *  quotes, invoices, equipment, payments, or memberships on file can't be
+ *  deleted outright (would orphan real records) — the caller should offer
+ *  "Merge into another customer" for that case instead of a bare delete.
+ *  returns: { ok: true } | { ok: false, error, blocked: true, counts } */
+async function saaCalDeleteCustomer(customerId) {
+  try {
+    const [{ count: jobCt }, { count: quoteCt }, { count: invCt }, { count: eqCt }] = await Promise.all([
+      _saaClient.from("jobs").select("id", { count: "exact", head: true }).eq("customer_id", customerId),
+      _saaClient.from("quotes").select("id", { count: "exact", head: true }).eq("customer_id", customerId),
+      _saaClient.from("invoices").select("id", { count: "exact", head: true }).eq("customer_id", customerId),
+      _saaClient.from("equipment").select("id", { count: "exact", head: true }).eq("customer_id", customerId),
+    ]);
+    const total = (jobCt || 0) + (quoteCt || 0) + (invCt || 0) + (eqCt || 0);
+    if (total > 0) {
+      return { ok: false, blocked: true, counts: { jobs: jobCt || 0, quotes: quoteCt || 0, invoices: invCt || 0, equipment: eqCt || 0 },
+        error: `This customer has ${jobCt || 0} job(s), ${quoteCt || 0} quote(s), ${invCt || 0} invoice(s), and ${eqCt || 0} equipment record(s) on file — delete or reassign those first.` };
+    }
+    const { error } = await _saaClient.from("customers").delete().eq("id", customerId);
+    if (error) throw error;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+/** Merge one customer record into another — repoints every job, quote,
+ *  invoice, equipment, payment, and membership row from `fromId` to
+ *  `toId`, then deletes the now-empty `fromId` row. Used by the New
+ *  Service popup's duplicate-cleanup flow when Delete is blocked because
+ *  the "duplicate" actually has records on file (the real fix for
+ *  "duplicate customers no more" — deleting a duplicate with real jobs on
+ *  it would orphan them, so those get folded into the kept record instead).
+ *  returns: { ok: true } | { ok: false, error } */
+async function saaCalMergeCustomers(fromId, toId) {
+  try {
+    if (fromId === toId) return { ok: false, error: "Can't merge a customer into itself." };
+    const tables = ["jobs", "quotes", "invoices", "equipment", "payments", "customer_memberships"];
+    for (const t of tables) {
+      const { error } = await _saaClient.from(t).update({ customer_id: toId }).eq("customer_id", fromId);
+      if (error) throw error;
+    }
+    const { error: delErr } = await _saaClient.from("customers").delete().eq("id", fromId);
+    if (delErr) throw delErr;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
 }
 
 /**

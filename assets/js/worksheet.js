@@ -245,6 +245,90 @@ function renderFlatPriceTable(mountEl, rows) {
 }
 
 /* ============================================================
+   Bill of Material auto-derivation (round 12 redesign, 2026-09-13)
+   "Itemized Bill of material should be printed from change worksheets
+   that are included for that job or quotation" -- rather than a
+   freeform manually-typed list, the BOM page (bom-db.js/bom.html)
+   reconstructs the qty+unit list straight from a saved quote's own
+   form_state, using the exact same row keys (`${mountId}__qty__${i}`,
+   `${mountId}__included__${i}`) that saaSerializeFormState captured
+   when the quote was last saved -- so the BOM always matches whatever
+   is currently toggled on in that quote's worksheets, with no separate
+   snapshot to fall out of sync. Needs pricing-data.js loaded for the
+   *_MATERIALS/*_ITEMS/DRAINPAN_ROWS source arrays (item name + unit
+   aren't themselves stored in form_state, only which row index is
+   included and at what qty).
+   No cost is included anywhere in this — per "no need to populate
+   cost, just populate qty and unit in order form". */
+function saaDeriveBomItemsFromFormState(formState, quoteType) {
+  formState = formState || {};
+  function rowsFromSpec(mountId, rows, opts) {
+    opts = opts || {};
+    if (opts.enabledIf) {
+      const gate = formState[opts.enabledIf];
+      if (!gate || !gate.c) return [];
+    }
+    const out = [];
+    (rows || []).forEach((src, idx) => {
+      const incState = formState[`${mountId}__included__${idx}`];
+      const included = incState ? !!incState.c : (src.included !== false);
+      if (!included) return;
+      if (opts.excludeCategories && opts.excludeCategories.includes(src.category)) return;
+      const qtyState = formState[`${mountId}__qty__${idx}`];
+      const qty = qtyState ? (parseFloat(qtyState.v) || 0) : (src.qty || 0);
+      if (!src.item || qty <= 0) return;
+      out.push({ description: src.item, unit: src.unit || "", qty });
+    });
+    return out;
+  }
+  function flatToggle(toggleId, description, unit) {
+    const st = formState[toggleId];
+    return (st && st.c) ? [{ description, unit: unit || "EA", qty: 1 }] : [];
+  }
+  // NOTE: pricing-data.js declares these with top-level `const`, which
+  // creates a global lexical binding but NOT a `window.X` property -- so
+  // this reads the bare identifiers directly (safe: emp_page() always
+  // loads pricing-data.js before worksheet.js, and by the time this
+  // function actually runs, later, both scripts have long since finished
+  // executing) rather than checking `typeof window[name]`, which would
+  // always read as undefined and silently return an empty item list.
+  let items = [];
+  if (quoteType === "repair") {
+    items = items.concat(
+      rowsFromSpec("detail-rep-condenser", typeof REPAIR_CONDENSER_ITEMS !== "undefined" ? REPAIR_CONDENSER_ITEMS : [], { enabledIf: "tgl-rep-condenser" }),
+      rowsFromSpec("detail-rep-fancoil", typeof REPAIR_FANCOIL_ITEMS !== "undefined" ? REPAIR_FANCOIL_ITEMS : [], { enabledIf: "tgl-rep-fancoil" }),
+      rowsFromSpec("detail-rep-furnace", typeof REPAIR_FURNACE_ITEMS !== "undefined" ? REPAIR_FURNACE_ITEMS : [], { enabledIf: "tgl-rep-furnace" })
+    );
+  } else {
+    items = items.concat(
+      rowsFromSpec("detail-condenser", typeof CONDENSER_MATERIALS !== "undefined" ? CONDENSER_MATERIALS : [], { enabledIf: "tgl-condenser" }),
+      rowsFromSpec("detail-coil", typeof COIL_MATERIALS !== "undefined" ? COIL_MATERIALS : [], { enabledIf: "tgl-coil" }),
+      rowsFromSpec("detail-furnace", typeof FURNACE_MATERIALS !== "undefined" ? FURNACE_MATERIALS : [], { enabledIf: "tgl-furnace" }),
+      rowsFromSpec("detail-drainpan", typeof DRAINPAN_ROWS !== "undefined" ? DRAINPAN_ROWS : [], { enabledIf: "tgl-drainpan", excludeCategories: ["Labor"] })
+    );
+  }
+  items = items.concat(flatToggle("tgl-thermostat", "Thermostat", "EA"));
+  return items;
+}
+
+/** Shows a small read-only note under the intake card listing any items
+ *  that were added on the Bill of Material page for this quote (see
+ *  saaBomAddItem in bom-db.js, which mirrors a manually-added item into
+ *  the quote's own form_state as "_bomExtras") — "update worksheets if
+ *  needed after bill of material update" (round 12 redesign, 2026-09-13).
+ *  No-op quietly if the page has no #bom-extras-note element. */
+function saaRenderBomExtrasNote(formState) {
+  const note = document.getElementById("bom-extras-note");
+  if (!note) return;
+  const extras = formState && Array.isArray(formState._bomExtras) ? formState._bomExtras : [];
+  if (!extras.length) { note.hidden = true; return; }
+  note.hidden = false;
+  note.innerHTML = "Added from Bill of Material page: " + extras.map((e) =>
+    `${e.qty || 1} ${e.unit || "ea"} &times; ${String(e.description || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}`
+  ).join(", ");
+}
+
+/* ============================================================
    Generic whole-page form-state capture/restore, used by the
    Save Quote / Retrieve Quote feature on the New Installation and
    Replacement pages. Every input/select on the page that has an

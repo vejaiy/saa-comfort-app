@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dashboard | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260913m">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260913n">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260913m"></script>
-<script src="../assets/js/supabase-config.js?v=20260913m"></script>
-<script src="../assets/js/auth.js?v=20260913m"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260913n"></script>
+<script src="../assets/js/supabase-config.js?v=20260913n"></script>
+<script src="../assets/js/auth.js?v=20260913n"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -40,6 +40,7 @@
         <option value="maintenance-plan.html">Maintenance Plan</option>
         <option value="custom-solutions.html">Custom HVAC Solutions</option>
         <option value="jobs.html">Jobs</option>
+        <option value="bill-of-material.html">Bill of Material</option>
         <option value="mileage.html">Mileage</option>
         <option value="instruction-manual.html">Instruction Manual</option>
         <option value="tool-list.html">Tool List</option>
@@ -74,11 +75,19 @@
   </div>
 </div>
 
-<a class="card category-card" href="jobs.html" style="display:flex;align-items:center;gap:18px;text-decoration:none;margin-bottom:28px">
+<a class="card category-card" href="jobs.html" style="display:flex;align-items:center;gap:18px;text-decoration:none;margin-bottom:14px">
   <div class="icon-wrap" style="flex:0 0 auto;font-size:26px">🗂️</div>
   <div>
     <h3 style="margin-bottom:2px">Jobs</h3>
     <p class="muted" style="margin:0">Every job's full record — customer, equipment, diagnosis, quote, actual cost, invoice, and payments.</p>
+  </div>
+</a>
+
+<a class="card category-card" href="bill-of-material.html" style="display:flex;align-items:center;gap:18px;text-decoration:none;margin-bottom:28px">
+  <div class="icon-wrap" style="flex:0 0 auto;font-size:26px">🧰</div>
+  <div>
+    <h3 style="margin-bottom:2px">Bill of Material</h3>
+    <p class="muted" style="margin:0">Itemized parts list for a job, pulled straight from whatever's toggled on in its quote — print it or turn it into a shop order.</p>
   </div>
 </a>
 
@@ -166,8 +175,8 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260913m"></script>
-<script src="../assets/js/worksheet.js?v=20260913m"></script>
+<script src="../assets/js/pricing-data.js?v=20260913n"></script>
+<script src="../assets/js/worksheet.js?v=20260913n"></script>
 
 </body>
 </html>

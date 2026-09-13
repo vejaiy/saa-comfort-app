@@ -683,17 +683,122 @@ function saaCalRenderCustResults(results, query) {
     if (warrantyLine) metaParts.push("Warranty: " + warrantyLine);
     const addrLine = [c.billing_address, [c.billing_city, c.billing_zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
     return `<div class="cal-cust-result" data-idx="${i}">
-      <div class="name">${_saaCalEsc(lastFirst)}</div>
-      ${addrLine ? `<div class="addr">${_saaCalEsc(addrLine)}</div>` : ""}
-      ${c.phone ? `<div class="phone">${_saaCalEsc(saaFormatPhone(c.phone))}</div>` : ""}
-      ${metaParts.length ? `<div class="svc-meta">${_saaCalEsc(metaParts.join(" · "))}</div>` : ""}
+      <div class="cal-cust-result-main" data-idx="${i}">
+        <div class="name">${_saaCalEsc(lastFirst)}</div>
+        ${addrLine ? `<div class="addr">${_saaCalEsc(addrLine)}</div>` : ""}
+        ${c.phone ? `<div class="phone">${_saaCalEsc(saaFormatPhone(c.phone))}</div>` : ""}
+        ${metaParts.length ? `<div class="svc-meta">${_saaCalEsc(metaParts.join(" · "))}</div>` : ""}
+      </div>
+      <div class="cal-cust-result-actions">
+        <button type="button" class="btn btn-ghost btn-sm cal-cust-edit-btn" data-idx="${i}" title="Edit customer information">✎ Edit</button>
+        <button type="button" class="btn btn-ghost btn-sm cal-cust-del-btn" data-idx="${i}" title="Delete this customer">🗑 Delete</button>
+      </div>
+      <div class="cal-cust-edit-form" id="ns-cust-edit-${i}" hidden></div>
     </div>`;
   }).join("") + addNewHtml;
   box.hidden = false;
   document.getElementById("ns-add-new-cust").addEventListener("click", () => saaCalOpenNewCustomerForm(query));
-  box.querySelectorAll(".cal-cust-result[data-idx]").forEach((el) => {
+  box.querySelectorAll(".cal-cust-result-main[data-idx]").forEach((el) => {
     el.addEventListener("click", () => saaCalSelectCustomer(results[parseInt(el.dataset.idx, 10)]));
   });
+  box.querySelectorAll(".cal-cust-edit-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      saaCalToggleEditCustomerForm(results, parseInt(btn.dataset.idx, 10), query);
+    });
+  });
+  box.querySelectorAll(".cal-cust-del-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      saaCalDeleteCustomerFlow(results, parseInt(btn.dataset.idx, 10), query);
+    });
+  });
+}
+
+/** "✎ Edit" on a New Service popup search result — expands an inline
+ *  mini-form (First/Last/Phone/Address/City/ZIP) beneath that row so the
+ *  office can fix a customer's info on the spot instead of leaving it
+ *  wrong forever (round 12 follow-up, 2026-09-13). Saving re-runs the
+ *  search so the row (and anywhere else it matters) reflects the edit. */
+function saaCalToggleEditCustomerForm(results, idx, query) {
+  const r = results[idx];
+  const c = r.customer;
+  const form = document.getElementById(`ns-cust-edit-${idx}`);
+  if (!form) return;
+  if (!form.hidden) { form.hidden = true; return; }
+  form.hidden = false;
+  form.innerHTML = `
+    <div class="field-row">
+      <div class="field"><label>First name</label><input type="text" class="ce-first" value="${_saaCalEsc(c.first_name || "")}"></div>
+      <div class="field"><label>Last name</label><input type="text" class="ce-last" value="${_saaCalEsc(c.last_name || "")}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Phone</label><input type="tel" class="ce-phone" value="${_saaCalEsc(c.phone ? saaFormatPhone(c.phone) : "")}"></div>
+      <div class="field"><label>Address</label><input type="text" class="ce-address" value="${_saaCalEsc(c.billing_address || "")}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>City</label><input type="text" class="ce-city" value="${_saaCalEsc(c.billing_city || "")}"></div>
+      <div class="field"><label>ZIP</label><input type="text" class="ce-zip" value="${_saaCalEsc(c.billing_zip || "")}"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:2px">
+      <button type="button" class="btn btn-navy btn-sm ce-save-btn">Save Changes</button>
+      <button type="button" class="btn btn-ghost btn-sm ce-cancel-btn">Cancel</button>
+      <span class="muted ce-status" style="font-size:.8rem"></span>
+    </div>`;
+  saaAttachPhoneMask(form.querySelector(".ce-phone"));
+  form.querySelector(".ce-cancel-btn").addEventListener("click", (e) => { e.stopPropagation(); form.hidden = true; });
+  form.querySelector(".ce-save-btn").addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const status = form.querySelector(".ce-status");
+    status.textContent = "Saving…";
+    const res = await saaCalUpdateCustomer(c.id, {
+      firstName: form.querySelector(".ce-first").value.trim(),
+      lastName: form.querySelector(".ce-last").value.trim(),
+      phone: form.querySelector(".ce-phone").value.trim(),
+      address: form.querySelector(".ce-address").value.trim(),
+      city: form.querySelector(".ce-city").value.trim(),
+      zip: form.querySelector(".ce-zip").value.trim(),
+    });
+    if (!res.ok) { status.textContent = "Error: " + res.error; return; }
+    document.getElementById("ns-cust-search").dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+/** "🗑 Delete" on a New Service popup search result. A customer with any
+ *  jobs/quotes/invoices/equipment on file can't be deleted outright (see
+ *  saaCalDeleteCustomer) — offer to merge it into another customer record
+ *  instead, which is the actual fix for real duplicate customers rather
+ *  than just refusing the delete (round 12 follow-up, 2026-09-13). */
+async function saaCalDeleteCustomerFlow(results, idx, query) {
+  const c = results[idx].customer;
+  const name = saaCalCustName(c) || "this customer";
+  const ok = await saaConfirm(`Delete ${name}? This can't be undone.`, { title: "Delete customer", okLabel: "Delete" });
+  if (!ok) return;
+  const res = await saaCalDeleteCustomer(c.id);
+  if (res.ok) {
+    document.getElementById("ns-cust-search").dispatchEvent(new Event("input", { bubbles: true }));
+    return;
+  }
+  if (!res.blocked) { await saaConfirm(res.error, { title: "Couldn't delete", okLabel: "OK", cancelLabel: "OK" }); return; }
+  const wantsMerge = await saaConfirm(
+    `${res.error}\n\nIf this is a duplicate of another customer already on file, you can merge its records into that other customer instead (this one is then removed).`,
+    { title: "Can't delete — merge instead?", okLabel: "Merge Into Another Customer…", cancelLabel: "Cancel" }
+  );
+  if (!wantsMerge) return;
+  const targetQuery = window.prompt(`Type the name or phone number of the customer to merge "${name}" into:`, "");
+  if (!targetQuery || !targetQuery.trim()) return;
+  const matches = await saaCalSearchCustomers(targetQuery.trim());
+  const candidates = matches.map((m) => m.customer).filter((m) => m.id !== c.id);
+  if (!candidates.length) { await saaConfirm("No other customer matched that search.", { title: "Merge cancelled", okLabel: "OK", cancelLabel: "OK" }); return; }
+  const target = candidates[0];
+  const proceed = await saaConfirm(
+    `Merge "${name}" into "${saaCalCustName(target)}" (${target.phone ? saaFormatPhone(target.phone) : "no phone"})? All of "${name}"'s jobs, quotes, invoices, and equipment move to "${saaCalCustName(target)}", and "${name}" is then removed.`,
+    { title: "Confirm merge", okLabel: "Merge" }
+  );
+  if (!proceed) return;
+  const mergeRes = await saaCalMergeCustomers(c.id, target.id);
+  if (!mergeRes.ok) { await saaConfirm("Error: " + mergeRes.error, { title: "Merge failed", okLabel: "OK", cancelLabel: "OK" }); return; }
+  document.getElementById("ns-cust-search").dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 function saaCalSelectCustomer(result) {

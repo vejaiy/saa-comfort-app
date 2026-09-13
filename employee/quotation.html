@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quotation | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260913m">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260913n">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260913m"></script>
-<script src="../assets/js/supabase-config.js?v=20260913m"></script>
-<script src="../assets/js/auth.js?v=20260913m"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260913n"></script>
+<script src="../assets/js/supabase-config.js?v=20260913n"></script>
+<script src="../assets/js/auth.js?v=20260913n"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -40,6 +40,7 @@
         <option value="maintenance-plan.html">Maintenance Plan</option>
         <option value="custom-solutions.html">Custom HVAC Solutions</option>
         <option value="jobs.html">Jobs</option>
+        <option value="bill-of-material.html">Bill of Material</option>
         <option value="mileage.html">Mileage</option>
         <option value="instruction-manual.html">Instruction Manual</option>
         <option value="tool-list.html">Tool List</option>
@@ -72,6 +73,11 @@
     <div class="field"><label>Phone number</label><input type="tel" id="q-phone" placeholder="XXX-XXX-XXXX" maxlength="12"></div>
     <div class="field"><label>Job address</label><input type="text" id="q-address"></div>
   </div>
+  <div class="field-row field-row-3">
+    <div class="field"><label>City</label><input type="text" id="q-city"></div>
+    <div class="field" style="max-width:110px"><label>State</label><input type="text" id="q-state" value="TX" maxlength="2" style="text-transform:uppercase"></div>
+    <div class="field"><label>ZIP</label><input type="text" id="q-zip"></div>
+  </div>
   <div class="field-row">
     <div class="field" style="max-width:220px"><label>Quote date</label><input type="text" id="q-date"></div>
     <div class="field" style="max-width:220px"><label>Quote #</label><input type="text" id="q-number" readonly placeholder="Assigned when saved" style="background:#f3f5f7;color:var(--muted)"></div>
@@ -91,6 +97,7 @@
     <span id="save-status" class="muted" style="font-size:.85rem"></span>
   </div>
 </div>
+<div class="muted" id="bom-extras-note" style="font-size:.85rem;margin:-12px 0 18px" hidden></div>
 
 <div class="modal-overlay" id="retrieve-modal" hidden>
   <div class="modal-card">
@@ -198,6 +205,15 @@
 </div>
 
 <div class="toggle-row">
+  <div class="meta"><div class="name">Thermostat</div><div class="desc">Supply and install a new smart/programmable thermostat.</div></div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="muted" style="font-size:.82rem">$</span>
+    <input type="number" id="price-thermostat" value="249" style="width:90px" step="any">
+  </div>
+  <label class="switch"><input type="checkbox" id="tgl-thermostat" ><span class="slider"></span></label>
+</div>
+
+<div class="toggle-row">
   <div class="meta"><div class="name">Equipment/Refrigerant Disposal Fee</div><div class="desc">Disposal of old condenser, coil, furnace, and recovered refrigerant per county requirements.</div></div>
   <div style="display:flex;gap:8px;align-items:center">
     <span class="muted" style="font-size:.82rem">$</span>
@@ -255,12 +271,12 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260913m"></script>
-<script src="../assets/js/worksheet.js?v=20260913m"></script>
-<script src="../assets/js/labor-widget.js?v=20260913m"></script>
-<script src="../assets/js/plenum-widget.js?v=20260913m"></script>
-<script src="../assets/js/print-quote.js?v=20260913m"></script>
-<script src="../assets/js/quotes-db.js?v=20260913m"></script>
+<script src="../assets/js/pricing-data.js?v=20260913n"></script>
+<script src="../assets/js/worksheet.js?v=20260913n"></script>
+<script src="../assets/js/labor-widget.js?v=20260913n"></script>
+<script src="../assets/js/plenum-widget.js?v=20260913n"></script>
+<script src="../assets/js/print-quote.js?v=20260913n"></script>
+<script src="../assets/js/quotes-db.js?v=20260913n"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
   saaAttachPhoneMask(document.getElementById('q-phone'));
@@ -305,11 +321,7 @@
 
   // ---- Additional-change detail worksheets ----
   const plenumWidget = initPlenumWidget(document.getElementById('detail-plenum'));
-  const drainpanRows = DRAINPAN_MATERIALS.concat([
-    { category: "Labor", item: "Installation labor (1 technician)", unit: "HR",
-      qty: DRAINPAN_LABOR.techs * DRAINPAN_LABOR.hours, price: DRAINPAN_LABOR.rate, included: true }
-  ]);
-  const drainpanDetail = renderLineItemTable(document.getElementById('detail-drainpan'), drainpanRows, { showGroupSubtotals: false });
+  const drainpanDetail = renderLineItemTable(document.getElementById('detail-drainpan'), DRAINPAN_ROWS, { showGroupSubtotals: false });
 
   // ---- Labor widget ----
   const laborWidget = initLaborWidget(document.getElementById('labor-widget'));
@@ -327,6 +339,7 @@
     const drainpanOn = document.getElementById('tgl-drainpan').checked;
     const relocateOn = document.getElementById('tgl-relocate').checked;
     const uvOn = document.getElementById('tgl-uv').checked;
+    const thermostatOn = document.getElementById('tgl-thermostat').checked;
     const disposalOn = document.getElementById('tgl-disposal').checked;
     const permitOn = document.getElementById('tgl-permit').checked;
     const otherOn = document.getElementById('tgl-other').checked;
@@ -365,6 +378,7 @@
 
     const relocatePrice = parseFloat(document.getElementById('price-relocate').value) || 0;
     const uvPrice = parseFloat(document.getElementById('price-uv').value) || 0;
+    const thermostatPrice = parseFloat(document.getElementById('price-thermostat').value) || 0;
     const disposalPrice = parseFloat(document.getElementById('price-disposal').value) || 0;
     const permitPrice = parseFloat(document.getElementById('price-permit').value) || 0;
     const otherPrice = parseFloat(document.getElementById('price-other').value) || 0;
@@ -377,6 +391,7 @@
     if (drainpanOn) grandTotal += drainpanTotal;
     if (relocateOn) grandTotal += relocatePrice;
     if (uvOn) grandTotal += uvPrice;
+    if (thermostatOn) grandTotal += thermostatPrice;
     if (disposalOn) grandTotal += disposalPrice;
     if (permitOn) grandTotal += permitPrice;
     if (otherOn) grandTotal += otherPrice;
@@ -424,6 +439,7 @@
       if (drainpanOn) lineItems.push({ name: 'Secondary Drainpan & Float Switch', price: drainpanTotal });
       if (relocateOn) lineItems.push({ name: 'Relocate Furnace and Coil', price: relocatePrice });
       if (uvOn) lineItems.push({ name: 'UV Light Air Purifier', price: uvPrice });
+      if (thermostatOn) lineItems.push({ name: 'Thermostat', price: thermostatPrice });
       if (disposalOn) lineItems.push({ name: 'Equipment/Refrigerant Disposal Fee', desc: 'Disposal of old condenser, coil, furnace, and recovered refrigerant per county requirements.', price: disposalPrice });
       if (permitOn) lineItems.push({ name: 'Permit & Inspection Fee', desc: 'Mechanical permit application and required inspection scheduling for the applicable jurisdiction.', price: permitPrice });
       if (otherOn && otherPrice > 0) lineItems.push({ name: otherName || 'Additional Item', desc: otherDesc, price: otherPrice });
@@ -446,6 +462,9 @@
         customer: [firstName, lastName].filter(Boolean).join(' '),
         phone: document.getElementById('q-phone').value.trim(),
         address: document.getElementById('q-address').value,
+        city: document.getElementById('q-city').value.trim(),
+        state: document.getElementById('q-state').value.trim().toUpperCase(),
+        zip: document.getElementById('q-zip').value.trim(),
         date: document.getElementById('q-date').value,
         quoteNumber: document.getElementById('q-number').value,
         lineItems: lineItems,
@@ -501,6 +520,9 @@
       lastName: quote.lastName,
       phone: quote.phone,
       jobAddress: quote.address,
+      city: quote.city,
+      state: quote.state,
+      zip: quote.zip,
       total: quote.grandTotal,
       materialCost: quote.materialCost,
       laborCost: quote.laborCost,
@@ -555,6 +577,7 @@
         const loaded = await saaLoadQuote(quoteId);
         if (!loaded.ok) { status.textContent = 'Error: ' + loaded.error; return; }
         if (loaded.quote.form_state) saaApplyFormState(loaded.quote.form_state);
+        saaRenderBomExtrasNote(loaded.quote.form_state);
         _saaCurrentQuoteId = loaded.quote.id;
         document.getElementById('q-number').value = loaded.quote.quote_number || '';
         if (loaded.quote.quote_type && [...quoteTypeSelect.options].some(o => o.value === loaded.quote.quote_type)) {

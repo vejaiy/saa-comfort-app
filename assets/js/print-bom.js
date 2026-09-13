@@ -67,26 +67,21 @@ function _saaBomPrintHeader(info) {
   <div class="rule"></div>`;
 }
 
-/** Builds the shared items table body + grand total for both documents. */
+/** Builds the shared items table body for both documents. Round 12
+ *  redesign (2026-09-13): "no need to populate cost, just populate qty
+ *  and unit in order form which will be showed to shop to pull
+ *  materials from shelf" -- neither document shows cost/pricing at all
+ *  anymore, just what to pull and how many. */
 function _saaBomItemsTable(items) {
   const rows = (items || []).map((it) => {
     const qty = Number(it.quantity != null ? it.quantity : it.qty) || 0;
-    const cost = it.unit_cost != null ? Number(it.unit_cost) : (it.actual_unit_cost != null ? Number(it.actual_unit_cost) : null);
-    const lineTotal = cost != null ? qty * cost : null;
     return `<tr>
-      <td>${_saaBomPrintEsc(it.description || "")}</td>
+      <td>${_saaBomPrintEsc(it.description || "")}${it.manual ? ' <span class="muted" style="font-size:.72rem">(added)</span>' : ""}</td>
       <td class="num">${qty || ""}</td>
       <td>${_saaBomPrintEsc(it.unit || "ea")}</td>
-      <td class="num">${cost != null ? fmtMoney(cost) : ""}</td>
-      <td class="num">${lineTotal != null ? fmtMoney(lineTotal) : ""}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="5" class="muted">No items listed.</td></tr>`;
-  const total = (items || []).reduce((s, it) => {
-    const qty = Number(it.quantity != null ? it.quantity : it.qty) || 0;
-    const cost = Number(it.unit_cost != null ? it.unit_cost : it.actual_unit_cost) || 0;
-    return s + qty * cost;
-  }, 0);
-  return { rows, total };
+  }).join("") || `<tr><td colspan="3" class="muted">No items listed.</td></tr>`;
+  return { rows };
 }
 
 /**
@@ -94,7 +89,7 @@ function _saaBomItemsTable(items) {
  */
 function printBillOfMaterial(opts) {
   const info = SAA_BOM_INFO;
-  const { rows, total } = _saaBomItemsTable(opts.items);
+  const { rows } = _saaBomItemsTable(opts.items);
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -123,11 +118,9 @@ function printBillOfMaterial(opts) {
   ${opts.jobTitle ? `<div class="meta-row"><div class="meta-box"><div class="label">Job</div><div class="val">${_saaBomPrintEsc(opts.jobTitle)}</div></div></div>` : ""}
 
   <table class="items">
-    <thead><tr><th>Description</th><th class="num">Qty</th><th>Unit</th><th class="num">Unit Cost</th><th class="num">Line Total</th></tr></thead>
+    <thead><tr><th>Description</th><th class="num">Qty</th><th>Unit</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
-
-  <div class="summary"><div class="summary-row total"><span>Estimated Total</span><span>${fmtMoney(total)}</span></div></div>
 
   <div class="footer">
     <div>${info.name} &mdash; Bill of Material ${_saaBomPrintEsc(opts.bomNumber)}</div>
@@ -152,7 +145,7 @@ function printBillOfMaterial(opts) {
  */
 function printBomOrderForm(opts) {
   const info = SAA_BOM_INFO;
-  const { rows, total } = _saaBomItemsTable(opts.items);
+  const { rows } = _saaBomItemsTable(opts.items);
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -182,11 +175,9 @@ function printBomOrderForm(opts) {
   </div>
 
   <table class="items">
-    <thead><tr><th>Description</th><th class="num">Qty</th><th>Unit</th><th class="num">Unit Cost</th><th class="num">Line Total</th></tr></thead>
+    <thead><tr><th>Description</th><th class="num">Qty</th><th>Unit</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
-
-  <div class="summary"><div class="summary-row total"><span>Order Total</span><span>${fmtMoney(total)}</span></div></div>
 
   <div class="footer">
     <div>${info.name} &mdash; Order ${_saaBomPrintEsc(opts.orderNumber)}</div>

@@ -67,6 +67,9 @@ const CONDENSER_MATERIALS = [
   { group: "MATERIALS",   category: "Electrical",   item: "Wire nuts / tape / anti-oxidant compound", unit: "Bag", qty: 1, price: 15, spec: "UL-listed connectors, anti-oxidant paste", notes: "Electrical connection finishing, incl. aluminum whip prep.", included: true },
   { group: "MATERIALS",   category: "Equipment",    item: "Liquid-line filter drier", unit: "EA", qty: 1, price: 50, spec: "Sized to line OD and system tonnage", notes: "Replaced any time the system is opened; mandatory after contamination/burnout.", included: true },
   { group: "MATERIALS",   category: "Refrigeration", item: "Rx11 Flush (Nu-Calgon 4300-30, 19.5oz)", unit: "EA", qty: 1, price: 62.63, spec: "Nu-Calgon 4300-30, non-flammable, non-toxic, 19.5 fl oz can", notes: "Flushes the existing line set/coil of old oil and contaminants before charging the new condenser — added 2026-09-13 per Vijayan's request; price from SupplyHouse.", included: true },
+  { group: "MATERIALS",   category: "Drainage",     item: "Armaflex insulation — drain line, 1/2\" wall x 3/4\" O.D., 6ft stick", unit: "EA", qty: 1, price: 9.97, spec: "K-Flex Insul-Lock DS Overlap, 3/4\" Pipe (O.D.) x 1/2\" Wall, closed-cell elastomeric foam (Armaflex-equivalent)", notes: "Insulates the condensate drain line — added 2026-09-13 per Vijayan's request; price from SupplyHouse (K-Flex 6RXLO048068).", included: true },
+  { group: "MATERIALS",   category: "Refrigeration", item: "Armaflex insulation — suction line, 1\" wall, 1\" nominal, 6ft stick", unit: "EA", qty: 1, price: 27.60, spec: "K-Flex Insul-Lock, 1-1/8\" Pipe (O.D.) x 1\" Wall, closed-cell elastomeric foam (Armaflex-equivalent) — sized to the actual 1-1/8\" O.D. of 1\" nominal copper refrigeration tube", notes: "Insulates the suction line — added 2026-09-13 per Vijayan's request; price from SupplyHouse (K-Flex 6RXL100118).", included: true },
+  { group: "MATERIALS",   category: "Refrigeration", item: "Armaflex insulation — liquid line, 1/2\" wall x 3/8\" O.D., 6ft stick", unit: "EA", qty: 1, price: 6.78, spec: "K-Flex Insul-Lock DS Overlap, 3/8\" Pipe (O.D.) x 1/2\" Wall, closed-cell elastomeric foam (Armaflex-equivalent)", notes: "Insulates the liquid line — added 2026-09-13 per Vijayan's request; price from SupplyHouse (K-Flex 6RXLO048038).", included: true },
   { group: "ACCESSORIES", category: "Accessory",    item: "Hard start kit", unit: "EA", qty: 0, price: 60, spec: "Single-phase, sized to compressor RLA", notes: "Reduces compressor inrush current; recommended on long line runs or weak supply.", included: false },
   { group: "ACCESSORIES", category: "Accessory",    item: "Whole-unit surge protector", unit: "EA", qty: 0, price: 80, spec: "Line-side, condenser-rated", notes: "Protects condenser electronics from grid/storm surges.", included: false },
   { group: "ACCESSORIES", category: "Accessory",    item: "Low-ambient control kit", unit: "EA", qty: 0, price: 70, spec: "Fan-cycling switch or head-pressure control", notes: "Enables reliable operation below manufacturer's rated ambient minimum.", included: false },
@@ -212,6 +215,15 @@ const DRAINPAN_MATERIALS = [
   { category: "Equipment Support", item: "Base/support platform", unit: "EA", qty: 1, price: 75, notes: "Wood/metal/composite support as required", included: true },
 ];
 const DRAINPAN_LABOR = { techs: 1, hours: 2, rate: 30 };
+/* Same concatenation gen_master.py builds for the Drainpan worksheet table
+   (DRAINPAN_MATERIALS + its one labor row) -- pulled out to a shared
+   constant so the Bill of Material page's auto-derivation (bom-db.js)
+   reconstructs the exact same row order/indices from a saved quote's
+   form_state without duplicating this list (round 12 redesign, 2026-09-13). */
+const DRAINPAN_ROWS = DRAINPAN_MATERIALS.concat([
+  { category: "Labor", item: "Installation labor (1 technician)", unit: "HR",
+    qty: DRAINPAN_LABOR.techs * DRAINPAN_LABOR.hours, price: DRAINPAN_LABOR.rate, included: true }
+]);
 
 /* ---- Drainline Maintenance: routine cleaning service (source rows 21-34, single price col) ---- */
 const DRAIN_MAINT_ITEMS = [

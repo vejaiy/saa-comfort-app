@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bill of Material | Employee | SAA Comfort Air LLC</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260913n">
+
+<style>body.emp-shell{visibility:hidden}</style>
+</head>
+<body class="emp-shell">
+<script src="../assets/js/vendor/supabase.js?v=20260913n"></script>
+<script src="../assets/js/supabase-config.js?v=20260913n"></script>
+<script src="../assets/js/auth.js?v=20260913n"></script>
+<script>saaRequireAuth();</script>
+<header class="emp-header">
+  <div class="container">
+    <div>
+      <a class="brand" href="dashboard.html" style="font-size:1rem">
+        <span class="mark" style="width:34px;height:34px;font-size:.62rem;letter-spacing:-0.3px">SAA</span>
+        <span>Employee Tools</span>
+      </a>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select onchange="if(this.value) window.location.href=this.value" style="width:auto;min-width:170px">
+        <option value="">Jump to page&hellip;</option>
+        <option value="dashboard.html">Dashboard</option>
+        <option value="calendar.html">Dispatch Calendar</option>
+        <option value="quotation.html">Quotation</option>
+        <option value="repair.html">Repair</option>
+        <option value="condenser-change.html">Condenser Change</option>
+        <option value="coil-change.html">Coil Change</option>
+        <option value="furnace-change.html">Furnace Change</option>
+        <option value="plenum-change.html">Plenum Change</option>
+        <option value="drainline-maintenance.html">Drainline Maintenance</option>
+        <option value="duct-cleaning.html">Duct Cleaning</option>
+        <option value="labor.html">Labor</option>
+        <option value="inspection.html">Inspection / QC</option>
+        <option value="maintenance-plan.html">Maintenance Plan</option>
+        <option value="custom-solutions.html">Custom HVAC Solutions</option>
+        <option value="jobs.html">Jobs</option>
+        <option value="bill-of-material.html" selected>Bill of Material</option>
+        <option value="mileage.html">Mileage</option>
+        <option value="instruction-manual.html">Instruction Manual</option>
+        <option value="tool-list.html">Tool List</option>
+        <option value="receipts.html">Receipts</option>
+      </select>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Dashboard</a>
+      <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
+      <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
+    </div>
+  </div>
+</header>
+<main class="container" style="padding:26px 20px 60px">
+
+<div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Bill of Material</div>
+<div class="page-title-row"><h1>Bill of Material</h1><a class="page-close-btn" href="dashboard.html" title="Close" aria-label="Close">&times;</a></div>
+<div class="note-box blue">Pulls its itemized list straight from whichever change-worksheet materials are toggled on in the job's quote — nothing to retype. Add anything the quote missed below; it's saved to this job and folded back into the quotation. Print the list for the shop, or raise it as an Order.</div>
+
+<div class="card" style="margin-bottom:20px">
+  <div class="field cal-cust-search-wrap" style="margin-bottom:0">
+    <label>Find a job</label>
+    <input type="text" id="bom-search" placeholder="Job #, customer name, or phone&hellip;" autocomplete="off">
+    <div class="cal-cust-results" id="bom-search-results" hidden></div>
+  </div>
+</div>
+
+<div id="bom-job-card" hidden>
+  <div class="card" style="margin-bottom:20px">
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div>
+        <h3 style="margin-bottom:2px" id="bom-job-title"></h3>
+        <div class="job-num" id="bom-job-num"></div>
+      </div>
+      <div style="text-align:right">
+        <div id="bom-job-cust" style="font-weight:700"></div>
+        <div class="muted" id="bom-job-addr" style="font-size:.85rem"></div>
+      </div>
+    </div>
+    <div class="muted" id="bom-quote-line" style="font-size:.85rem;margin-top:8px"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <h3 style="margin-bottom:10px">Itemized Materials</h3>
+    <div class="worksheet-wrap">
+      <table class="worksheet">
+        <thead><tr><th>Description</th><th>Unit</th><th>Qty</th><th></th></tr></thead>
+        <tbody id="bom-items-tbody"></tbody>
+      </table>
+    </div>
+    <p class="muted" id="bom-empty-note" style="font-size:.82rem;margin-top:8px" hidden>Nothing toggled on in this job's quote yet — add items below if something's missing.</p>
+
+    <div class="field-row" style="margin-top:16px;align-items:flex-end">
+      <div class="field" style="flex:2"><label>Add item (missed in the quote)</label><input type="text" id="bom-add-desc" placeholder="e.g. Line-set flare nuts"></div>
+      <div class="field" style="max-width:110px"><label>Unit</label><input type="text" id="bom-add-unit" value="EA"></div>
+      <div class="field" style="max-width:90px"><label>Qty</label><input type="number" step="any" id="bom-add-qty" value="1"></div>
+      <button type="button" class="btn btn-ghost btn-sm" id="bom-add-btn" style="margin-bottom:14px">+ Add Item</button>
+    </div>
+    <span id="bom-status" class="muted" style="font-size:.85rem"></span>
+  </div>
+
+  <div class="card">
+    <div class="field" style="max-width:320px"><label>Supplier / Order From</label><input type="text" id="bom-supplier" placeholder="e.g. Ferguson, distributor name"></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+      <button type="button" class="btn btn-ghost btn-sm" id="bom-print-btn">🖨️ Print Bill of Material</button>
+      <button type="button" class="btn btn-navy btn-sm" id="bom-order-btn">📦 Create Order</button>
+    </div>
+    <div class="muted" id="bom-order-status" style="font-size:.85rem;margin-top:8px"></div>
+  </div>
+</div>
+
+</main>
+<script src="../assets/js/pricing-data.js?v=20260913n"></script>
+<script src="../assets/js/worksheet.js?v=20260913n"></script>
+<script src="../assets/js/jobs-db.js?v=20260913n"></script>
+<script src="../assets/js/bom-db.js?v=20260913n"></script>
+<script src="../assets/js/print-bom.js?v=20260913n"></script>
+<script>
+  let _bomJob = null;
+
+  function _bomJobNum(job) {
+    return (job && job.job_number) || ("JOB-" + ((job && job.id) || "").slice(0, 8).toUpperCase());
+  }
+  function _bomCustName(c) {
+    if (!c) return "";
+    return [c.first_name, c.last_name].filter(Boolean).join(" ") || "(no name)";
+  }
+  function _bomEsc(s) {
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function renderBomItems() {
+    const items = saaBomCombinedItems(_bomJob);
+    const tbody = document.getElementById("bom-items-tbody");
+    document.getElementById("bom-empty-note").hidden = items.length > 0;
+    tbody.innerHTML = items.map((it) => `
+      <tr>
+        <td>${_bomEsc(it.description)}${it.manual ? ' <span class="muted" style="font-size:.76rem">(added)</span>' : ''}</td>
+        <td>${_bomEsc(it.unit || 'ea')}</td>
+        <td>${it.qty}</td>
+        <td>${it.manual ? `<button type="button" class="btn btn-ghost btn-sm bom-remove-btn" data-id="${it.id}">Remove</button>` : ''}</td>
+      </tr>`).join("") || `<tr><td colspan="4" class="muted">No items yet.</td></tr>`;
+    tbody.querySelectorAll(".bom-remove-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const res = await saaBomRemoveItem(_bomJob, btn.dataset.id);
+        if (res.ok) renderBomItems();
+      });
+    });
+  }
+
+  function renderBomJob() {
+    const job = _bomJob;
+    document.getElementById("bom-job-card").hidden = false;
+    document.getElementById("bom-job-title").textContent = job.title || saaJobTypeLabel(job.job_type);
+    document.getElementById("bom-job-num").textContent = _bomJobNum(job);
+    document.getElementById("bom-job-cust").textContent = _bomCustName(job.customer);
+    document.getElementById("bom-job-addr").textContent = [job.job_address, job.job_city, job.job_state, job.job_zip].filter(Boolean).join(", ");
+    document.getElementById("bom-quote-line").textContent = job.linkedQuote
+      ? `Linked to Quote ${job.linkedQuote.quote_number || "—"} (${job.linkedQuote.quote_type || ""})`
+      : "No linked quotation — items below come only from what's added manually.";
+    document.getElementById("bom-supplier").value = job.bom_supplier || "";
+    const ordered = job.bom_status === "ordered" && job.bom_order_number;
+    document.getElementById("bom-order-btn").textContent = ordered ? "🖨️ Print Order Form" : "📦 Create Order";
+    document.getElementById("bom-order-status").textContent = ordered
+      ? `Ordered as ${job.bom_order_number}${job.bom_order_date ? " on " + job.bom_order_date : ""} from ${job.bom_supplier || "—"}.`
+      : (job.bom_number ? `Bill of Material ${job.bom_number}` : "");
+    renderBomItems();
+  }
+
+  async function loadJob(job) {
+    document.getElementById("bom-status").textContent = "Loading…";
+    _bomJob = await saaBomFetchJob(job.id);
+    document.getElementById("bom-status").textContent = "";
+    document.getElementById("bom-search").value = `${_bomJobNum(_bomJob)} — ${_bomCustName(_bomJob.customer)}`;
+    document.getElementById("bom-search-results").hidden = true;
+    renderBomJob();
+  }
+
+  let _bomSearchTimer = null;
+  document.getElementById("bom-search").addEventListener("input", (e) => {
+    clearTimeout(_bomSearchTimer);
+    const q = e.target.value.trim();
+    const box = document.getElementById("bom-search-results");
+    if (q.length < 2) { box.hidden = true; return; }
+    _bomSearchTimer = setTimeout(async () => {
+      const results = await saaBomSearchJobs(q);
+      if (!results.length) {
+        box.innerHTML = `<div class="cal-cust-result muted">No matching jobs.</div>`;
+        box.hidden = false;
+        return;
+      }
+      box.innerHTML = results.map((j) => `
+        <div class="cal-cust-result" data-id="${j.id}">
+          <div class="name">${_bomJobNum(j)} &middot; ${saaJobTypeLabel(j.job_type)}</div>
+          <div class="addr">${_bomCustName(j.customer)}${j.customer && j.customer.phone ? " — " + saaFormatPhone(j.customer.phone) : ""}</div>
+        </div>`).join("");
+      box.hidden = false;
+      box.querySelectorAll(".cal-cust-result[data-id]").forEach((el) => {
+        el.addEventListener("click", () => loadJob(results.find((r) => r.id === el.dataset.id)));
+      });
+    }, 200);
+  });
+  document.addEventListener("click", (e) => {
+    const box = document.getElementById("bom-search-results");
+    if (!box.hidden && !e.target.closest(".cal-cust-search-wrap")) box.hidden = true;
+  });
+
+  document.getElementById("bom-add-btn").addEventListener("click", async () => {
+    if (!_bomJob) return;
+    const status = document.getElementById("bom-status");
+    const res = await saaBomAddItem(_bomJob, {
+      description: document.getElementById("bom-add-desc").value,
+      unit: document.getElementById("bom-add-unit").value,
+      qty: document.getElementById("bom-add-qty").value,
+    });
+    if (!res.ok) { status.textContent = "Error: " + res.error; return; }
+    document.getElementById("bom-add-desc").value = "";
+    document.getElementById("bom-add-qty").value = "1";
+    status.textContent = "Item added.";
+    renderBomItems();
+  });
+
+  document.getElementById("bom-print-btn").addEventListener("click", async () => {
+    if (!_bomJob) return;
+    const numRes = await saaBomEnsureNumber(_bomJob);
+    if (!numRes.ok) { document.getElementById("bom-status").textContent = "Error: " + numRes.error; return; }
+    renderBomJob();
+    printBillOfMaterial({
+      bomNumber: _bomJob.bom_number,
+      jobNumber: _bomJobNum(_bomJob),
+      customer: _bomCustName(_bomJob.customer),
+      phone: _bomJob.customer ? _bomJob.customer.phone : "",
+      address: [_bomJob.job_address, _bomJob.job_city, _bomJob.job_state, _bomJob.job_zip].filter(Boolean).join(", "),
+      jobTitle: _bomJob.title || saaJobTypeLabel(_bomJob.job_type),
+      items: saaBomCombinedItems(_bomJob),
+    });
+  });
+
+  document.getElementById("bom-order-btn").addEventListener("click", async () => {
+    if (!_bomJob) return;
+    const supplier = document.getElementById("bom-supplier").value.trim();
+    const orderRes = await saaBomCreateOrder(_bomJob, supplier);
+    if (!orderRes.ok) { document.getElementById("bom-status").textContent = "Error: " + orderRes.error; return; }
+    renderBomJob();
+    printBomOrderForm({
+      orderNumber: _bomJob.bom_order_number,
+      orderDate: _bomJob.bom_order_date,
+      jobNumber: _bomJobNum(_bomJob),
+      quoteNumber: _bomJob.linkedQuote ? _bomJob.linkedQuote.quote_number : null,
+      supplier: _bomJob.bom_supplier,
+      customer: _bomCustName(_bomJob.customer),
+      phone: _bomJob.customer ? _bomJob.customer.phone : "",
+      address: [_bomJob.job_address, _bomJob.job_city, _bomJob.job_state, _bomJob.job_zip].filter(Boolean).join(", "),
+      items: saaBomCombinedItems(_bomJob),
+    });
+  });
+
+  // Deep link from a Job Card's "🧰 Bill of Material" quick action —
+  // ?job=<job number or id> auto-loads that job.
+  (async function initFromQueryString() {
+    const jobParam = new URLSearchParams(location.search).get("job");
+    if (!jobParam) return;
+    const results = await saaBomSearchJobs(jobParam);
+    const match = results.find((j) => j.job_number === jobParam) || results[0];
+    if (match) loadJob(match);
+  })();
+</script>
+</body>
+</html>
