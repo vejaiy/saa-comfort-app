@@ -449,7 +449,12 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
   .cal-type-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
-.cal-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--navy); color: #fff; padding: 10px 18px; border-radius: 8px; font-size: .88rem; box-shadow: var(--shadow); z-index: 60; }
+/* z-index 300: a toast must always sit above .modal-overlay (200) and the
+   Dispatch Calendar drawer (41) — otherwise a toast fired while the Job
+   Card or drawer is open renders invisibly behind it (Round 13 bugfix:
+   this is exactly what made the Job Card's "Calculate Miles" error look
+   like it silently failed — it was firing, just hidden underneath). */
+.cal-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--navy); color: #fff; padding: 10px 18px; border-radius: 8px; font-size: .88rem; box-shadow: var(--shadow); z-index: 300; max-width: 90vw; text-align: center; }
 .cal-toast[hidden] { display: none; }
 
 /* ============ Jobs Master List (jobs.html) ============ */

@@ -587,8 +587,26 @@ async function saaJobsUpdateJob(jobId, fields) {
     if (error) throw error;
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: (e && e.message) || String(e) };
+    return { ok: false, error: _saaJobsFriendlyDbError(e) };
   }
+}
+
+/** Turns a raw Postgres/PostgREST error into something an office user can
+ *  act on, instead of leaking constraint/column internals verbatim (Round
+ *  13: "clearly say what is causing the error"). Same idea as calendar-db.js's
+ *  copy — kept separate since these files aren't always loaded together. */
+function _saaJobsFriendlyDbError(e) {
+  const raw = (e && e.message) || String(e);
+  if (/violates check constraint "jobs_status_check"/.test(raw)) {
+    return "That status isn't valid for a job record. Please try again — if this keeps happening, let the office know.";
+  }
+  if (/violates check constraint/.test(raw)) {
+    return "That value isn't allowed for this field: " + raw.replace(/^.*constraint "/, "").replace(/".*$/, "").replace(/_/g, " ") + ".";
+  }
+  if (/violates foreign key constraint/.test(raw)) {
+    return "That record is linked to other data and can't be changed that way.";
+  }
+  return raw;
 }
 
 /** That customer's saved quotes, for the Job Card's "link a saved

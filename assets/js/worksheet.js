@@ -277,13 +277,13 @@ function saaDeriveBomItemsFromFormState(formState, quoteType) {
       const qtyState = formState[`${mountId}__qty__${idx}`];
       const qty = qtyState ? (parseFloat(qtyState.v) || 0) : (src.qty || 0);
       if (!src.item || qty <= 0) return;
-      out.push({ description: src.item, unit: src.unit || "", qty });
+      out.push({ description: src.item, unit: src.unit || "", qty, section: opts.section || "Other" });
     });
     return out;
   }
-  function flatToggle(toggleId, description, unit) {
+  function flatToggle(toggleId, description, unit, section) {
     const st = formState[toggleId];
-    return (st && st.c) ? [{ description, unit: unit || "EA", qty: 1 }] : [];
+    return (st && st.c) ? [{ description, unit: unit || "EA", qty: 1, section: section || "Other" }] : [];
   }
   // NOTE: pricing-data.js declares these with top-level `const`, which
   // creates a global lexical binding but NOT a `window.X` property -- so
@@ -292,22 +292,29 @@ function saaDeriveBomItemsFromFormState(formState, quoteType) {
   // function actually runs, later, both scripts have long since finished
   // executing) rather than checking `typeof window[name]`, which would
   // always read as undefined and silently return an empty item list.
+  // Each row is tagged with a "section" (Round 13: "categorize bill of
+  // material by condenser, coil and furnace") matching whichever
+  // worksheet it came from -- the repair page's "fan coil" worksheet
+  // maps to the same "Coil" section as the install/replacement page's
+  // indoor coil, since it's the same piece of equipment. Drain pan
+  // materials and the flat Thermostat toggle don't belong to any one
+  // piece of equipment, so they fall into "Other".
   let items = [];
   if (quoteType === "repair") {
     items = items.concat(
-      rowsFromSpec("detail-rep-condenser", typeof REPAIR_CONDENSER_ITEMS !== "undefined" ? REPAIR_CONDENSER_ITEMS : [], { enabledIf: "tgl-rep-condenser" }),
-      rowsFromSpec("detail-rep-fancoil", typeof REPAIR_FANCOIL_ITEMS !== "undefined" ? REPAIR_FANCOIL_ITEMS : [], { enabledIf: "tgl-rep-fancoil" }),
-      rowsFromSpec("detail-rep-furnace", typeof REPAIR_FURNACE_ITEMS !== "undefined" ? REPAIR_FURNACE_ITEMS : [], { enabledIf: "tgl-rep-furnace" })
+      rowsFromSpec("detail-rep-condenser", typeof REPAIR_CONDENSER_ITEMS !== "undefined" ? REPAIR_CONDENSER_ITEMS : [], { enabledIf: "tgl-rep-condenser", section: "Condenser" }),
+      rowsFromSpec("detail-rep-fancoil", typeof REPAIR_FANCOIL_ITEMS !== "undefined" ? REPAIR_FANCOIL_ITEMS : [], { enabledIf: "tgl-rep-fancoil", section: "Coil" }),
+      rowsFromSpec("detail-rep-furnace", typeof REPAIR_FURNACE_ITEMS !== "undefined" ? REPAIR_FURNACE_ITEMS : [], { enabledIf: "tgl-rep-furnace", section: "Furnace" })
     );
   } else {
     items = items.concat(
-      rowsFromSpec("detail-condenser", typeof CONDENSER_MATERIALS !== "undefined" ? CONDENSER_MATERIALS : [], { enabledIf: "tgl-condenser" }),
-      rowsFromSpec("detail-coil", typeof COIL_MATERIALS !== "undefined" ? COIL_MATERIALS : [], { enabledIf: "tgl-coil" }),
-      rowsFromSpec("detail-furnace", typeof FURNACE_MATERIALS !== "undefined" ? FURNACE_MATERIALS : [], { enabledIf: "tgl-furnace" }),
-      rowsFromSpec("detail-drainpan", typeof DRAINPAN_ROWS !== "undefined" ? DRAINPAN_ROWS : [], { enabledIf: "tgl-drainpan", excludeCategories: ["Labor"] })
+      rowsFromSpec("detail-condenser", typeof CONDENSER_MATERIALS !== "undefined" ? CONDENSER_MATERIALS : [], { enabledIf: "tgl-condenser", section: "Condenser" }),
+      rowsFromSpec("detail-coil", typeof COIL_MATERIALS !== "undefined" ? COIL_MATERIALS : [], { enabledIf: "tgl-coil", section: "Coil" }),
+      rowsFromSpec("detail-furnace", typeof FURNACE_MATERIALS !== "undefined" ? FURNACE_MATERIALS : [], { enabledIf: "tgl-furnace", section: "Furnace" }),
+      rowsFromSpec("detail-drainpan", typeof DRAINPAN_ROWS !== "undefined" ? DRAINPAN_ROWS : [], { enabledIf: "tgl-drainpan", excludeCategories: ["Labor"], section: "Other" })
     );
   }
-  items = items.concat(flatToggle("tgl-thermostat", "Thermostat", "EA"));
+  items = items.concat(flatToggle("tgl-thermostat", "Thermostat", "EA", "Other"));
   return items;
 }
 

@@ -80,7 +80,7 @@ function saaBomCombinedItems(jobDetail) {
     ? saaDeriveBomItemsFromFormState(jobDetail.linkedQuote.form_state, jobDetail.linkedQuote.quote_type)
     : [];
   const manual = (jobDetail.manualItems || []).map((m) => ({
-    description: m.description, unit: m.unit || "ea", qty: Number(m.qty) || 1, manual: true, id: m.id,
+    description: m.description, unit: m.unit || "ea", qty: Number(m.qty) || 1, manual: true, id: m.id, section: "Added Manually",
   }));
   return derived.map((d) => Object.assign({}, d, { manual: false })).concat(manual);
 }

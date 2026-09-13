@@ -436,6 +436,24 @@ async function saaCalUpdateAppointmentSchedule({ appointmentId, jobId, technicia
   }
 }
 
+// appointments.status (appointments_status_check) allows finer-grained
+// values than jobs.status (jobs_status_check) does — the Dispatch Calendar
+// drawer's dropdown offers en_route/on_site/waiting_parts/no_show, none of
+// which jobs.status accepts, so writing the raw appointment status straight
+// into jobs.status throws a check-constraint violation (Round 13 bugfix).
+// This maps each appointment status down to the closest valid job status;
+// status_history below still records the exact appointment-level status
+// (not the mapped one) so technician-timing reporting keeps its detail.
+const SAA_CAL_JOB_STATUS_FROM_APPT_STATUS = {
+  scheduled: "scheduled",
+  en_route: "in_progress",
+  on_site: "in_progress",
+  waiting_parts: "in_progress",
+  completed: "completed",
+  cancelled: "cancelled",
+  no_show: "scheduled",
+};
+
 /** Status change from the Job Details drawer (drives the appointment card color). */
 async function saaCalUpdateAppointmentStatus({ appointmentId, jobId, status }) {
   try {
@@ -451,15 +469,16 @@ async function saaCalUpdateAppointmentStatus({ appointmentId, jobId, status }) {
       // because a jsonb merge isn't expressible through the query builder's
       // .update() — keep this in sync with saaJobsUpdateJob's copy of the
       // same logic in jobs-db.js.
+      const jobStatus = SAA_CAL_JOB_STATUS_FROM_APPT_STATUS[status] || status;
       const { data: current, error: curErr } = await _saaClient
         .from("jobs")
         .select("status,status_history")
         .eq("id", jobId)
         .single();
       if (curErr) throw curErr;
-      const patch = { status };
-      if (status === "completed") patch.completed_date = new Date().toISOString().slice(0, 10);
-      if (status === "cancelled") patch.completed_date = null;
+      const patch = { status: jobStatus };
+      if (jobStatus === "completed") patch.completed_date = new Date().toISOString().slice(0, 10);
+      if (jobStatus === "cancelled") patch.completed_date = null;
       if (current && status !== current.status) {
         patch.status_history = Object.assign({}, current.status_history || {}, { [status]: new Date().toISOString() });
       }
@@ -468,8 +487,26 @@ async function saaCalUpdateAppointmentStatus({ appointmentId, jobId, status }) {
     }
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: (e && e.message) || String(e) };
+    return { ok: false, error: _saaCalFriendlyDbError(e) };
   }
+}
+
+/** Turns a raw Postgres/PostgREST error into something an office user can
+ *  act on, instead of leaking constraint/column internals verbatim (Round
+ *  13: "clearly say what is causing the error"). Falls back to the raw
+ *  message for anything not specifically recognized. */
+function _saaCalFriendlyDbError(e) {
+  const raw = (e && e.message) || String(e);
+  if (/violates check constraint "jobs_status_check"/.test(raw)) {
+    return "That status isn't valid for a job record. Please try again — if this keeps happening, let the office know.";
+  }
+  if (/violates check constraint/.test(raw)) {
+    return "That value isn't allowed for this field: " + raw.replace(/^.*constraint "/, "").replace(/".*$/, "").replace(/_/g, " ") + ".";
+  }
+  if (/violates foreign key constraint/.test(raw)) {
+    return "That record is linked to other data and can't be changed that way.";
+  }
+  return raw;
 }
 
 /** Most recent equipment row on file for a customer (Job Details drawer). */

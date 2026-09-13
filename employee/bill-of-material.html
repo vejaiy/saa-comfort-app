@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bill of Material | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260913n">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260913o">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260913n"></script>
-<script src="../assets/js/supabase-config.js?v=20260913n"></script>
-<script src="../assets/js/auth.js?v=20260913n"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260913o"></script>
+<script src="../assets/js/supabase-config.js?v=20260913o"></script>
+<script src="../assets/js/auth.js?v=20260913o"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -111,11 +111,11 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260913n"></script>
-<script src="../assets/js/worksheet.js?v=20260913n"></script>
-<script src="../assets/js/jobs-db.js?v=20260913n"></script>
-<script src="../assets/js/bom-db.js?v=20260913n"></script>
-<script src="../assets/js/print-bom.js?v=20260913n"></script>
+<script src="../assets/js/pricing-data.js?v=20260913o"></script>
+<script src="../assets/js/worksheet.js?v=20260913o"></script>
+<script src="../assets/js/jobs-db.js?v=20260913o"></script>
+<script src="../assets/js/bom-db.js?v=20260913o"></script>
+<script src="../assets/js/print-bom.js?v=20260913o"></script>
 <script>
   let _bomJob = null;
 
@@ -130,17 +130,36 @@
     return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
+  // Round 13: "categorize bill of material by condenser, coil and
+  // furnace" — group the flat item list saaBomCombinedItems returns by
+  // each item's "section" tag (see saaDeriveBomItemsFromFormState in
+  // worksheet.js), in a fixed display order, and only show sections
+  // that actually have items on this job.
+  const BOM_SECTION_ORDER = ["Condenser", "Coil", "Furnace", "Other", "Added Manually"];
   function renderBomItems() {
     const items = saaBomCombinedItems(_bomJob);
     const tbody = document.getElementById("bom-items-tbody");
     document.getElementById("bom-empty-note").hidden = items.length > 0;
-    tbody.innerHTML = items.map((it) => `
-      <tr>
-        <td>${_bomEsc(it.description)}${it.manual ? ' <span class="muted" style="font-size:.76rem">(added)</span>' : ''}</td>
-        <td>${_bomEsc(it.unit || 'ea')}</td>
-        <td>${it.qty}</td>
-        <td>${it.manual ? `<button type="button" class="btn btn-ghost btn-sm bom-remove-btn" data-id="${it.id}">Remove</button>` : ''}</td>
-      </tr>`).join("") || `<tr><td colspan="4" class="muted">No items yet.</td></tr>`;
+    const bySection = {};
+    items.forEach((it) => {
+      const sec = it.section || "Other";
+      (bySection[sec] = bySection[sec] || []).push(it);
+    });
+    const order = BOM_SECTION_ORDER.concat(Object.keys(bySection).filter((s) => !BOM_SECTION_ORDER.includes(s)));
+    let rows = "";
+    order.forEach((sec) => {
+      const list = bySection[sec];
+      if (!list || !list.length) return;
+      rows += `<tr class="group-row"><td colspan="4">${_bomEsc(sec)}</td></tr>`;
+      rows += list.map((it) => `
+        <tr>
+          <td>${_bomEsc(it.description)}${it.manual ? ' <span class="muted" style="font-size:.76rem">(added)</span>' : ''}</td>
+          <td>${_bomEsc(it.unit || 'ea')}</td>
+          <td>${it.qty}</td>
+          <td>${it.manual ? `<button type="button" class="btn btn-ghost btn-sm bom-remove-btn" data-id="${it.id}">Remove</button>` : ''}</td>
+        </tr>`).join("");
+    });
+    tbody.innerHTML = rows || `<tr><td colspan="4" class="muted">No items yet.</td></tr>`;
     tbody.querySelectorAll(".bom-remove-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const res = await saaBomRemoveItem(_bomJob, btn.dataset.id);

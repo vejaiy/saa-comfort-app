@@ -72,15 +72,35 @@ function _saaBomPrintHeader(info) {
  *  and unit in order form which will be showed to shop to pull
  *  materials from shelf" -- neither document shows cost/pricing at all
  *  anymore, just what to pull and how many. */
+// Round 13: "categorize bill of material by condenser, coil and furnace"
+// -- group printed rows the same way the on-screen Bill of Material page
+// does (renderBomItems in gen_bom.py), so the shop sees materials broken
+// out by equipment on paper too.
+const SAA_BOM_PRINT_SECTION_ORDER = ["Condenser", "Coil", "Furnace", "Other", "Added Manually"];
 function _saaBomItemsTable(items) {
-  const rows = (items || []).map((it) => {
+  const list = items || [];
+  const bySection = {};
+  list.forEach((it) => {
+    const sec = it.section || "Other";
+    (bySection[sec] = bySection[sec] || []).push(it);
+  });
+  const order = SAA_BOM_PRINT_SECTION_ORDER.concat(Object.keys(bySection).filter((s) => !SAA_BOM_PRINT_SECTION_ORDER.includes(s)));
+  const itemRow = (it) => {
     const qty = Number(it.quantity != null ? it.quantity : it.qty) || 0;
     return `<tr>
       <td>${_saaBomPrintEsc(it.description || "")}${it.manual ? ' <span class="muted" style="font-size:.72rem">(added)</span>' : ""}</td>
       <td class="num">${qty || ""}</td>
       <td>${_saaBomPrintEsc(it.unit || "ea")}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="3" class="muted">No items listed.</td></tr>`;
+  };
+  let rows = "";
+  order.forEach((sec) => {
+    const secList = bySection[sec];
+    if (!secList || !secList.length) return;
+    rows += `<tr><td colspan="3" style="background:#eef2f5;font-weight:700;color:#0f2439;font-size:.72rem;text-transform:uppercase;letter-spacing:.3px">${_saaBomPrintEsc(sec)}</td></tr>`;
+    rows += secList.map(itemRow).join("");
+  });
+  if (!rows) rows = `<tr><td colspan="3" class="muted">No items listed.</td></tr>`;
   return { rows };
 }
 
