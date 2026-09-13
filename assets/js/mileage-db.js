@@ -124,25 +124,79 @@ async function _saaFreeRouteThrottle() {
 
 const _saaFreeRouteUnavailableMsg = "Couldn't reach the free mileage-lookup service right now (it's a shared public service that's occasionally slow or unavailable) — try again in a moment, or type the mileage in by hand.";
 
-/** Address string -> {lat, lon} via Nominatim (OpenStreetMap's free
- *  geocoder). Cached indefinitely per exact address string. */
-async function _saaGeocodeAddress(address) {
-  const key = String(address || "").trim().toLowerCase();
-  if (!key) throw new Error("No address to look up.");
-  if (_saaGeocodeCache[key]) return _saaGeocodeCache[key];
-  await _saaFreeRouteThrottle();
+// "STREET, CITY, STATE ZIP" -- the one format every address in this app is
+// built in (see saaMileageJobAddress above and SAA_COMPANY_ADDRESS in
+// maps-config.js) -- split apart so a failed freeform Nominatim lookup can
+// be retried a couple of different ways instead of giving up immediately.
+function _saaParseAddressParts(address) {
+  const m = String(address || "").match(/^(.*?),\s*([^,]+?),\s*([A-Za-z]{2})\s+(\d{5})(?:-\d{4})?\s*$/);
+  if (!m) return null;
+  return { street: m[1].trim(), city: m[2].trim(), state: m[3].trim(), zip: m[4].trim() };
+}
+
+/** One Nominatim call -- {lat, lon} on a match, null on a clean zero-result
+ *  response (NOT an error; the caller decides whether to retry a different
+ *  way or give up). Still throws on a real network/HTTP failure. */
+async function _saaGeocodeQuery(url) {
   let resp;
   try {
-    resp = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=" + encodeURIComponent(address), {
-      headers: { Accept: "application/json" },
-    });
+    resp = await fetch(url, { headers: { Accept: "application/json" } });
   } catch (e) {
     throw new Error(_saaFreeRouteUnavailableMsg);
   }
   if (!resp.ok) throw new Error(_saaFreeRouteUnavailableMsg);
   const rows = await resp.json();
-  if (!rows || !rows.length) throw new Error(`Couldn't find the address "${address}" — double check it, or type the mileage in by hand.`);
-  const loc = { lat: parseFloat(rows[0].lat), lon: parseFloat(rows[0].lon) };
+  if (!rows || !rows.length) return null;
+  return { lat: parseFloat(rows[0].lat), lon: parseFloat(rows[0].lon) };
+}
+
+/** Address string -> {lat, lon} via Nominatim (OpenStreetMap's free
+ *  geocoder). Cached indefinitely per exact address string.
+ *
+ *  Round 15 (2026-09-13) reliability fix: a single freeform "house number
+ *  + street + city + state + zip" query sometimes comes back with ZERO
+ *  results from Nominatim even for a perfectly real, deliverable address
+ *  (new-construction house numbers in particular can lag behind in
+ *  OpenStreetMap's data even though the street itself is mapped) --
+ *  including, in practice, SAA's own office address, which is used as the
+ *  "from" point for every technician's first leg of every single day. A
+ *  hard failure there would break mileage calculation constantly. So on a
+ *  zero-result freeform lookup, this now retries two more ways before
+ *  giving up: Nominatim's *structured* query params (street/city/state/
+ *  postalcode split out, rather than one string it has to parse itself --
+ *  documented to succeed in cases a freeform query misses), then a
+ *  freeform retry with the house number stripped off (street-level
+ *  accuracy is plenty for a mileage estimate). Each retry still respects
+ *  the 1-request/sec throttle Nominatim's usage policy requires. */
+async function _saaGeocodeAddress(address) {
+  const key = String(address || "").trim().toLowerCase();
+  if (!key) throw new Error("No address to look up.");
+  if (_saaGeocodeCache[key]) return _saaGeocodeCache[key];
+
+  await _saaFreeRouteThrottle();
+  let loc = await _saaGeocodeQuery("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=" + encodeURIComponent(address));
+
+  const parts = !loc ? _saaParseAddressParts(address) : null;
+  if (!loc && parts) {
+    await _saaFreeRouteThrottle();
+    loc = await _saaGeocodeQuery(
+      "https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us" +
+      "&street=" + encodeURIComponent(parts.street) +
+      "&city=" + encodeURIComponent(parts.city) +
+      "&state=" + encodeURIComponent(parts.state) +
+      "&postalcode=" + encodeURIComponent(parts.zip)
+    );
+  }
+  if (!loc && parts) {
+    const streetNoNumber = parts.street.replace(/^\s*\d+[a-zA-Z-]*\s+/, "").trim();
+    if (streetNoNumber && streetNoNumber !== parts.street) {
+      await _saaFreeRouteThrottle();
+      loc = await _saaGeocodeQuery("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=" +
+        encodeURIComponent(`${streetNoNumber}, ${parts.city}, ${parts.state} ${parts.zip}`));
+    }
+  }
+
+  if (!loc) throw new Error(`Couldn't find the address "${address}" — double check it, or type the mileage in by hand.`);
   _saaGeocodeCache[key] = loc;
   _saaGeocodeCacheSave();
   return loc;

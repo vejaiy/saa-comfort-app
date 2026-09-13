@@ -176,7 +176,6 @@ function printFormalQuote(opts) {
   <section>
     <h2>4. Warranty</h2>
     <p class="muted" style="margin:2px 0"><strong>Parts Warranty:</strong> 10-Year Manufacturer Limited Warranty (upon online equipment registration within 60 days).</p>
-    <p class="muted" style="margin:2px 0"><strong>Labor Warranty:</strong> 1-Year Installation Workmanship Warranty from SAA Comfort Air LLC.</p>
   </section>
 
   <section>
@@ -193,7 +192,6 @@ function printFormalQuote(opts) {
     <ul class="terms">
       <li><strong>Permits:</strong> SAA Comfort Air LLC will obtain all required mechanical permits for the applicable jurisdiction and schedule required inspections. Permit fees are included in the pricing above unless noted otherwise.</li>
       <li><strong>Change Orders:</strong> Any change to scope, equipment, or price after acceptance must be documented in a written Change Order signed by both parties, except where immediate action is needed to prevent damage to the property or equipment.</li>
-      <li><strong>Right to Cancel:</strong> If this quote is accepted and signed away from SAA Comfort Air LLC's place of business (e.g., at the customer's home), the customer may cancel without penalty within 3 business days per the FTC Cooling-Off Rule. A separate Notice of Cancellation form will be provided at signing.</li>
       <li><strong>Limitation of Liability:</strong> Except in cases of gross negligence or willful misconduct, SAA Comfort Air LLC's total liability arising from this project is limited to the amount paid by the customer under the resulting agreement.</li>
       <li><strong>Governing Agreement:</strong> This quotation is a good-faith estimate. Work will not begin until the customer signs SAA Comfort Air LLC's formal HVAC Service &amp; Installation Agreement, which contains the complete, binding terms and conditions for this project.</li>
       <li><strong>Dispute Resolution:</strong> Governed by the laws of the State of Texas; venue in the county where the property is located.</li>

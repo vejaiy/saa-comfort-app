@@ -976,8 +976,16 @@ async function jbSaveInspection() {
  * the dedicated Bill of Material page (bill-of-material.html), pointed at
  * this job — see jbWireBomLink below, called from jbOpenDetail. */
 function jbWireBomLink(job) {
-  const link = document.getElementById("jbd-quick-bom-btn");
-  if (link) link.href = `bill-of-material.html?job=${encodeURIComponent(job.job_number || job.id)}`;
+  const href = `bill-of-material.html?job=${encodeURIComponent(job.job_number || job.id)}`;
+  // Round 15: a second Bill of Material link right in the Equipment
+  // section (in addition to the quick-actions one at the top) -- Vijayan
+  // pointed at the Equipment section specifically when asking for a BOM
+  // button, so both stay wired to the same page rather than replacing
+  // one with the other.
+  ["jbd-quick-bom-btn", "jbd-eq-bom-btn"].forEach((id) => {
+    const link = document.getElementById(id);
+    if (link) link.href = href;
+  });
 }
 
 /* ============================== Mileage ============================== */
