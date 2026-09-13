@@ -304,11 +304,28 @@ async function saaCalUpdateAppointmentStatus({ appointmentId, jobId, status }) {
     const { error: aErr } = await _saaClient.from("appointments").update({ status }).eq("id", appointmentId);
     if (aErr) throw aErr;
 
-    if (jobId && (status === "completed" || status === "cancelled")) {
-      const { error: jErr } = await _saaClient
+    if (jobId) {
+      // Round 6: keep the job's own status (and its per-status timestamp
+      // history, for technician-timing reporting) in sync with EVERY
+      // calendar status change, not just Completed/Cancelled — the Jobs
+      // page reads jobs.status directly, so a status set only here would
+      // otherwise drift from what the calendar shows. Fetch-then-merge
+      // because a jsonb merge isn't expressible through the query builder's
+      // .update() — keep this in sync with saaJobsUpdateJob's copy of the
+      // same logic in jobs-db.js.
+      const { data: current, error: curErr } = await _saaClient
         .from("jobs")
-        .update({ status, completed_date: status === "completed" ? new Date().toISOString().slice(0, 10) : null })
-        .eq("id", jobId);
+        .select("status,status_history")
+        .eq("id", jobId)
+        .single();
+      if (curErr) throw curErr;
+      const patch = { status };
+      if (status === "completed") patch.completed_date = new Date().toISOString().slice(0, 10);
+      if (status === "cancelled") patch.completed_date = null;
+      if (current && status !== current.status) {
+        patch.status_history = Object.assign({}, current.status_history || {}, { [status]: new Date().toISOString() });
+      }
+      const { error: jErr } = await _saaClient.from("jobs").update(patch).eq("id", jobId);
       if (jErr) throw jErr;
     }
     return { ok: true };

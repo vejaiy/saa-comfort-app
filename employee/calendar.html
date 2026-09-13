@@ -192,7 +192,7 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
   <button type="button" class="cal-drawer-close" id="cal-drawer-close-btn">&times;</button>
   <h2 id="drawer-title"></h2>
   <div class="job-num" id="drawer-jobnum"></div>
-  <a id="drawer-jobrecord-link" class="btn btn-ghost btn-sm" style="margin:6px 0 4px;display:inline-block" href="jobs.html">View Full Job Record &rarr;</a>
+  <a id="drawer-jobrecord-link" class="btn btn-ghost btn-sm" style="margin:6px 0 4px;display:inline-block" href="jobs.html" title="Opens right here — the calendar stays in the background">View Full Job Record &rarr;</a>
 
   <div class="drawer-section">
     <div class="drawer-row">&#128205; <span id="drawer-address"></span> &middot;
@@ -246,10 +246,254 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 <div id="cal-toast" class="cal-toast" hidden></div>
 
+
+<!-- ============ Job Card detail modal ============ -->
+<div class="modal-overlay" id="jb-detail-modal" hidden>
+  <div class="modal-card jb-detail-card">
+    <button type="button" class="cal-drawer-close" id="jb-detail-close-btn">&times;</button>
+    <h2 id="jbd-title" style="margin-bottom:2px"></h2>
+    <div class="job-num" id="jbd-jobnum" style="margin-bottom:4px"></div>
+    <div class="jb-quick-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <button type="button" class="btn btn-outline btn-sm" id="jbd-quick-checklist-btn">📋 Checklist</button>
+      <button type="button" class="btn btn-outline btn-sm" id="jbd-quick-receipt-btn">🧾 Receipt</button>
+      <button type="button" class="btn btn-outline btn-sm" id="jbd-quick-invoice-btn">💵 Invoice</button>
+    </div>
+
+    <div class="jb-detail-grid">
+      <div>
+        <div class="drawer-section">
+          <h4>Customer</h4>
+          <div id="jbd-customer"></div>
+        </div>
+
+        <div class="drawer-section">
+          <h4>Job Info</h4>
+          <div class="field-row">
+            <div class="field"><label>Job Type</label><select id="jbd-type"></select></div>
+            <div class="field"><label>Priority</label><select id="jbd-priority"></select></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Status</label><select id="jbd-status"></select></div>
+            <div class="field"><label>Technician</label><select id="jbd-tech"></select></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Scheduled Date</label><input type="date" id="jbd-scheduled"></div>
+            <div class="field"><label>Scheduled Time</label><input type="time" id="jbd-time"></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Completion Date</label><input type="date" id="jbd-completed"></div>
+            <div class="field"><label>Completed Time <span class="muted" id="jbd-completed-time-note" style="font-weight:400;font-size:.78rem"></span></label><input type="time" id="jbd-completed-time"></div>
+          </div>
+          <div class="field"><label>Service Address</label><input type="text" id="jbd-address"></div>
+          <div class="field-row field-row-3">
+            <div class="field"><label>City</label><input type="text" id="jbd-city"></div>
+            <div class="field"><label>State</label><input type="text" id="jbd-state" maxlength="2" style="text-transform:uppercase"></div>
+            <div class="field"><label>ZIP</label><input type="text" id="jbd-zip"></div>
+          </div>
+        </div>
+
+        <div class="drawer-section">
+          <h4>Equipment</h4>
+
+        <div class="jb-eq-block" data-eqtype="condenser">
+          <div class="jb-eq-head">
+            <button type="button" class="btn btn-ghost btn-sm jb-eq-toggle-btn">+ Add Condenser</button>
+            <button type="button" class="jb-eq-lock-btn" hidden></button>
+          </div>
+          <div class="jb-eq-fields" hidden>
+            <div class="field-row">
+              <div class="field"><label>Manufacturer</label><input type="text" class="jb-eq-brand"></div>
+              <div class="field"><label>Model</label><input type="text" class="jb-eq-model"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Serial Number</label><input type="text" class="jb-eq-serial"></div>
+              <div class="field"><label>Refrigerant</label><input type="text" class="jb-eq-refrigerant"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Tonnage</label><input type="number" step="0.5" class="jb-eq-tonnage"></div>
+              <div class="field"><label>Install Year</label><input type="number" class="jb-eq-installyear"></div>
+            </div>
+            <div class="field"><label>Warranty Status</label><select class="jb-eq-warranty">
+              <option value="unknown">Unknown</option><option value="active">Active</option><option value="expired">Expired</option>
+            </select></div>
+          </div>
+        </div>
+        <div class="jb-eq-block" data-eqtype="coil">
+          <div class="jb-eq-head">
+            <button type="button" class="btn btn-ghost btn-sm jb-eq-toggle-btn">+ Add Coil</button>
+            <button type="button" class="jb-eq-lock-btn" hidden></button>
+          </div>
+          <div class="jb-eq-fields" hidden>
+            <div class="field-row">
+              <div class="field"><label>Manufacturer</label><input type="text" class="jb-eq-brand"></div>
+              <div class="field"><label>Model</label><input type="text" class="jb-eq-model"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Serial Number</label><input type="text" class="jb-eq-serial"></div>
+              <div class="field"><label>Refrigerant</label><input type="text" class="jb-eq-refrigerant"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Tonnage</label><input type="number" step="0.5" class="jb-eq-tonnage"></div>
+              <div class="field"><label>Install Year</label><input type="number" class="jb-eq-installyear"></div>
+            </div>
+            <div class="field"><label>Warranty Status</label><select class="jb-eq-warranty">
+              <option value="unknown">Unknown</option><option value="active">Active</option><option value="expired">Expired</option>
+            </select></div>
+          </div>
+        </div>
+        <div class="jb-eq-block" data-eqtype="furnace">
+          <div class="jb-eq-head">
+            <button type="button" class="btn btn-ghost btn-sm jb-eq-toggle-btn">+ Add Furnace</button>
+            <button type="button" class="jb-eq-lock-btn" hidden></button>
+          </div>
+          <div class="jb-eq-fields" hidden>
+            <div class="field-row">
+              <div class="field"><label>Manufacturer</label><input type="text" class="jb-eq-brand"></div>
+              <div class="field"><label>Model</label><input type="text" class="jb-eq-model"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Serial Number</label><input type="text" class="jb-eq-serial"></div>
+              <div class="field"><label>Refrigerant</label><input type="text" class="jb-eq-refrigerant"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Tonnage</label><input type="number" step="0.5" class="jb-eq-tonnage"></div>
+              <div class="field"><label>Install Year</label><input type="number" class="jb-eq-installyear"></div>
+            </div>
+            <div class="field"><label>Warranty Status</label><select class="jb-eq-warranty">
+              <option value="unknown">Unknown</option><option value="active">Active</option><option value="expired">Expired</option>
+            </select></div>
+          </div>
+        </div>
+        </div>
+
+        <div class="drawer-section">
+          <h4>Diagnosis</h4>
+          <div class="field"><label>Problem Description</label><textarea id="jbd-problem" rows="2"></textarea></div>
+          <div class="field"><label>Inspection Findings</label><textarea id="jbd-findings" rows="2"></textarea></div>
+          <div class="field"><label>Recommended Action</label><textarea id="jbd-recommend" rows="2"></textarea></div>
+        </div>
+
+        <div class="drawer-section">
+          <h4>Photos</h4>
+          <button type="button" class="btn btn-ghost btn-sm" id="jbd-add-photos-btn">📷 Add Photos</button>
+          <div class="jb-photo-grid" id="jbd-photos-grid"><span class="jb-photo-empty">No photos yet.</span></div>
+        </div>
+
+        <div class="drawer-section">
+          <h4>Inspection</h4>
+          <div class="jb-insp-summary">
+            <span id="jbd-insp-summary" class="muted" style="font-size:.85rem">Not started</span>
+            <button type="button" class="btn btn-ghost btn-sm" id="jbd-open-inspection-btn">✅ Open Inspection Checklist</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="drawer-section">
+          <h4>Quote</h4>
+          <div id="jbd-quote-linked" hidden></div>
+          <div id="jbd-quote-search-wrap" class="cal-cust-search-wrap">
+            <input type="text" id="jbd-quote-search" placeholder="Search this customer's saved quotes&hellip;">
+            <div class="cal-cust-results" id="jbd-quote-results" hidden></div>
+          </div>
+        </div>
+
+        <div class="drawer-section">
+          <h4>Financials</h4>
+          <div class="field-row">
+            <div class="field"><label>Quoted Amount</label><input type="number" step="0.01" id="jbd-quoted"></div>
+            <div class="field"><label>Approved Amount</label><input type="number" step="0.01" id="jbd-approved"></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Actual Material Cost</label><input type="number" step="0.01" id="jbd-cost-material"></div>
+            <div class="field"><label>Actual Labor Cost</label><input type="number" step="0.01" id="jbd-cost-labor"></div>
+          </div>
+          <div class="field"><label>Other Cost</label><input type="number" step="0.01" id="jbd-cost-other"></div>
+          <div class="jb-profit-box" id="jbd-profit-box"></div>
+        </div>
+
+        <div class="drawer-section">
+          <h4>Receipts</h4>
+          <button type="button" class="btn btn-ghost btn-sm" id="jbd-add-receipt-btn">🧾 Add Receipt</button>
+          <div class="jb-photo-grid" id="jbd-receipts-grid"><span class="jb-photo-empty">No receipts yet.</span></div>
+        </div>
+
+        <div class="drawer-section">
+          <h4>Invoice &amp; Payment</h4>
+          <div id="jbd-invoice-box"></div>
+        </div>
+
+        <div class="drawer-section">
+          <h4>Customer Signature / Approval</h4>
+          <div class="field-row">
+            <div class="field"><label>Name</label><input type="text" id="jbd-sig-name"></div>
+            <div class="field"><label>Date</label><input type="date" id="jbd-sig-date"></div>
+          </div>
+        </div>
+
+        <div class="drawer-section">
+          <h4>Notes</h4>
+          <textarea id="jbd-notes" rows="3"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-top:6px;border-top:1px solid var(--line);padding-top:14px">
+      <button type="button" class="btn btn-navy btn-sm" id="jbd-save-btn">Save Job Card</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="jbd-close-btn">Close</button>
+      <button type="button" class="btn btn-outline btn-sm" id="jbd-delete-btn" style="margin-left:auto;color:#b42318;border-color:#b42318">Delete Job</button>
+      <span id="jbd-status-msg" class="muted" style="font-size:.85rem"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Inspection checklist modal ============ -->
+<div class="modal-overlay" id="jb-inspection-modal" hidden>
+  <div class="modal-card" style="max-width:620px">
+    <h3>Inspection Checklist</h3>
+    <p class="muted" style="font-size:.85rem;margin-bottom:4px">Check off each item as it's verified. Use the camera button to attach a photo to a specific item.</p>
+    <ul class="jb-insp-list" id="jb-insp-list"></ul>
+    <div class="modal-close-row">
+      <button type="button" class="btn btn-navy btn-sm" id="jb-insp-save-btn">Save Inspection</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="jb-insp-close-btn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Camera capture modal (Photos + per-Inspection-item photos) ============ -->
+<div class="modal-overlay" id="cam-modal" hidden>
+  <div class="modal-card">
+    <h3 id="cam-modal-title">Take Photos</h3>
+    <div id="cam-live-wrap">
+      <video id="cam-video" autoplay playsinline muted></video>
+      <div style="margin-top:8px"><button type="button" class="btn btn-navy btn-sm" id="cam-shoot-btn">📸 Capture</button></div>
+    </div>
+    <p class="muted" id="cam-nolive-note" style="font-size:.85rem" hidden>Camera isn't available here — choose photos from files instead.</p>
+    <canvas id="cam-canvas" hidden></canvas>
+    <div class="cam-strip" id="cam-strip"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
+      <label class="btn btn-ghost btn-sm" style="cursor:pointer">📁 Choose from Files<input type="file" id="cam-file-input" accept="image/*" multiple style="display:none"></label>
+      <span class="muted" id="cam-count" style="font-size:.82rem">0 photos</span>
+    </div>
+    <div class="modal-close-row">
+      <button type="button" class="btn btn-navy btn-sm" id="cam-done-btn">Save Photos</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="cam-cancel-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="jb-toast" class="cal-toast" hidden></div>
+
+
 </main>
 <script src="../assets/js/pricing-data.js?v=20260912d"></script>
 <script src="../assets/js/worksheet.js?v=20260912d"></script>
 <script src="../assets/js/calendar-db.js?v=20260912d"></script>
+<script src="../assets/js/jobs-db.js?v=20260912d"></script>
+<script src="../assets/js/job-photos-db.js?v=20260912d"></script>
+<script src="../assets/js/camera-capture.js?v=20260912d"></script>
+<script src="../assets/js/print-invoice.js?v=20260912d"></script>
+<script src="../assets/js/jobs.js?v=20260912d"></script>
 <script src="../assets/js/calendar.js?v=20260912d"></script>
 </body>
 </html>

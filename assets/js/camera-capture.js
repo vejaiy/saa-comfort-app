@@ -39,9 +39,10 @@ function _saaCamRenderStrip() {
 /** Opens the modal and starts the live camera if available. onDone(blobs)
  *  is called with every photo taken/picked once "Save Photos" is clicked
  *  (never called if the office cancels or saves zero photos). */
-async function saaCamOpen(onDone) {
+async function saaCamOpen(onDone, title) {
   _saaCamBlobs = [];
   _saaCamOnDone = onDone;
+  document.getElementById("cam-modal-title").textContent = title || "Take Photos";
   document.getElementById("cam-modal").hidden = false;
   _saaCamRenderStrip();
   document.getElementById("cam-live-wrap").hidden = false;

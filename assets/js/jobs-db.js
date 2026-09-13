@@ -271,6 +271,60 @@ function _saaJobsAddMinutes(hhmm, minutes) {
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
+/**
+ * Best-available "completed time" for a job (Round 6 item 6), shown next
+ * to Completed Date on the Job Card:
+ *  1) status_history.completed — set automatically the moment the status
+ *     is changed to Completed (see saaJobsUpdateJob), or manually edited —
+ *     shown as the confirmed local HH:MM.
+ *  2) otherwise, for a job already marked Completed from before this
+ *     tracking existed, an ESTIMATE based on calendar duration: Scheduled
+ *     Time plus that job type's usual appointment length — flagged so the
+ *     UI can label it "(estimated)" until the tech confirms/edits it.
+ * returns { time: "HH:MM"|"", isEstimate: bool }
+ */
+async function saaJobsGetCompletedTime(job) {
+  if (job && job.status_history && job.status_history.completed) {
+    const d = new Date(job.status_history.completed);
+    if (!isNaN(d.getTime())) {
+      return { time: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`, isEstimate: false };
+    }
+  }
+  if (job && job.status === "completed" && job.scheduled_time) {
+    const durations = await saaJobsFetchAppointmentTypes();
+    const duration = durations[job.job_type] || 60;
+    return { time: _saaJobsAddMinutes(job.scheduled_time, duration), isEstimate: true };
+  }
+  return { time: "", isEstimate: false };
+}
+
+/**
+ * Manually set/override a job's recorded completed time (Round 6 item 6's
+ * "allow provision to update status time if required"). Writes straight
+ * into status_history.completed as a same-day timestamp built from the
+ * given HH:MM, replacing whatever was there (an auto-set time from the
+ * status change, a prior manual edit, or nothing at all).
+ * returns { ok: true } | { ok: false, error }
+ */
+async function saaJobsSetCompletedTime(jobId, hhmm) {
+  try {
+    const { data: current, error: curErr } = await _saaClient
+      .from("jobs")
+      .select("status_history,completed_date")
+      .eq("id", jobId)
+      .single();
+    if (curErr) throw curErr;
+    const day = current.completed_date || new Date().toISOString().slice(0, 10);
+    const iso = new Date(`${day}T${hhmm}:00`).toISOString();
+    const status_history = Object.assign({}, current.status_history || {}, { completed: iso });
+    const { error } = await _saaClient.from("jobs").update({ status_history }).eq("id", jobId);
+    if (error) throw error;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
 /** Keeps a job's calendar appointment in sync with its Scheduled Date /
  *  Scheduled Time / Technician fields, whichever page last changed them.
  *  Called after every save on the Jobs List's Job Card (the Dispatch
@@ -456,6 +510,24 @@ async function saaJobsUpdateJob(jobId, fields) {
     if (patch.status === "completed" && !patch.completed_date) {
       patch.completed_date = new Date().toISOString().slice(0, 10);
     }
+    // Round 6: record the date/time the job entered each status, so
+    // technician timing can be reconstructed later. Each status keeps only
+    // its MOST RECENT timestamp — re-entering a status overwrites rather
+    // than piling up duplicates. Skipped entirely when this save doesn't
+    // touch status, and a no-op when the status isn't actually changing.
+    // Keep this in sync with saaCalUpdateAppointmentStatus's copy of the
+    // same logic in calendar-db.js.
+    if (patch.status) {
+      const { data: current, error: curErr } = await _saaClient
+        .from("jobs")
+        .select("status,status_history")
+        .eq("id", jobId)
+        .single();
+      if (curErr) throw curErr;
+      if (current && patch.status !== current.status) {
+        patch.status_history = Object.assign({}, current.status_history || {}, { [patch.status]: new Date().toISOString() });
+      }
+    }
     const { error } = await _saaClient.from("jobs").update(patch).eq("id", jobId);
     if (error) throw error;
     return { ok: true };
@@ -482,7 +554,7 @@ async function saaJobsUpdateJob(jobId, fields) {
 async function saaJobsFetchCustomerQuotes(customerId, phone) {
   const { data, error } = await _saaClient
     .from("quotes")
-    .select("id,quote_number,quote_type,total,updated_at,customer_id")
+    .select("id,quote_number,quote_type,total,updated_at,customer_id,job_address")
     .eq("customer_id", customerId)
     .order("updated_at", { ascending: false });
   if (error) throw error;
@@ -498,7 +570,7 @@ async function saaJobsFetchCustomerQuotes(customerId, phone) {
 
   const { data: byPhone, error: phoneErr } = await _saaClient
     .from("quotes")
-    .select("id,quote_number,quote_type,total,updated_at,customer_id")
+    .select("id,quote_number,quote_type,total,updated_at,customer_id,job_address")
     .in("customer_id", otherIds)
     .order("updated_at", { ascending: false });
   if (phoneErr) throw phoneErr;

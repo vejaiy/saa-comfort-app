@@ -22,8 +22,12 @@ function _saaPhotoExt(mime) {
 
 /** Uploads one photo (a Blob from either the camera-capture canvas or a
  *  file picker — see camera-capture.js) to Storage and records it against
- *  a job, optionally tied to one Inspection checklist item by index. */
-async function saaPhotosUpload(jobId, blob, inspectionItemIndex) {
+ *  a job, optionally tied to one Inspection checklist item by index.
+ *  photoType ('general' | 'inspection' | 'receipt', Round 6) defaults from
+ *  inspectionItemIndex when not given, so the two existing call sites
+ *  (plain job photos, per-inspection-item photos) don't need to change —
+ *  only the new Receipt upload passes 'receipt' explicitly. */
+async function saaPhotosUpload(jobId, blob, inspectionItemIndex, photoType) {
   try {
     const ext = _saaPhotoExt(blob.type);
     const path = `${jobId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
@@ -38,6 +42,7 @@ async function saaPhotosUpload(jobId, blob, inspectionItemIndex) {
         job_id: jobId,
         storage_path: path,
         inspection_item_index: inspectionItemIndex == null ? null : inspectionItemIndex,
+        photo_type: photoType || (inspectionItemIndex == null ? "general" : "inspection"),
       })
       .select("*")
       .single();

@@ -858,6 +858,21 @@ function saaCalWireStaticHandlers() {
   document.getElementById("cal-drawer-close-btn").addEventListener("click", saaCalCloseDrawer);
   document.getElementById("cal-drawer-overlay").addEventListener("click", saaCalCloseDrawer);
 
+  // Round 6 item 7: "View Full Job Record" opens the Job Card as an overlay
+  // right here instead of navigating to jobs.html, so the Dispatch Calendar
+  // stays in the background — unlike opening the same Job Card FROM the
+  // Jobs page, which is a normal same-page modal there, this deliberately
+  // doesn't change what URL/page is underneath. jobs.js/jobs-db.js/etc. are
+  // loaded on calendar.html for exactly this (see gen_calendar.py).
+  document.getElementById("drawer-jobrecord-link").addEventListener("click", async (e) => {
+    e.preventDefault();
+    if (!saaCalDrawerAppt || !saaCalDrawerAppt.job_id) return;
+    const jobId = saaCalDrawerAppt.job_id;
+    saaCalCloseDrawer();
+    await jbLoadAll();
+    jbOpenDetail(jobId);
+  });
+
   document.getElementById("drawer-status-select").addEventListener("change", async (e) => {
     const newStatus = e.target.value;
     const res = await saaCalUpdateAppointmentStatus({ appointmentId: saaCalDrawerAppt.id, jobId: saaCalDrawerAppt.job_id, status: newStatus });

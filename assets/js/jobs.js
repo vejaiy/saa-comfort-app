@@ -84,8 +84,9 @@ function jbApplyFilters() {
 }
 
 function jbRenderTable() {
-  const rows = jbApplyFilters();
   const tbody = document.getElementById("jb-tbody");
+  if (!tbody) return; // embedded Job Card context (e.g. calendar.html) has no Jobs List table
+  const rows = jbApplyFilters();
   document.getElementById("jb-empty").hidden = rows.length > 0;
   tbody.innerHTML = rows.map((j) => `
     <tr class="jb-row" data-id="${j.id}">
@@ -353,17 +354,67 @@ async function jbSearchCustomerQuotes(job, query) {
   box.hidden = false;
   box.querySelectorAll(".cal-cust-result").forEach((el) => {
     el.addEventListener("click", async () => {
+      const quote = filtered.find((f) => f.id === el.dataset.id);
       const res = await saaJobsLinkQuote(job.id, el.dataset.id);
       if (res.ok) {
         job.linked_quote_id = el.dataset.id;
-        job.linkedQuote = filtered.find((f) => f.id === el.dataset.id);
+        job.linkedQuote = quote;
         document.getElementById("jbd-quoted").value = res.quotedAmount || 0;
         jbComputeProfit();
+        // Auto-populate the job sheet from the quote, same fields the New
+        // Job popup's "Start from a Quote" flow fills. Address/city/zip are
+        // genuinely blank-by-default text fields, so only fill those when
+        // empty. Job Type always already holds a real value (there's no
+        // "unset" option), so a blank check would never fire there — instead
+        // ask before changing it, and only when the quote's type actually
+        // differs from what's already selected.
+        const typeSelect = document.getElementById("jbd-type");
+        if (quote.quote_type && quote.quote_type !== typeSelect.value && [...typeSelect.options].some((o) => o.value === quote.quote_type)) {
+          const newLabel = saaJobTypeLabel(quote.quote_type);
+          const useNewType = await saaConfirm(
+            `This quote is a "${newLabel}" quote. Update the Job Type to match?`,
+            { title: "Update job type from quote", okLabel: "Update", cancelLabel: "Keep Current" }
+          );
+          if (useNewType) typeSelect.value = quote.quote_type;
+        }
+        const addrEl = document.getElementById("jbd-address");
+        if (!addrEl.value.trim()) {
+          addrEl.value = quote.job_address || (job.customer && job.customer.billing_address) || "";
+        }
+        const cityEl = document.getElementById("jbd-city");
+        if (!cityEl.value.trim() && job.customer && job.customer.billing_city) cityEl.value = job.customer.billing_city;
+        const zipEl = document.getElementById("jbd-zip");
+        if (!zipEl.value.trim() && job.customer && job.customer.billing_zip) zipEl.value = job.customer.billing_zip;
         jbRenderQuoteSection(job);
         box.hidden = true;
       }
     });
   });
+}
+
+/** Job Card quick-access "💵 Invoice" button (Round 6 item 4): create the
+ *  invoice if this job doesn't have one yet, then jump straight to the
+ *  Invoice & Payment section either way — same "Generate Invoice"/"Update
+ *  Invoice" flow underneath, just reachable without scrolling. */
+async function jbQuickInvoice() {
+  const job = _jbCurrentJob;
+  if (!job) return;
+  if (!_jbCurrentInvoice) {
+    const res = await saaJobsGetOrCreateInvoice(job);
+    if (res.ok) {
+      _jbCurrentInvoice = res.invoice;
+      _jbCurrentPayments = [];
+      jbRenderInvoiceBox(job, res.invoice, []);
+      _jbToast("Invoice generated.");
+    } else {
+      _jbToast(res.error, true);
+      return;
+    }
+  }
+  const box = document.getElementById("jbd-invoice-box");
+  box.scrollIntoView({ behavior: "smooth", block: "center" });
+  box.closest(".drawer-section").classList.add("jb-highlight-section");
+  setTimeout(() => box.closest(".drawer-section").classList.remove("jb-highlight-section"), 1200);
 }
 
 function jbRenderInvoiceBox(job, invoice, payments) {
@@ -528,7 +579,9 @@ function jbWireEquipmentBlocks() {
 
 function jbRenderPhotoGrid() {
   const grid = document.getElementById("jbd-photos-grid");
-  const general = _jbPhotos.filter((p) => p.inspection_item_index == null);
+  // photo_type excludes receipts (Round 6) from the general grid even
+  // though, like general photos, they have no inspection_item_index.
+  const general = _jbPhotos.filter((p) => p.inspection_item_index == null && p.photo_type !== "receipt");
   if (!general.length) {
     grid.innerHTML = `<span class="jb-photo-empty">No photos yet.</span>`;
     return;
@@ -564,6 +617,51 @@ function jbAddPhotos() {
     jbRenderPhotoGrid();
     _jbToast(`${blobs.length} photo${blobs.length === 1 ? "" : "s"} added.`);
   });
+}
+
+/* ---- Receipts (Round 6) — same camera-capture/upload/delete plumbing as
+   Photos above, filed under photo_type 'receipt' so they show in their own
+   drawer section instead of the general Photos grid. ---- */
+function jbRenderReceiptGrid() {
+  const grid = document.getElementById("jbd-receipts-grid");
+  const receipts = _jbPhotos.filter((p) => p.photo_type === "receipt");
+  if (!receipts.length) {
+    grid.innerHTML = `<span class="jb-photo-empty">No receipts yet.</span>`;
+    return;
+  }
+  grid.innerHTML = receipts.map((p) => `
+    <div class="jb-photo-thumb" data-id="${p.id}">
+      <img src="${p.url}" alt="Receipt">
+      <button type="button" class="jb-photo-del" data-id="${p.id}" title="Delete receipt">&times;</button>
+    </div>`).join("");
+  grid.querySelectorAll(".jb-photo-del").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const photo = _jbPhotos.find((p) => p.id === btn.dataset.id);
+      if (!photo) return;
+      const res = await saaPhotosDelete(photo);
+      if (res.ok) {
+        _jbPhotos = _jbPhotos.filter((p) => p.id !== photo.id);
+        jbRenderReceiptGrid();
+      } else {
+        _jbToast(res.error, true);
+      }
+    });
+  });
+}
+
+function jbAddReceipt() {
+  if (!_jbCurrentJob) return;
+  // Reuses camera-capture.js's existing take-a-photo-or-pick-a-file modal
+  // unchanged — a receipt is just a photo filed under a different type.
+  saaCamOpen(async (blobs) => {
+    for (const blob of blobs) {
+      const res = await saaPhotosUpload(_jbCurrentJob.id, blob, null, "receipt");
+      if (res.ok) _jbPhotos.push(res.photo);
+      else _jbToast(res.error, true);
+    }
+    jbRenderReceiptGrid();
+    _jbToast(`${blobs.length} receipt${blobs.length === 1 ? "" : "s"} added.`);
+  }, "Add Receipt");
 }
 
 /* ============================== Inspection checklist ============================== */
@@ -658,6 +756,10 @@ async function jbOpenDetail(jobId) {
   document.getElementById("jbd-scheduled").value = job.scheduled_date || "";
   document.getElementById("jbd-time").value = job.scheduled_time || "";
   document.getElementById("jbd-completed").value = job.completed_date || "";
+  const _jbCompletedTime = await saaJobsGetCompletedTime(job);
+  document.getElementById("jbd-completed-time").value = _jbCompletedTime.time;
+  document.getElementById("jbd-completed-time-note").textContent = _jbCompletedTime.isEstimate ? "(estimated from schedule — confirm or edit)" : "";
+  job._jbCompletedTimeAtOpen = _jbCompletedTime.time; // change-detection so Save doesn't re-stamp an unedited time
   document.getElementById("jbd-address").value = job.job_address || "";
   document.getElementById("jbd-city").value = job.job_city || "";
   document.getElementById("jbd-state").value = job.job_state || "TX";
@@ -696,6 +798,7 @@ async function jbOpenDetail(jobId) {
 
   _jbPhotos = await saaPhotosFetch(job.id);
   jbRenderPhotoGrid();
+  jbRenderReceiptGrid();
   _jbInspectionResults = Array.isArray(job.inspection_results) ? job.inspection_results.slice() : [];
   jbRenderInspectionSummary();
 
@@ -736,6 +839,24 @@ async function jbSaveDetail() {
   const res = await saaJobsUpdateJob(job.id, patch);
   if (!res.ok) { statusMsg.textContent = res.error; return; }
   Object.assign(job, patch); // keep the open Job Card's in-memory copy in sync (e.g. so "Generate Invoice" right after Save sees the just-saved Approved Amount)
+
+  // Completed Time (Round 6 item 6): saaJobsUpdateJob above only stamps
+  // status_history.completed automatically when Status just CHANGED to
+  // Completed. This covers the other case — the tech directly editing the
+  // Completed Time field (correcting an auto-set or estimated time) without
+  // touching Status — by only writing when the field actually changed from
+  // what was loaded, so an untouched field never overwrites a precise
+  // auto-set timestamp with a rounded HH:MM on every ordinary Save.
+  const completedTimeVal = document.getElementById("jbd-completed-time").value;
+  if (patch.status === "completed" && completedTimeVal && completedTimeVal !== job._jbCompletedTimeAtOpen) {
+    const ctRes = await saaJobsSetCompletedTime(job.id, completedTimeVal);
+    if (ctRes.ok) {
+      job._jbCompletedTimeAtOpen = completedTimeVal;
+      document.getElementById("jbd-completed-time-note").textContent = "";
+    } else {
+      _jbToast(ctRes.error, true);
+    }
+  }
 
   // Push Scheduled Date/Time/Technician onto the job's calendar appointment —
   // this is what makes saving here place (or move) it on the Dispatch Calendar grid.
@@ -781,6 +902,11 @@ async function jbCloseDetail() {
   if (modal.hidden) return;
   if (_jbCurrentJob) await jbSaveDetail();
   modal.hidden = true;
+  // Round 6 item 7: when the Job Card is an overlay on top of the Dispatch
+  // Calendar, refresh the calendar grid behind it so a status/schedule
+  // change just saved shows up immediately without the tech having to
+  // reload. saaCalLoadAndRender only exists on calendar.html.
+  if (typeof saaCalLoadAndRender === "function") await saaCalLoadAndRender();
 }
 
 /** Removes a job that turned out to be a duplicate (or was created in
@@ -797,39 +923,64 @@ async function jbDeleteCurrentJob() {
   document.getElementById("jb-detail-modal").hidden = true;
   _jbToast("Job deleted.");
   await jbLoadAll();
+  if (typeof saaCalLoadAndRender === "function") await saaCalLoadAndRender();
 }
 
 /* ============================== Wire up on load ============================== */
 
 document.addEventListener("DOMContentLoaded", async () => {
   _jbTechnicians = await saaJobsFetchTechnicians();
-  document.getElementById("jb-filter-type").innerHTML = `<option value="">All Job Types</option>` + _jbOptionsHtml(SAA_JOBS_TYPE_OPTIONS, "");
-  document.getElementById("jb-filter-status").innerHTML = `<option value="">All Statuses</option>` + _jbOptionsHtml(SAA_JOBS_STATUS_OPTIONS, "");
-  document.getElementById("jb-filter-priority").innerHTML = `<option value="">All Priorities</option>` + _jbOptionsHtml(SAA_JOBS_PRIORITY_OPTIONS, "");
-  document.getElementById("jb-filter-tech").innerHTML = `<option value="">All Technicians</option>` + _jbTechnicians.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
-  document.getElementById("jbn-type").innerHTML = _jbOptionsHtml(SAA_JOBS_TYPE_OPTIONS, "");
-  document.getElementById("jbn-tech").innerHTML = `<option value="">Unassigned</option>` + _jbTechnicians.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
 
-  ["jb-search", "jb-filter-type", "jb-filter-status", "jb-filter-priority", "jb-filter-tech", "jb-filter-payment"].forEach((id) => {
-    document.getElementById(id).addEventListener("input", jbRenderTable);
-    document.getElementById(id).addEventListener("change", jbRenderTable);
-  });
+  // Round 6 item 7: the Job Card (everything below this point) is now also
+  // embedded on the Dispatch Calendar page so "View Full Job Record" can
+  // open it as an overlay without navigating away — see calendar.js's
+  // drawer-jobrecord-link handler. Only jobs.html has the Jobs List table
+  // and the New Job popup, so that wiring is skipped everywhere else.
+  const _jbIsFullPage = !!document.getElementById("jb-new-btn");
+  if (_jbIsFullPage) {
+    document.getElementById("jb-filter-type").innerHTML = `<option value="">All Job Types</option>` + _jbOptionsHtml(SAA_JOBS_TYPE_OPTIONS, "");
+    document.getElementById("jb-filter-status").innerHTML = `<option value="">All Statuses</option>` + _jbOptionsHtml(SAA_JOBS_STATUS_OPTIONS, "");
+    document.getElementById("jb-filter-priority").innerHTML = `<option value="">All Priorities</option>` + _jbOptionsHtml(SAA_JOBS_PRIORITY_OPTIONS, "");
+    document.getElementById("jb-filter-tech").innerHTML = `<option value="">All Technicians</option>` + _jbTechnicians.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
+    document.getElementById("jbn-type").innerHTML = _jbOptionsHtml(SAA_JOBS_TYPE_OPTIONS, "");
+    document.getElementById("jbn-tech").innerHTML = `<option value="">Unassigned</option>` + _jbTechnicians.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
 
-  document.getElementById("jb-new-btn").addEventListener("click", jbOpenNewJobModal);
-  document.getElementById("jbn-cancel-btn").addEventListener("click", () => { document.getElementById("jb-new-modal").hidden = true; });
-  document.getElementById("jbn-save-btn").addEventListener("click", jbSaveNewJob);
-  document.getElementById("jbn-newcust-use-btn").addEventListener("click", jbUseNewCustomer);
-  document.getElementById("jbn-newcust-cancel-btn").addEventListener("click", () => {
-    document.getElementById("jbn-newcust-form").hidden = true;
-    document.getElementById("jbn-cust-results").hidden = false;
-  });
-  document.getElementById("jbn-cust-search").addEventListener("input", async (e) => {
-    const q = e.target.value;
-    if (!q.trim()) { document.getElementById("jbn-cust-results").hidden = true; return; }
-    const results = await saaJobsSearchCustomers(q);
-    jbRenderCustResults(results, q);
-  });
+    ["jb-search", "jb-filter-type", "jb-filter-status", "jb-filter-priority", "jb-filter-tech", "jb-filter-payment"].forEach((id) => {
+      document.getElementById(id).addEventListener("input", jbRenderTable);
+      document.getElementById(id).addEventListener("change", jbRenderTable);
+    });
 
+    document.getElementById("jb-new-btn").addEventListener("click", jbOpenNewJobModal);
+    document.getElementById("jbn-cancel-btn").addEventListener("click", () => { document.getElementById("jb-new-modal").hidden = true; });
+    document.getElementById("jbn-save-btn").addEventListener("click", jbSaveNewJob);
+    document.getElementById("jbn-newcust-use-btn").addEventListener("click", jbUseNewCustomer);
+    document.getElementById("jbn-newcust-cancel-btn").addEventListener("click", () => {
+      document.getElementById("jbn-newcust-form").hidden = true;
+      document.getElementById("jbn-cust-results").hidden = false;
+    });
+    document.getElementById("jbn-cust-search").addEventListener("input", async (e) => {
+      const q = e.target.value;
+      if (!q.trim()) { document.getElementById("jbn-cust-results").hidden = true; return; }
+      const results = await saaJobsSearchCustomers(q);
+      jbRenderCustResults(results, q);
+    });
+    document.getElementById("jbn-from-quote-btn").addEventListener("click", () => {
+      const wrap = document.getElementById("jbn-quote-search-wrap");
+      wrap.hidden = !wrap.hidden;
+      if (!wrap.hidden) document.getElementById("jbn-quote-search").focus();
+    });
+    document.getElementById("jbn-quote-search").addEventListener("input", (e) => {
+      clearTimeout(_jbQuoteSearchTimer);
+      const q = e.target.value;
+      if (!q.trim()) { document.getElementById("jbn-quote-results").hidden = true; return; }
+      _jbQuoteSearchTimer = setTimeout(async () => {
+        const results = await saaJobsSearchQuotes(q);
+        jbRenderQuoteResults(results, q);
+      }, 200);
+    });
+  }
+
+  // ---- Job Card wiring — present on both jobs.html and calendar.html ----
   document.getElementById("jbd-quote-search").addEventListener("input", (e) => {
     if (_jbCurrentJob) jbSearchCustomerQuotes(_jbCurrentJob, e.target.value);
   });
@@ -843,28 +994,24 @@ document.addEventListener("DOMContentLoaded", async () => {
   jbWireEquipmentBlocks();
 
   document.getElementById("jbd-add-photos-btn").addEventListener("click", jbAddPhotos);
+  document.getElementById("jbd-add-receipt-btn").addEventListener("click", jbAddReceipt);
   document.getElementById("jbd-open-inspection-btn").addEventListener("click", jbOpenInspectionModal);
+  // Job Card quick-access row (Round 6 item 4) — same three actions as the
+  // buttons already inside the card, just reachable without scrolling.
+  document.getElementById("jbd-quick-checklist-btn").addEventListener("click", jbOpenInspectionModal);
+  document.getElementById("jbd-quick-receipt-btn").addEventListener("click", jbAddReceipt);
+  document.getElementById("jbd-quick-invoice-btn").addEventListener("click", jbQuickInvoice);
   document.getElementById("jb-insp-save-btn").addEventListener("click", jbSaveInspection);
   document.getElementById("jb-insp-close-btn").addEventListener("click", () => { document.getElementById("jb-inspection-modal").hidden = true; });
 
-  document.getElementById("jbn-from-quote-btn").addEventListener("click", () => {
-    const wrap = document.getElementById("jbn-quote-search-wrap");
-    wrap.hidden = !wrap.hidden;
-    if (!wrap.hidden) document.getElementById("jbn-quote-search").focus();
-  });
-  document.getElementById("jbn-quote-search").addEventListener("input", (e) => {
-    clearTimeout(_jbQuoteSearchTimer);
-    const q = e.target.value;
-    if (!q.trim()) { document.getElementById("jbn-quote-results").hidden = true; return; }
-    _jbQuoteSearchTimer = setTimeout(async () => {
-      const results = await saaJobsSearchQuotes(q);
-      jbRenderQuoteResults(results, q);
-    }, 200);
-  });
-
-  // Deep link from the Dispatch Calendar's Job Details drawer: jobs.html?job=<id>
-  await jbLoadAll();
-  const params = new URLSearchParams(window.location.search);
-  const openId = params.get("job");
-  if (openId && _jbAllJobs.some((j) => j.id === openId)) jbOpenDetail(openId);
+  if (_jbIsFullPage) {
+    // Legacy deep link, kept for any bookmarked/saved jobs.html?job=<id>
+    // link — Round 6 item 7 replaced the calendar's own link to this with
+    // an in-place overlay (see calendar.js), so this path is no longer how
+    // the calendar gets here, but an old link should still work.
+    await jbLoadAll();
+    const params = new URLSearchParams(window.location.search);
+    const openId = params.get("job");
+    if (openId && _jbAllJobs.some((j) => j.id === openId)) jbOpenDetail(openId);
+  }
 });

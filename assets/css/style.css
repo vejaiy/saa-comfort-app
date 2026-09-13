@@ -477,6 +477,9 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .jb-detail-card .drawer-section h4 { font-size: .7rem; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); margin-bottom: 6px; }
 .jb-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
 @media (max-width: 760px) { .jb-detail-grid { grid-template-columns: 1fr; } }
+.jb-quick-actions .btn { font-weight: 600; }
+.jb-highlight-section { animation: jbHighlightFlash 1.2s ease-out; border-radius: 8px; }
+@keyframes jbHighlightFlash { 0% { background: #fff3cd; } 100% { background: transparent; } }
 
 .jb-profit-box { background: #f5f8fa; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 8px; }
 .jb-profit-row { display: flex; justify-content: space-between; font-size: .85rem; padding: 3px 0; }

@@ -163,7 +163,12 @@
   <div class="modal-card jb-detail-card">
     <button type="button" class="cal-drawer-close" id="jb-detail-close-btn">&times;</button>
     <h2 id="jbd-title" style="margin-bottom:2px"></h2>
-    <div class="job-num" id="jbd-jobnum" style="margin-bottom:14px"></div>
+    <div class="job-num" id="jbd-jobnum" style="margin-bottom:4px"></div>
+    <div class="jb-quick-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <button type="button" class="btn btn-outline btn-sm" id="jbd-quick-checklist-btn">📋 Checklist</button>
+      <button type="button" class="btn btn-outline btn-sm" id="jbd-quick-receipt-btn">🧾 Receipt</button>
+      <button type="button" class="btn btn-outline btn-sm" id="jbd-quick-invoice-btn">💵 Invoice</button>
+    </div>
 
     <div class="jb-detail-grid">
       <div>
@@ -186,7 +191,10 @@
             <div class="field"><label>Scheduled Date</label><input type="date" id="jbd-scheduled"></div>
             <div class="field"><label>Scheduled Time</label><input type="time" id="jbd-time"></div>
           </div>
-          <div class="field"><label>Completion Date</label><input type="date" id="jbd-completed"></div>
+          <div class="field-row">
+            <div class="field"><label>Completion Date</label><input type="date" id="jbd-completed"></div>
+            <div class="field"><label>Completed Time <span class="muted" id="jbd-completed-time-note" style="font-weight:400;font-size:.78rem"></span></label><input type="time" id="jbd-completed-time"></div>
+          </div>
           <div class="field"><label>Service Address</label><input type="text" id="jbd-address"></div>
           <div class="field-row field-row-3">
             <div class="field"><label>City</label><input type="text" id="jbd-city"></div>
@@ -316,6 +324,12 @@
         </div>
 
         <div class="drawer-section">
+          <h4>Receipts</h4>
+          <button type="button" class="btn btn-ghost btn-sm" id="jbd-add-receipt-btn">🧾 Add Receipt</button>
+          <div class="jb-photo-grid" id="jbd-receipts-grid"><span class="jb-photo-empty">No receipts yet.</span></div>
+        </div>
+
+        <div class="drawer-section">
           <h4>Invoice &amp; Payment</h4>
           <div id="jbd-invoice-box"></div>
         </div>
@@ -360,7 +374,7 @@
 <!-- ============ Camera capture modal (Photos + per-Inspection-item photos) ============ -->
 <div class="modal-overlay" id="cam-modal" hidden>
   <div class="modal-card">
-    <h3>Take Photos</h3>
+    <h3 id="cam-modal-title">Take Photos</h3>
     <div id="cam-live-wrap">
       <video id="cam-video" autoplay playsinline muted></video>
       <div style="margin-top:8px"><button type="button" class="btn btn-navy btn-sm" id="cam-shoot-btn">📸 Capture</button></div>
