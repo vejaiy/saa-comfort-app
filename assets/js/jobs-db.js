@@ -843,6 +843,133 @@ async function _saaCustomerFirstName(customerId) {
   return data ? data.first_name : null;
 }
 
+/* ============================== Bill of Material (job_materials) ==============================
+ * Round 12 (2026-09-13): "Add BOM button to create and print bill of
+ * material to order. Add order button in bill of material page. Order
+ * button will create order form with order number showing related
+ * quotation number and job number. Save bill of material details in
+ * database against each job." job_materials already existed in the
+ * schema (scaffolded, unused) as the natural per-job itemized-materials
+ * table, so the Job Card's Bill of Material section reads/writes it
+ * directly rather than a new table. BOM-level metadata (its own number,
+ * and the Order raised against it) lives on the jobs row itself, the same
+ * way inspection_results and linked_quote_id already do — a Bill of
+ * Material only ever belongs to one job. */
+
+/** Fetches this job's Bill of Material line items, in display order. */
+async function saaBomFetchItems(jobId) {
+  const { data, error } = await _saaClient
+    .from("job_materials")
+    .select("*")
+    .eq("job_id", jobId)
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+/** Replaces a job's entire Bill of Material item list. The list has no
+ *  durable ids on the client side (rows are freely added/edited/removed
+ *  in the Job Card), so "delete everything for this job, then reinsert
+ *  what's currently on screen" is the simplest correct way to save it —
+ *  same shape as re-saving the Inspection checklist's whole array, just
+ *  against a real child table instead of a jsonb column. Returns the
+ *  freshly-inserted rows (with their DB-generated actual_ext_cost) so
+ *  callers can print/display exact totals without a second round-trip.
+ *  Rows with no description are dropped (a blank trailing row from
+ *  "+ Add Item" that was never filled in). */
+async function saaBomSaveItems(jobId, items) {
+  try {
+    const { error: delErr } = await _saaClient.from("job_materials").delete().eq("job_id", jobId);
+    if (delErr) throw delErr;
+    const clean = (items || [])
+      .map((it) => ({
+        description: (it.description || "").trim(),
+        qty: Number(it.quantity != null ? it.quantity : it.qty) || 1,
+        unit: (it.unit || "ea").trim() || "ea",
+        actual_unit_cost: it.unit_cost != null && it.unit_cost !== "" ? Number(it.unit_cost) : 0,
+        notes: it.notes || null,
+      }))
+      .filter((it) => it.description);
+    if (!clean.length) return { ok: true, items: [] };
+    const rows = clean.map((it, i) => Object.assign({ job_id: jobId, sort_order: i }, it));
+    const { data, error: insErr } = await _saaClient
+      .from("job_materials")
+      .insert(rows)
+      .select("*")
+      .order("sort_order", { ascending: true });
+    if (insErr) throw insErr;
+    return { ok: true, items: data || [] };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+async function _saaBomNextNumber(firstName) {
+  const year = new Date().getFullYear();
+  const { count, error } = await _saaClient
+    .from("jobs")
+    .select("id", { count: "exact", head: true })
+    .like("bom_number", `BOM-${year}-%`);
+  if (error) throw error;
+  const base = `BOM-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
+  return saaAppendNameSuffix(base, firstName);
+}
+
+async function _saaBomNextOrderNumber(firstName) {
+  const year = new Date().getFullYear();
+  const { count, error } = await _saaClient
+    .from("jobs")
+    .select("id", { count: "exact", head: true })
+    .like("bom_order_number", `PO-${year}-%`);
+  if (error) throw error;
+  const base = `PO-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
+  return saaAppendNameSuffix(base, firstName);
+}
+
+/** Assigns this job's Bill of Material its sequential number the first
+ *  time it's needed — printing the BOM, or creating an Order against it.
+ *  A no-op (no DB write) if it already has one. Same lazy-numbering shape
+ *  as saaJobsGetOrCreateInvoice. */
+async function saaBomEnsureNumber(job) {
+  try {
+    if (job.bom_number) return { ok: true, bomNumber: job.bom_number };
+    const firstName = job.customer ? job.customer.first_name : await _saaCustomerFirstName(job.customer_id);
+    const bomNumber = await _saaBomNextNumber(firstName);
+    const res = await saaJobsUpdateJob(job.id, { bom_number: bomNumber });
+    if (!res.ok) return res;
+    job.bom_number = bomNumber;
+    return { ok: true, bomNumber };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+/** Raises the Order against a job's current Bill of Material — mints a
+ *  sequential Order Number/date the first time (re-clicking "Create
+ *  Order"/"Print Order Form" once one already exists just updates the
+ *  Supplier and re-prints the same order rather than minting a new number
+ *  every time). Always makes sure the Bill of Material itself is numbered
+ *  first, since an Order needs a BOM number to point back to. */
+async function saaBomCreateOrder(job, supplier) {
+  try {
+    const numRes = await saaBomEnsureNumber(job);
+    if (!numRes.ok) return numRes;
+    const patch = { bom_supplier: supplier || null };
+    if (!job.bom_order_number) {
+      const firstName = job.customer ? job.customer.first_name : await _saaCustomerFirstName(job.customer_id);
+      patch.bom_order_number = await _saaBomNextOrderNumber(firstName);
+      patch.bom_order_date = new Date().toISOString().slice(0, 10);
+      patch.bom_status = "ordered";
+    }
+    const res = await saaJobsUpdateJob(job.id, patch);
+    if (!res.ok) return res;
+    Object.assign(job, patch);
+    return { ok: true, orderNumber: job.bom_order_number, orderDate: job.bom_order_date, bomNumber: job.bom_number };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
 /** Fetches the job's most recent invoice, or creates a Draft one if
  *  none exists yet — amount defaults to Approved Amount, falling back
  *  to Quoted Amount, so "Generate Invoice" works with one click. */

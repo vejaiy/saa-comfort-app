@@ -477,6 +477,7 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .jb-pay-partial { background: #fdf3d8; color: #8a6d1a; }
 .jb-pay-paid { background: #e3f6ee; color: var(--ok); }
 .jb-invstatus-none { background: #eef3f6; color: var(--muted); }
+.jb-bomstatus-ordered { background: #e3f6ee; color: var(--ok); }
 .jb-flag-mismatch { background: #fdf3d8; color: #8a6d1a; text-transform: none; letter-spacing: normal; font-size: .72rem; margin-left: 8px; }
 
 /* .jb-detail-close-btn (class .cal-drawer-close, position:absolute top/right
@@ -505,6 +506,17 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .jb-negative { color: var(--danger); }
 .jb-payments-list { font-size: .82rem; color: var(--muted); margin: 4px 0; }
 .jb-payment-row { padding: 2px 0; }
+
+/* Bill of Material item table (Round 12) — compact, editable rows. */
+.jb-bom-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+.jb-bom-table th { text-align: left; font-size: .66rem; text-transform: uppercase; letter-spacing: .3px; color: var(--muted); padding: 4px 5px; border-bottom: 1px solid var(--line); }
+.jb-bom-table th.num, .jb-bom-table td.num { text-align: right; white-space: nowrap; }
+.jb-bom-table td { padding: 3px 5px; border-bottom: 1px solid #f0f3f6; vertical-align: middle; }
+.jb-bom-table input { width: 100%; padding: 4px 6px; font-size: .84rem; border: 1px solid var(--line); border-radius: 5px; font-family: inherit; }
+.jb-bom-table .jb-bom-qty, .jb-bom-table .jb-bom-unit { text-align: center; }
+.jb-bom-remove-btn { background: none; border: none; color: var(--muted); font-size: 1.05rem; cursor: pointer; line-height: 1; padding: 2px 6px; }
+.jb-bom-remove-btn:hover { color: var(--danger); }
+.jb-bom-total { text-align: right; font-weight: 700; margin-top: 6px; font-size: .9rem; }
 
 /* A three-across field-row (New Job's Technician / Scheduled Date / Scheduled Time). */
 .field-row-3 { grid-template-columns: 1fr 1fr 1fr; }

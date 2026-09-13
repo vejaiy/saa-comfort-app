@@ -20,6 +20,7 @@ let _jbQuoteSearchTimer = null;
 let _jbPhotos = []; // every job_photos row for the open job (general + inspection-linked)
 let _jbInspectionResults = []; // [{index, item, checked}] — synced with INSPECTION_ITEMS by index
 let _jbWarrantyFiles = []; // every job_warranty_files row for the open job
+let _jbBomItems = []; // Bill of Material line items (job_materials rows) for the open job
 
 function _jbToast(msg, isError) {
   const el = document.getElementById("jb-toast");
@@ -969,6 +970,187 @@ async function jbSaveInspection() {
   }
 }
 
+/* ============================== Bill of Material ============================== */
+/* Round 12 (2026-09-13): itemized parts/materials to order for this job,
+ * backed by the job_materials table (see saaBom* in jobs-db.js). Rows are
+ * plain inputs read straight from the DOM when saving/printing/ordering —
+ * same "collect from the live fields" shape jbSaveDetail already uses for
+ * Equipment, rather than re-rendering on every keystroke. */
+
+function _jbBomEsc(s) {
+  return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function _jbBomLineTotal(item) {
+  const qty = Number(item.quantity != null ? item.quantity : item.qty) || 0;
+  const cost = Number(item.unit_cost != null ? item.unit_cost : item.actual_unit_cost) || 0;
+  return qty * cost;
+}
+
+function _jbBomRowHtml(item, i) {
+  const desc = _jbBomEsc(item.description || "");
+  const qty = item.quantity != null ? item.quantity : (item.qty != null ? item.qty : 1);
+  const unit = _jbBomEsc(item.unit || "ea");
+  const rawCost = item.unit_cost != null ? item.unit_cost : item.actual_unit_cost;
+  const cost = rawCost != null && rawCost !== "" ? rawCost : "";
+  return `<tr class="jb-bom-row" data-i="${i}">
+    <td><input type="text" class="jb-bom-desc" value="${desc}" placeholder="Part / material"></td>
+    <td><input type="number" step="1" min="0" class="jb-bom-qty" value="${qty}"></td>
+    <td><input type="text" class="jb-bom-unit" value="${unit}"></td>
+    <td><input type="number" step="0.01" min="0" class="jb-bom-cost" value="${cost}" placeholder="0.00"></td>
+    <td class="num jb-bom-linetotal">${fmtMoney(_jbBomLineTotal(item))}</td>
+    <td><button type="button" class="jb-bom-remove-btn" data-i="${i}" title="Remove item">&times;</button></td>
+  </tr>`;
+}
+
+/** Reads whatever's currently in the Bill of Material's input rows (NOT
+ *  _jbBomItems, which only reflects the last render) into a plain array,
+ *  dropping fully-blank rows. Called before every save/print/order so
+ *  in-progress edits are never lost or stale. Also refreshes _jbBomItems
+ *  so a re-render (add/remove row) doesn't discard unsaved typing. */
+function jbBomCollectFromDom() {
+  const rows = document.querySelectorAll("#jbd-bom-box .jb-bom-row");
+  const items = [];
+  rows.forEach((row) => {
+    const description = row.querySelector(".jb-bom-desc").value.trim();
+    const qtyRaw = row.querySelector(".jb-bom-qty").value;
+    const unit = row.querySelector(".jb-bom-unit").value.trim() || "ea";
+    const costRaw = row.querySelector(".jb-bom-cost").value;
+    const quantity = qtyRaw === "" ? null : parseFloat(qtyRaw);
+    const unit_cost = costRaw === "" ? null : parseFloat(costRaw);
+    if (!description && !quantity && !unit_cost) return; // skip a never-filled-in blank row
+    items.push({ description, quantity: quantity || 1, unit, unit_cost });
+  });
+  _jbBomItems = items;
+  return items;
+}
+
+function jbBomUpdateLineTotals() {
+  let total = 0;
+  document.querySelectorAll("#jbd-bom-box .jb-bom-row").forEach((row) => {
+    const qty = parseFloat(row.querySelector(".jb-bom-qty").value) || 0;
+    const cost = parseFloat(row.querySelector(".jb-bom-cost").value) || 0;
+    const lineTotal = qty * cost;
+    total += lineTotal;
+    row.querySelector(".jb-bom-linetotal").textContent = fmtMoney(lineTotal);
+  });
+  const totalEl = document.getElementById("jbd-bom-total");
+  if (totalEl) totalEl.textContent = `Total: ${fmtMoney(total)}`;
+}
+
+function jbRenderBomBox(job) {
+  const box = document.getElementById("jbd-bom-box");
+  const items = _jbBomItems.length ? _jbBomItems : [{}];
+  const total = items.reduce((s, it) => s + _jbBomLineTotal(it), 0);
+  const ordered = job.bom_status === "ordered" && job.bom_order_number;
+
+  box.innerHTML = `
+    <div class="muted" style="font-size:.8rem;margin-bottom:6px">
+      ${job.bom_number ? `BOM ${_jbBomEsc(job.bom_number)}` : "Not yet numbered &mdash; assigned when first printed or ordered."}
+      ${ordered ? ` &middot; <span class="jb-badge jb-bomstatus-ordered">Ordered</span> ${_jbBomEsc(job.bom_order_number)}${job.bom_order_date ? " on " + _jbBomEsc(job.bom_order_date) : ""}` : ""}
+    </div>
+    <table class="jb-bom-table">
+      <thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th class="num">Unit Cost</th><th class="num">Total</th><th></th></tr></thead>
+      <tbody>${items.map(_jbBomRowHtml).join("")}</tbody>
+    </table>
+    <button type="button" class="btn btn-ghost btn-sm" id="jbd-bom-add-btn" style="margin-top:8px">+ Add Item</button>
+    <div class="jb-bom-total" id="jbd-bom-total">Total: ${fmtMoney(total)}</div>
+    <div class="field" style="margin-top:8px"><label>Supplier / Order From</label><input type="text" id="jbd-bom-supplier" value="${_jbBomEsc(job.bom_supplier || "")}" placeholder="e.g. Ferguson, distributor name"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button type="button" class="btn btn-ghost btn-sm" id="jbd-bom-print-btn">🖨️ Print Bill of Material</button>
+      <button type="button" class="btn btn-navy btn-sm" id="jbd-bom-order-btn">${ordered ? "🖨️ Print Order Form" : "📦 Create Order"}</button>
+    </div>`;
+
+  box.querySelectorAll(".jb-bom-remove-btn").forEach((btn) => {
+    btn.addEventListener("click", () => jbBomRemoveRow(parseInt(btn.dataset.i, 10)));
+  });
+  box.querySelectorAll(".jb-bom-qty, .jb-bom-cost").forEach((inp) => inp.addEventListener("input", jbBomUpdateLineTotals));
+  document.getElementById("jbd-bom-add-btn").addEventListener("click", jbBomAddRow);
+  document.getElementById("jbd-bom-print-btn").addEventListener("click", jbPrintBom);
+  document.getElementById("jbd-bom-order-btn").addEventListener("click", jbCreateBomOrder);
+}
+
+function jbBomAddRow() {
+  jbBomCollectFromDom();
+  _jbBomItems.push({ description: "", quantity: 1, unit: "ea", unit_cost: null });
+  jbRenderBomBox(_jbCurrentJob);
+}
+
+function jbBomRemoveRow(i) {
+  jbBomCollectFromDom();
+  _jbBomItems.splice(i, 1);
+  jbRenderBomBox(_jbCurrentJob);
+}
+
+/** Saves the current Bill of Material rows to job_materials, keeping
+ *  `job.bom_items`-shaped in-memory state and the modal's fields in sync
+ *  with what actually landed in the DB (the DB-generated actual_ext_cost
+ *  on the returned rows isn't used for re-render math, but keeps _jbBomItems
+ *  and the printed total based on the exact same numbers). Shared by
+ *  Print BOM, Create Order, and the main Save Job Card button. */
+async function jbSaveBomItems() {
+  const job = _jbCurrentJob;
+  const items = jbBomCollectFromDom();
+  const res = await saaBomSaveItems(job.id, items);
+  if (!res.ok) { _jbToast(res.error, true); return null; }
+  return items;
+}
+
+async function jbPrintBom() {
+  const job = _jbCurrentJob;
+  if (!job) return;
+  const items = await jbSaveBomItems();
+  if (items === null) return;
+  if (!items.length) { _jbToast("Add at least one item to the Bill of Material first.", true); return; }
+  const numRes = await saaBomEnsureNumber(job);
+  if (!numRes.ok) { _jbToast(numRes.error, true); return; }
+  jbRenderBomBox(job);
+  printBillOfMaterial({
+    bomNumber: job.bom_number,
+    jobNumber: _jbJobNum(job),
+    customer: job.customer ? _jbCustName(job.customer) : "",
+    phone: job.customer ? job.customer.phone : "",
+    address: [job.job_address, job.job_city, job.job_state, job.job_zip].filter(Boolean).join(", "),
+    jobTitle: job.title || saaJobTypeLabel(job.job_type),
+    items,
+  });
+}
+
+async function jbCreateBomOrder() {
+  const job = _jbCurrentJob;
+  if (!job) return;
+  const items = await jbSaveBomItems();
+  if (items === null) return;
+  if (!items.length) { _jbToast("Add at least one item to the Bill of Material before creating an order.", true); return; }
+  const supplier = document.getElementById("jbd-bom-supplier").value.trim();
+  const wasOrdered = job.bom_status === "ordered" && job.bom_order_number;
+  const orderRes = await saaBomCreateOrder(job, supplier);
+  if (!orderRes.ok) { _jbToast(orderRes.error, true); return; }
+  jbRenderBomBox(job);
+  printBomOrderForm({
+    orderNumber: job.bom_order_number,
+    orderDate: job.bom_order_date,
+    jobNumber: _jbJobNum(job),
+    quoteNumber: job.linkedQuote ? job.linkedQuote.quote_number : null,
+    supplier: job.bom_supplier,
+    customer: job.customer ? _jbCustName(job.customer) : "",
+    phone: job.customer ? job.customer.phone : "",
+    address: [job.job_address, job.job_city, job.job_state, job.job_zip].filter(Boolean).join(", "),
+    items,
+  });
+  if (!wasOrdered) _jbToast("Order created.");
+}
+
+/** Quick-actions "Bill of Material" button — scrolls to and highlights
+ *  the section, same as the Invoice quick action, rather than opening a
+ *  separate modal (the section is always right there on the Job Card). */
+function jbQuickBom() {
+  const box = document.getElementById("jbd-bom-box");
+  box.scrollIntoView({ behavior: "smooth", block: "center" });
+  box.closest(".drawer-section").classList.add("jb-highlight-section");
+  setTimeout(() => box.closest(".drawer-section").classList.remove("jb-highlight-section"), 1200);
+}
+
 /* ============================== Mileage ============================== */
 
 /** Builds a plain snapshot from the Job Card's LIVE field values (not the
@@ -1117,6 +1299,9 @@ async function jbOpenDetail(jobId) {
   _jbInspectionResults = Array.isArray(job.inspection_results) ? job.inspection_results.slice() : [];
   jbRenderInspectionSummary();
 
+  _jbBomItems = await saaBomFetchItems(job.id);
+  jbRenderBomBox(job);
+
   document.getElementById("jb-detail-modal").hidden = false;
 }
 
@@ -1244,6 +1429,12 @@ async function jbSaveDetail() {
     // number just shows up next time.
     saaMileageEnsureForJob(_jbMileageSnapshot());
   }
+
+  // Bill of Material: persisted to job_materials on every ordinary Save
+  // Job Card too (not just when Print/Create Order are clicked), so
+  // in-progress edits to the parts list are never lost by closing the
+  // card without printing anything.
+  await jbSaveBomItems();
 
   statusMsg.textContent = "Saved.";
   await jbLoadAll();
@@ -1377,6 +1568,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("jbd-quick-checklist-btn").addEventListener("click", jbOpenInspectionModal);
   document.getElementById("jbd-quick-receipt-btn").addEventListener("click", jbAddReceipt);
   document.getElementById("jbd-quick-invoice-btn").addEventListener("click", jbQuickInvoice);
+  document.getElementById("jbd-quick-bom-btn").addEventListener("click", jbQuickBom);
   document.getElementById("jb-insp-save-btn").addEventListener("click", jbSaveInspection);
   document.getElementById("jb-insp-close-btn").addEventListener("click", () => { document.getElementById("jb-inspection-modal").hidden = true; });
 

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260913l">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260913m">
 <script>
 if (new URLSearchParams(location.search).get('embed') === '1') {
   document.documentElement.classList.add('saa-embed');
@@ -14,9 +14,9 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260913l"></script>
-<script src="../assets/js/supabase-config.js?v=20260913l"></script>
-<script src="../assets/js/auth.js?v=20260913l"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260913m"></script>
+<script src="../assets/js/supabase-config.js?v=20260913m"></script>
+<script src="../assets/js/auth.js?v=20260913m"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -262,6 +262,7 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
       <button type="button" class="btn btn-ghost btn-sm" id="jbd-quick-checklist-btn">📋 Checklist</button>
       <button type="button" class="btn btn-ghost btn-sm" id="jbd-quick-receipt-btn">🧾 Receipt</button>
       <button type="button" class="btn btn-ghost btn-sm" id="jbd-quick-invoice-btn">💵 Invoice</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="jbd-quick-bom-btn">🧰 Bill of Material</button>
     </div>
 
     <div class="jb-detail-grid">
@@ -425,6 +426,11 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
         </div>
 
         <div class="drawer-section">
+          <h4>Bill of Material</h4>
+          <div id="jbd-bom-box"></div>
+        </div>
+
+        <div class="drawer-section">
           <h4>Mileage</h4>
           <div class="muted" id="jbd-mileage-context" style="font-size:.82rem;margin-bottom:8px">Assign a technician and a Scheduled Date to calculate this trip.</div>
           <div class="field-row">
@@ -508,17 +514,18 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260913l"></script>
-<script src="../assets/js/worksheet.js?v=20260913l"></script>
-<script src="../assets/js/calendar-db.js?v=20260913l"></script>
-<script src="../assets/js/jobs-db.js?v=20260913l"></script>
-<script src="../assets/js/job-photos-db.js?v=20260913l"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260913l"></script>
-<script src="../assets/js/camera-capture.js?v=20260913l"></script>
-<script src="../assets/js/print-invoice.js?v=20260913l"></script>
-<script src="../assets/js/maps-config.js?v=20260913l"></script>
-<script src="../assets/js/mileage-db.js?v=20260913l"></script>
-<script src="../assets/js/jobs.js?v=20260913l"></script>
-<script src="../assets/js/calendar.js?v=20260913l"></script>
+<script src="../assets/js/pricing-data.js?v=20260913m"></script>
+<script src="../assets/js/worksheet.js?v=20260913m"></script>
+<script src="../assets/js/calendar-db.js?v=20260913m"></script>
+<script src="../assets/js/jobs-db.js?v=20260913m"></script>
+<script src="../assets/js/job-photos-db.js?v=20260913m"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260913m"></script>
+<script src="../assets/js/camera-capture.js?v=20260913m"></script>
+<script src="../assets/js/print-invoice.js?v=20260913m"></script>
+<script src="../assets/js/print-bom.js?v=20260913m"></script>
+<script src="../assets/js/maps-config.js?v=20260913m"></script>
+<script src="../assets/js/mileage-db.js?v=20260913m"></script>
+<script src="../assets/js/jobs.js?v=20260913m"></script>
+<script src="../assets/js/calendar.js?v=20260913m"></script>
 </body>
 </html>
