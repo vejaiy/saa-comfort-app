@@ -242,3 +242,83 @@ async function saaLoadQuote(quoteId) {
     return { ok: false, error: (e && e.message) || String(e) };
   }
 }
+
+/* ============================================================
+   "Select Existing Customer" search (round 8 follow-up, 2026-09-13)
+   Lets the Quotation and Repair pages pull an existing customer
+   (one already on file from a job or the Dispatch Calendar) into
+   the quote intake card instead of retyping their name/phone/
+   address. Mirrors saaJobsSearchCustomers (jobs-db.js) /
+   saaCalSearchCustomers (calendar-db.js); duplicated rather than
+   shared since neither of those files is loaded here.
+   ============================================================ */
+
+async function saaQuotesSearchCustomers(query) {
+  const q = (query || "").trim().replace(/[%,()]/g, "");
+  if (!q) return [];
+  const { data, error } = await _saaClient
+    .from("customers")
+    .select("id,first_name,last_name,phone,billing_address,billing_city,billing_zip")
+    .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,phone.ilike.%${q}%`)
+    .limit(8);
+  if (error) throw error;
+  return data || [];
+}
+
+/** Wires the "Select Existing Customer" search box inside
+ *  quote_intake_card() (templates.py) — id="q-cust-search"/
+ *  "q-cust-results". Selecting a result fills First/Last/Phone/
+ *  Address and fires an input event so the page's own totals/
+ *  save-state listeners pick up the change. Call once, after the
+ *  page's other DOM wiring, from Quotation's and Repair's own
+ *  inline <script>. No-ops quietly if the fields aren't present. */
+let _saaQuoteCustSearchTimer = null;
+function saaWireQuoteCustomerSearch() {
+  const input = document.getElementById("q-cust-search");
+  const results = document.getElementById("q-cust-results");
+  if (!input || !results) return;
+
+  input.addEventListener("input", (e) => {
+    clearTimeout(_saaQuoteCustSearchTimer);
+    const q = e.target.value.trim();
+    if (q.length < 2) { results.hidden = true; return; }
+    _saaQuoteCustSearchTimer = setTimeout(async () => {
+      let matches = [];
+      try { matches = await saaQuotesSearchCustomers(q); } catch (err) { /* best-effort search */ }
+      if (!matches.length) {
+        results.innerHTML = `<div class="cal-cust-result muted">No matching customers.</div>`;
+        results.hidden = false;
+        return;
+      }
+      results.innerHTML = matches.map((c) => `
+        <div class="cal-cust-result" data-id="${c.id}">
+          <div class="name">${[c.first_name, c.last_name].filter(Boolean).join(" ") || "(no name)"}</div>
+          ${c.phone ? `<div class="phone">${saaFormatPhone(c.phone)}</div>` : ""}
+          ${c.billing_address ? `<div class="addr">${[c.billing_address, c.billing_city].filter(Boolean).join(", ")}</div>` : ""}
+        </div>`).join("");
+      results.hidden = false;
+      results.querySelectorAll(".cal-cust-result[data-id]").forEach((row) => {
+        row.addEventListener("click", () => {
+          const c = matches.find((m) => m.id === row.dataset.id);
+          if (!c) return;
+          document.getElementById("q-first").value = c.first_name || "";
+          document.getElementById("q-last").value = c.last_name || "";
+          document.getElementById("q-phone").value = c.phone ? saaFormatPhone(c.phone) : "";
+          document.getElementById("q-address").value = [c.billing_address, c.billing_city].filter(Boolean).join(", ") || c.billing_address || "";
+          input.value = "";
+          results.hidden = true;
+          results.innerHTML = "";
+          // Nudge the page's own totals/save-state listeners (bound to
+          // input/change on the whole worksheet) so the newly-filled
+          // fields are picked up immediately, same as if typed by hand.
+          document.getElementById("q-address").dispatchEvent(new Event("input", { bubbles: true }));
+        });
+      });
+    }, 200);
+  });
+
+  // Clicking anywhere outside the search box closes the results list.
+  document.addEventListener("click", (e) => {
+    if (!results.hidden && !e.target.closest(".cal-cust-search-wrap")) results.hidden = true;
+  });
+}

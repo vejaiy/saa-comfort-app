@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quotation | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260913g">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260913j">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260913g"></script>
-<script src="../assets/js/supabase-config.js?v=20260913g"></script>
-<script src="../assets/js/auth.js?v=20260913g"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260913j"></script>
+<script src="../assets/js/supabase-config.js?v=20260913j"></script>
+<script src="../assets/js/auth.js?v=20260913j"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -40,6 +40,7 @@
         <option value="maintenance-plan.html">Maintenance Plan</option>
         <option value="custom-solutions.html">Custom HVAC Solutions</option>
         <option value="jobs.html">Jobs</option>
+        <option value="mileage.html">Mileage</option>
         <option value="instruction-manual.html">Instruction Manual</option>
         <option value="tool-list.html">Tool List</option>
         <option value="receipts.html">Receipts</option>
@@ -53,11 +54,16 @@
 <main class="container" style="padding:26px 20px 60px">
 
 <div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Quotation</div>
-<div class="page-title-row"><h1>Quotation</h1></div>
+<div class="page-title-row"><h1>Quotation</h1><a class="page-close-btn" href="dashboard.html" title="Close" aria-label="Close">&times;</a></div>
 <div class="note-box blue">Full system quote for a new installation or a full system replacement. Pick the quote type below, then toggle on what the job needs — worksheets open for detail and stay live as you edit.</div>
 
 
 <div class="card" style="margin-bottom:22px">
+  <div class="field cal-cust-search-wrap" style="margin-bottom:14px">
+    <label>Select Existing Customer <span class="muted" style="font-weight:400">(optional &mdash; searches Jobs &amp; Dispatch Calendar)</span></label>
+    <input type="text" id="q-cust-search" placeholder="Search by name or phone&hellip;" autocomplete="off">
+    <div class="cal-cust-results" id="q-cust-results" hidden></div>
+  </div>
   <div class="field-row">
     <div class="field"><label>Customer first name</label><input type="text" id="q-first"></div>
     <div class="field"><label>Customer last name</label><input type="text" id="q-last"></div>
@@ -249,16 +255,17 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260913g"></script>
-<script src="../assets/js/worksheet.js?v=20260913g"></script>
-<script src="../assets/js/labor-widget.js?v=20260913g"></script>
-<script src="../assets/js/plenum-widget.js?v=20260913g"></script>
-<script src="../assets/js/print-quote.js?v=20260913g"></script>
-<script src="../assets/js/quotes-db.js?v=20260913g"></script>
+<script src="../assets/js/pricing-data.js?v=20260913j"></script>
+<script src="../assets/js/worksheet.js?v=20260913j"></script>
+<script src="../assets/js/labor-widget.js?v=20260913j"></script>
+<script src="../assets/js/plenum-widget.js?v=20260913j"></script>
+<script src="../assets/js/print-quote.js?v=20260913j"></script>
+<script src="../assets/js/quotes-db.js?v=20260913j"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
   saaAttachPhoneMask(document.getElementById('q-phone'));
   saaAttachPhoneMask(document.getElementById('rq-phone'));
+  saaWireQuoteCustomerSearch();
 
   // Tracks which saved quote this page is editing, once one exists —
   // set after the first successful Save Quote, or after Retrieve Saved

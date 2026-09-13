@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260913g">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260913j">
 <script>
 if (new URLSearchParams(location.search).get('embed') === '1') {
   document.documentElement.classList.add('saa-embed');
@@ -14,9 +14,9 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260913g"></script>
-<script src="../assets/js/supabase-config.js?v=20260913g"></script>
-<script src="../assets/js/auth.js?v=20260913g"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260913j"></script>
+<script src="../assets/js/supabase-config.js?v=20260913j"></script>
+<script src="../assets/js/auth.js?v=20260913j"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -44,6 +44,7 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
         <option value="maintenance-plan.html">Maintenance Plan</option>
         <option value="custom-solutions.html">Custom HVAC Solutions</option>
         <option value="jobs.html">Jobs</option>
+        <option value="mileage.html">Mileage</option>
         <option value="instruction-manual.html">Instruction Manual</option>
         <option value="tool-list.html">Tool List</option>
         <option value="receipts.html">Receipts</option>
@@ -384,6 +385,13 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
         </div>
 
         <div class="drawer-section">
+          <h4>Warranty Documents</h4>
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-block">📎 Add Warranty File<input type="file" id="jbd-warranty-input" accept=".pdf,.doc,.docx" multiple style="display:none"></label>
+          <span class="muted" style="font-size:.78rem;margin-left:6px">PDF or Word, up to 20MB each</span>
+          <div class="jb-file-list" id="jbd-warranty-list"><span class="jb-photo-empty">No warranty files yet.</span></div>
+        </div>
+
+        <div class="drawer-section">
           <h4>Inspection</h4>
           <div class="jb-insp-summary">
             <span id="jbd-insp-summary" class="muted" style="font-size:.85rem">Not started</span>
@@ -414,6 +422,16 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
           </div>
           <div class="field"><label>Other Cost</label><input type="number" step="0.01" id="jbd-cost-other"></div>
           <div class="jb-profit-box" id="jbd-profit-box"></div>
+        </div>
+
+        <div class="drawer-section">
+          <h4>Mileage</h4>
+          <div class="muted" id="jbd-mileage-context" style="font-size:.82rem;margin-bottom:8px">Assign a technician and a Scheduled Date to calculate this trip.</div>
+          <div class="field-row">
+            <div class="field"><label>Miles Driven</label><input type="number" step="0.1" min="0" id="jbd-mileage-miles" placeholder="0.0"></div>
+            <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbd-mileage-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Miles</button></div>
+          </div>
+          <div class="muted" id="jbd-mileage-note" style="font-size:.78rem"></div>
         </div>
 
         <div class="drawer-section">
@@ -490,14 +508,17 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260913g"></script>
-<script src="../assets/js/worksheet.js?v=20260913g"></script>
-<script src="../assets/js/calendar-db.js?v=20260913g"></script>
-<script src="../assets/js/jobs-db.js?v=20260913g"></script>
-<script src="../assets/js/job-photos-db.js?v=20260913g"></script>
-<script src="../assets/js/camera-capture.js?v=20260913g"></script>
-<script src="../assets/js/print-invoice.js?v=20260913g"></script>
-<script src="../assets/js/jobs.js?v=20260913g"></script>
-<script src="../assets/js/calendar.js?v=20260913g"></script>
+<script src="../assets/js/pricing-data.js?v=20260913j"></script>
+<script src="../assets/js/worksheet.js?v=20260913j"></script>
+<script src="../assets/js/calendar-db.js?v=20260913j"></script>
+<script src="../assets/js/jobs-db.js?v=20260913j"></script>
+<script src="../assets/js/job-photos-db.js?v=20260913j"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260913j"></script>
+<script src="../assets/js/camera-capture.js?v=20260913j"></script>
+<script src="../assets/js/print-invoice.js?v=20260913j"></script>
+<script src="../assets/js/maps-config.js?v=20260913j"></script>
+<script src="../assets/js/mileage-db.js?v=20260913j"></script>
+<script src="../assets/js/jobs.js?v=20260913j"></script>
+<script src="../assets/js/calendar.js?v=20260913j"></script>
 </body>
 </html>

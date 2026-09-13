@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Repair | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260913g">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260913j">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260913g"></script>
-<script src="../assets/js/supabase-config.js?v=20260913g"></script>
-<script src="../assets/js/auth.js?v=20260913g"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260913j"></script>
+<script src="../assets/js/supabase-config.js?v=20260913j"></script>
+<script src="../assets/js/auth.js?v=20260913j"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -40,6 +40,7 @@
         <option value="maintenance-plan.html">Maintenance Plan</option>
         <option value="custom-solutions.html">Custom HVAC Solutions</option>
         <option value="jobs.html">Jobs</option>
+        <option value="mileage.html">Mileage</option>
         <option value="instruction-manual.html">Instruction Manual</option>
         <option value="tool-list.html">Tool List</option>
         <option value="receipts.html">Receipts</option>
@@ -54,10 +55,15 @@
 
 <div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Repair</div>
 <div class="page-title-row"><h1>Repair</h1></div>
-<div class="note-box blue">Component-level repair estimate for a Condenser, Fan Coil, or Furnace. Toggle on the system that needs work, then switch on and price each part it needs — quantities default to 1 the moment a part is included. Update the repair list at the top or bottom when you're done.</div>
+<div class="note-box blue">Component-level repair estimate for a Condenser, Fan Coil, or Furnace. Toggle on the system that needs work, then switch on and price each part it needs — quantities default to 1 the moment a part is included. Save the quote at the top or bottom when you're done.</div>
 
 
 <div class="card" style="margin-bottom:22px">
+  <div class="field cal-cust-search-wrap" style="margin-bottom:14px">
+    <label>Select Existing Customer <span class="muted" style="font-weight:400">(optional &mdash; searches Jobs &amp; Dispatch Calendar)</span></label>
+    <input type="text" id="q-cust-search" placeholder="Search by name or phone&hellip;" autocomplete="off">
+    <div class="cal-cust-results" id="q-cust-results" hidden></div>
+  </div>
   <div class="field-row">
     <div class="field"><label>Customer first name</label><input type="text" id="q-first"></div>
     <div class="field"><label>Customer last name</label><input type="text" id="q-last"></div>
@@ -71,7 +77,7 @@
     <div class="field" style="max-width:220px"><label>Quote #</label><input type="text" id="q-number" readonly placeholder="Assigned when saved" style="background:#f3f5f7;color:var(--muted)"></div>
   </div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px">
-    <button type="button" class="btn btn-navy btn-sm" id="save-quote-btn">Update Repair List</button>
+    <button type="button" class="btn btn-navy btn-sm" id="save-quote-btn">Save Quote</button>
     <button type="button" class="btn btn-ghost btn-sm" id="retrieve-quote-btn">Retrieve Saved Quote&hellip;</button>
     <button type="button" class="btn btn-ghost btn-sm" id="reset-quote-btn">Reset</button>
     <span id="save-status" class="muted" style="font-size:.85rem"></span>
@@ -140,19 +146,20 @@
 
 <div class="card" style="margin-top:20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
   <button type="button" class="btn btn-navy btn-sm" id="print-quote-btn">Print Quote</button>
-  <button type="button" class="btn btn-navy btn-sm" id="save-quote-btn-bottom">Update Repair List</button>
+  <button type="button" class="btn btn-navy btn-sm" id="save-quote-btn-bottom">Save Quote</button>
   <span id="save-status-bottom" class="muted" style="font-size:.85rem"></span>
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260913g"></script>
-<script src="../assets/js/worksheet.js?v=20260913g"></script>
-<script src="../assets/js/print-quote.js?v=20260913g"></script>
-<script src="../assets/js/quotes-db.js?v=20260913g"></script>
+<script src="../assets/js/pricing-data.js?v=20260913j"></script>
+<script src="../assets/js/worksheet.js?v=20260913j"></script>
+<script src="../assets/js/print-quote.js?v=20260913j"></script>
+<script src="../assets/js/quotes-db.js?v=20260913j"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
   saaAttachPhoneMask(document.getElementById('q-phone'));
   saaAttachPhoneMask(document.getElementById('rq-phone'));
+  saaWireQuoteCustomerSearch();
 
   // Tracks which saved repair-quote this page is editing, once one
   // exists — same pattern as Quotation's Save/Retrieve (quotes-db.js),
@@ -224,7 +231,7 @@
     printFormalQuote(window._saaGetQuote());
   });
 
-  // ---- Update Repair List (top + bottom buttons share one flow) ----
+  // ---- Save Quote (top + bottom buttons share one flow) ----
   function setSaveStatus(msg) {
     document.getElementById('save-status').textContent = msg;
     document.getElementById('save-status-bottom').textContent = msg;

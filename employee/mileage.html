@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mileage | Employee | SAA Comfort Air LLC</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260913j">
+
+<style>body.emp-shell{visibility:hidden}</style>
+</head>
+<body class="emp-shell">
+<script src="../assets/js/vendor/supabase.js?v=20260913j"></script>
+<script src="../assets/js/supabase-config.js?v=20260913j"></script>
+<script src="../assets/js/auth.js?v=20260913j"></script>
+<script>saaRequireAuth();</script>
+<header class="emp-header">
+  <div class="container">
+    <div>
+      <a class="brand" href="dashboard.html" style="font-size:1rem">
+        <span class="mark" style="width:34px;height:34px;font-size:.62rem;letter-spacing:-0.3px">SAA</span>
+        <span>Employee Tools</span>
+      </a>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select onchange="if(this.value) window.location.href=this.value" style="width:auto;min-width:170px">
+        <option value="">Jump to page&hellip;</option>
+        <option value="dashboard.html">Dashboard</option>
+        <option value="calendar.html">Dispatch Calendar</option>
+        <option value="quotation.html">Quotation</option>
+        <option value="repair.html">Repair</option>
+        <option value="condenser-change.html">Condenser Change</option>
+        <option value="coil-change.html">Coil Change</option>
+        <option value="furnace-change.html">Furnace Change</option>
+        <option value="plenum-change.html">Plenum Change</option>
+        <option value="drainline-maintenance.html">Drainline Maintenance</option>
+        <option value="duct-cleaning.html">Duct Cleaning</option>
+        <option value="labor.html">Labor</option>
+        <option value="inspection.html">Inspection / QC</option>
+        <option value="maintenance-plan.html">Maintenance Plan</option>
+        <option value="custom-solutions.html">Custom HVAC Solutions</option>
+        <option value="jobs.html">Jobs</option>
+        <option value="mileage.html" selected>Mileage</option>
+        <option value="instruction-manual.html">Instruction Manual</option>
+        <option value="tool-list.html">Tool List</option>
+        <option value="receipts.html">Receipts</option>
+      </select>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Dashboard</a>
+      <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
+      <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
+    </div>
+  </div>
+</header>
+<main class="container" style="padding:26px 20px 60px">
+
+<div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Mileage</div>
+<div class="page-title-row">
+  <h1>Technician Mileage</h1>
+<a class="page-close-btn" href="dashboard.html" title="Close" aria-label="Close">&times;</a>
+</div>
+<p class="muted" style="margin-top:-6px">Driving mileage for reimbursement/tax tracking. A technician's first stop of the day always starts from the shop; each later stop that day chains from the job before it. Trips tied to a job are calculated (or entered) right on that Job Card &mdash; add a one-off trip below for anything that isn't tied to a job.</p>
+
+<div class="jobs-toolbar">
+  <select id="mp-tech-filter"><option value="">All Technicians</option></select>
+  <input type="date" id="mp-date-from" title="From date">
+  <span class="muted" style="align-self:center">to</span>
+  <input type="date" id="mp-date-to" title="To date">
+  <button type="button" class="btn btn-ghost btn-sm" id="mp-clear-btn">Clear Filters</button>
+</div>
+
+<div id="mp-totals" class="note-box blue"></div>
+
+<div class="jobs-table-wrap">
+  <table class="jobs-table">
+    <thead>
+      <tr>
+        <th>Technician</th><th>Date</th><th>Leg</th><th>From</th><th>To</th><th>Job</th><th>Miles</th><th>Source</th><th></th>
+      </tr>
+    </thead>
+    <tbody id="mp-tbody"></tbody>
+  </table>
+  <p class="muted" id="mp-empty" style="text-align:center;padding:30px" hidden>No mileage entries match your filters.</p>
+</div>
+
+<div class="card" style="margin-top:22px;max-width:640px">
+  <h3>Add a Manual Trip</h3>
+  <p class="muted">For a drive that isn't tied to a job on the calendar &mdash; a parts-house run, a trip back to the shop, and so on.</p>
+  <div class="field-row">
+    <div class="field"><label>Technician</label><select id="mp-add-tech"></select></div>
+    <div class="field"><label>Date</label><input type="date" id="mp-add-date"></div>
+  </div>
+  <div class="field"><label>From</label><input type="text" id="mp-add-from" placeholder="Leave blank to start from the shop"></div>
+  <div class="field"><label>To</label><input type="text" id="mp-add-to" placeholder="Destination address"></div>
+  <div class="field-row">
+    <div class="field"><label>Miles</label><input type="number" step="0.1" min="0" id="mp-add-miles" placeholder="0.0"></div>
+    <div class="field"><label>Notes</label><input type="text" id="mp-add-notes" placeholder="Optional"></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
+    <button type="button" class="btn btn-navy btn-sm" id="mp-add-btn">Add Trip</button>
+    <span class="muted" id="mp-add-status" style="font-size:.85rem"></span>
+  </div>
+</div>
+
+</main>
+<script src="../assets/js/pricing-data.js?v=20260913j"></script>
+<script src="../assets/js/worksheet.js?v=20260913j"></script>
+<script src="../assets/js/jobs-db.js?v=20260913j"></script>
+<script src="../assets/js/maps-config.js?v=20260913j"></script>
+<script src="../assets/js/mileage-db.js?v=20260913j"></script>
+<script src="../assets/js/mileage-page.js?v=20260913j"></script>
+</body>
+</html>

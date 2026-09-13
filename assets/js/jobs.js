@@ -19,6 +19,7 @@ let _jbConvertingQuote = null; // the quote object picked via "Start from a Quot
 let _jbQuoteSearchTimer = null;
 let _jbPhotos = []; // every job_photos row for the open job (general + inspection-linked)
 let _jbInspectionResults = []; // [{index, item, checked}] — synced with INSPECTION_ITEMS by index
+let _jbWarrantyFiles = []; // every job_warranty_files row for the open job
 
 function _jbToast(msg, isError) {
   const el = document.getElementById("jb-toast");
@@ -786,6 +787,69 @@ function jbAddPhotos() {
   });
 }
 
+/* ---- Warranty Documents — PDF/Word files attached to a job (manufacturer
+   warranty cards, extended-warranty paperwork, signed registrations).
+   Same list-render/upload/delete shape as Photos above, just files instead
+   of images, and no camera capture — a plain file-picker input. ---- */
+function _jbFileSizeLabel(bytes) {
+  if (!bytes && bytes !== 0) return "";
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function jbRenderWarrantyList() {
+  const list = document.getElementById("jbd-warranty-list");
+  if (!_jbWarrantyFiles.length) {
+    list.innerHTML = `<span class="jb-photo-empty">No warranty files yet.</span>`;
+    return;
+  }
+  list.innerHTML = _jbWarrantyFiles.map((f) => `
+    <div class="jb-file-row" data-id="${f.id}">
+      <span class="jb-file-icon">${f.file_type === "pdf" ? "📄" : "📝"}</span>
+      <a href="${f.url}" target="_blank" rel="noopener">${f.file_name}</a>
+      <span class="jb-file-size">${_jbFileSizeLabel(f.file_size_bytes)}</span>
+      <button type="button" class="jb-photo-del" data-id="${f.id}" title="Delete file">&times;</button>
+    </div>`).join("");
+  list.querySelectorAll(".jb-photo-del").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const file = _jbWarrantyFiles.find((f) => f.id === btn.dataset.id);
+      if (!file) return;
+      const ok = await saaConfirm(`Delete "${file.file_name}"? This can't be undone.`, { title: "Delete warranty file", okLabel: "Delete", cancelLabel: "Cancel" });
+      if (!ok) return;
+      const res = await saaWarrantyDelete(file);
+      if (res.ok) {
+        _jbWarrantyFiles = _jbWarrantyFiles.filter((f) => f.id !== file.id);
+        jbRenderWarrantyList();
+      } else {
+        _jbToast(res.error, true);
+      }
+    });
+  });
+}
+
+async function jbAddWarrantyFiles(fileList) {
+  if (!_jbCurrentJob || !fileList || !fileList.length) return;
+  const files = Array.from(fileList);
+  let added = 0;
+  let lastError = null;
+  for (const file of files) {
+    const res = await saaWarrantyUpload(_jbCurrentJob.id, file);
+    if (res.ok) { _jbWarrantyFiles.push(res.file); added++; }
+    else lastError = res.error;
+  }
+  jbRenderWarrantyList();
+  // Show whichever the office most needs to see: if everything failed,
+  // the (specific, e.g. "not a PDF or Word file") error; if only some
+  // failed, both counts; only silence the error when every file made it.
+  if (added && !lastError) {
+    _jbToast(`${added} file${added === 1 ? "" : "s"} added.`);
+  } else if (added && lastError) {
+    _jbToast(`${added} added, but: ${lastError}`, true);
+  } else {
+    _jbToast(lastError || "Couldn't add that file.", true);
+  }
+}
+
 /* ---- Receipts (Round 6) — same camera-capture/upload/delete plumbing as
    Photos above, filed under photo_type 'receipt' so they show in their own
    drawer section instead of the general Photos grid. ---- */
@@ -905,6 +969,87 @@ async function jbSaveInspection() {
   }
 }
 
+/* ============================== Mileage ============================== */
+
+/** Builds a plain snapshot from the Job Card's LIVE field values (not the
+ *  possibly-stale _jbCurrentJob object) — so mileage can be calculated
+ *  using whatever's currently on screen (tech just picked, address just
+ *  typed) even before "Save Job Card" is clicked, same as other Job Card
+ *  helper actions (e.g. quote-select) work against in-progress edits. */
+function _jbMileageSnapshot() {
+  if (!_jbCurrentJob) return null;
+  return {
+    id: _jbCurrentJob.id,
+    assigned_technician_id: document.getElementById("jbd-tech").value || null,
+    scheduled_date: document.getElementById("jbd-scheduled").value || null,
+    scheduled_time: document.getElementById("jbd-time").value || null,
+    job_address: document.getElementById("jbd-address").value.trim() || null,
+    job_city: document.getElementById("jbd-city").value.trim() || null,
+    job_state: document.getElementById("jbd-state").value.trim() || null,
+    job_zip: document.getElementById("jbd-zip").value.trim() || null,
+  };
+}
+
+/** Updates only the "Trip: from → to" context line from whatever's
+ *  currently in the tech/date/address fields — safe to call on every
+ *  field change without disturbing the Miles Driven value the office may
+ *  already be editing. */
+async function _jbUpdateMileageContext() {
+  const ctxEl = document.getElementById("jbd-mileage-context");
+  const snap = _jbMileageSnapshot();
+  if (!snap || !snap.assigned_technician_id || !snap.scheduled_date) {
+    ctxEl.textContent = "Assign a technician and a Scheduled Date to calculate this trip.";
+    return;
+  }
+  const leg = await saaMileageLegContext(snap);
+  const dest = saaMileageJobAddress(snap);
+  ctxEl.textContent = dest
+    ? `Trip: ${leg.fromAddress} → ${dest}`
+    : `Trip starts at: ${leg.fromAddress} (add a Service Address to complete the route)`;
+}
+
+/** Full render on Job Card open — context line plus the saved Miles
+ *  Driven value/note for this job. */
+async function jbRenderMileageSection(job) {
+  const milesEl = document.getElementById("jbd-mileage-miles");
+  const noteEl = document.getElementById("jbd-mileage-note");
+  await _jbUpdateMileageContext();
+
+  const existing = await saaMileageFetchForJob(job.id);
+  milesEl.value = existing && existing.miles != null ? existing.miles : "";
+  job._jbMileageMilesAtOpen = milesEl.value;
+  noteEl.textContent = existing
+    ? (existing.source === "manual" ? "Entered manually." : "Auto-calculated from addresses.")
+    : "";
+}
+
+async function jbCalculateMileage() {
+  if (!_jbCurrentJob) return;
+  const snap = _jbMileageSnapshot();
+  const btn = document.getElementById("jbd-mileage-calc-btn");
+  btn.disabled = true;
+  btn.textContent = "Calculating…";
+  try {
+    let res = await saaMileageRecalcForJob(snap);
+    if (!res.ok && res.manual) {
+      const ok = await saaConfirm("This trip's mileage was entered manually. Recalculate and overwrite it?", { title: "Overwrite manual entry", okLabel: "Recalculate", cancelLabel: "Cancel" });
+      if (!ok) return;
+      res = await saaMileageRecalcForJob(snap, true);
+    }
+    if (res.ok) {
+      document.getElementById("jbd-mileage-miles").value = res.log.miles != null ? res.log.miles : "";
+      _jbCurrentJob._jbMileageMilesAtOpen = document.getElementById("jbd-mileage-miles").value;
+      document.getElementById("jbd-mileage-note").textContent = "Auto-calculated from addresses.";
+      _jbToast(`${res.log.miles} miles calculated.`);
+    } else {
+      _jbToast(res.error, true);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "📍 Calculate Miles";
+  }
+}
+
 async function jbOpenDetail(jobId) {
   const job = _jbAllJobs.find((j) => j.id === jobId);
   if (!job) return;
@@ -962,10 +1107,13 @@ async function jbOpenDetail(jobId) {
   _jbCurrentInvoice = job.invoice || null;
   _jbCurrentPayments = job.invoice ? await saaJobsFetchPayments(job.invoice.id) : [];
   jbRenderInvoiceBox(job, _jbCurrentInvoice, _jbCurrentPayments);
+  await jbRenderMileageSection(job);
 
   _jbPhotos = await saaPhotosFetch(job.id);
   jbRenderPhotoGrid();
   jbRenderReceiptGrid();
+  _jbWarrantyFiles = await saaWarrantyFetch(job.id);
+  jbRenderWarrantyList();
   _jbInspectionResults = Array.isArray(job.inspection_results) ? job.inspection_results.slice() : [];
   jbRenderInspectionSummary();
 
@@ -1062,6 +1210,29 @@ async function jbSaveDetail() {
   // were when the Job Card was first opened (round 7 follow-up,
   // 2026-09-13).
   if (_jbCurrentInvoice) jbRenderInvoiceBox(job, _jbCurrentInvoice, _jbCurrentPayments);
+
+  // Mileage: only touch the row if the office actually typed something new
+  // into Miles Driven — an untouched field (whether it came from an "auto"
+  // calculation or was left blank) shouldn't be overwritten or stamped
+  // 'manual' on every ordinary Save. Clearing a previously-set value
+  // deletes the leg instead of writing a null.
+  const mileageVal = document.getElementById("jbd-mileage-miles").value;
+  if (mileageVal !== (job._jbMileageMilesAtOpen || "")) {
+    const snap = _jbMileageSnapshot();
+    if (mileageVal.trim() === "") {
+      await saaMileageDeleteForJob(job.id);
+      job._jbMileageMilesAtOpen = "";
+      document.getElementById("jbd-mileage-note").textContent = "";
+    } else {
+      const mRes = await saaMileageSetManualForJob(snap, parseFloat(mileageVal));
+      if (mRes.ok) {
+        job._jbMileageMilesAtOpen = mileageVal;
+        document.getElementById("jbd-mileage-note").textContent = "Entered manually.";
+      } else {
+        _jbToast(mRes.error, true);
+      }
+    }
+  }
 
   statusMsg.textContent = "Saved.";
   await jbLoadAll();
@@ -1177,6 +1348,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("jbd-add-photos-btn").addEventListener("click", jbAddPhotos);
   document.getElementById("jbd-add-receipt-btn").addEventListener("click", jbAddReceipt);
   document.getElementById("jbd-open-inspection-btn").addEventListener("click", jbOpenInspectionModal);
+  document.getElementById("jbd-warranty-input").addEventListener("change", (e) => {
+    jbAddWarrantyFiles(e.target.files);
+    e.target.value = ""; // allow re-selecting the same filename later
+  });
+  document.getElementById("jbd-mileage-calc-btn").addEventListener("click", jbCalculateMileage);
+  // Recompute the "Trip: ..." context line (not the miles themselves) the
+  // moment technician/date/address fields change, so it never shows a
+  // stale route while the office is still filling out the card.
+  ["jbd-tech", "jbd-scheduled", "jbd-address", "jbd-city", "jbd-state", "jbd-zip"].forEach((id) => {
+    document.getElementById(id).addEventListener("change", () => {
+      if (_jbCurrentJob) _jbUpdateMileageContext();
+    });
+  });
   // Job Card quick-access row (Round 6 item 4) — same three actions as the
   // buttons already inside the card, just reachable without scrolling.
   document.getElementById("jbd-quick-checklist-btn").addEventListener("click", jbOpenInspectionModal);
