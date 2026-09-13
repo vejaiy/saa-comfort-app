@@ -142,14 +142,33 @@ async function _saaFreeRouteThrottle() {
 
 const _saaFreeRouteUnavailableMsg = "Couldn't reach the free mileage-lookup service right now (it's a shared public service that's occasionally slow or unavailable) — try again in a moment, or type the mileage in by hand.";
 
-// "STREET, CITY, STATE ZIP" -- the one format every address in this app is
-// built in (see saaMileageJobAddress above and SAA_COMPANY_ADDRESS in
-// maps-config.js) -- split apart so a failed freeform Nominatim lookup can
-// be retried a couple of different ways instead of giving up immediately.
+// "STREET, CITY, STATE ZIP" is the format every address in this app is
+// SUPPOSED to be built in (see saaMileageJobAddress above and
+// SAA_COMPANY_ADDRESS in maps-config.js), but in practice a tech
+// sometimes types the whole thing into one field by hand (Round 16/17
+// both ran into this) and drops the comma between city and state --
+// "9435 Sparrow creek ct, Katy TX 77494" instead of "..., Katy, TX
+// 77494". The original strict two-comma regex simply didn't match that,
+// which meant parts came back null and every fallback tier past the
+// first got skipped entirely -- exactly the class of address most likely
+// to need those tiers. Round 20 (2026-09-13) rewrite: pull "STATE ZIP"
+// off the end regardless of what (if anything) separates it from the
+// rest, then split whatever's left on the LAST comma, if there is one,
+// to get street vs. city. A missing city is fine -- it just means the
+// city-centroid tier has nothing to try, but ZIP-centroid still works.
 function _saaParseAddressParts(address) {
-  const m = String(address || "").match(/^(.*?),\s*([^,]+?),\s*([A-Za-z]{2})\s+(\d{5})(?:-\d{4})?\s*$/);
-  if (!m) return null;
-  return { street: m[1].trim(), city: m[2].trim(), state: m[3].trim(), zip: m[4].trim() };
+  const s = String(address || "").trim();
+  const tail = s.match(/^(.*?),?\s*([A-Za-z]{2})\s*,?\s*(\d{5})(?:-\d{4})?\s*$/);
+  if (!tail) return null;
+  const before = tail[1].trim();
+  const state = tail[2].trim();
+  const zip = tail[3].trim();
+  if (!before) return null;
+  const lastComma = before.lastIndexOf(",");
+  const street = (lastComma === -1 ? before : before.slice(0, lastComma)).trim();
+  const city = (lastComma === -1 ? "" : before.slice(lastComma + 1)).trim();
+  if (!street) return null;
+  return { street, city, state, zip };
 }
 
 /** One Nominatim call -- {lat, lon} on a match, null on a clean zero-result
@@ -190,8 +209,14 @@ async function _saaGeocodeQuery(url) {
  *  first three tiers still came up empty for SAA's own office address --
  *  added a ZIP-centroid tier and, below that, a city-centroid tier, since
  *  those are essentially always present even when a specific street isn't.
- *  Each retry still respects the 1-request/sec throttle Nominatim's usage
- *  policy requires. */
+ *  Round 20 (2026-09-13): those later tiers depend on _saaParseAddressParts
+ *  successfully splitting the address, which used to require an exact
+ *  "STREET, CITY, STATE ZIP" comma pattern -- an address typed as "STREET,
+ *  CITY STATE ZIP" (no comma before the state) failed to parse at all, so
+ *  it fell straight through to the plain error with none of tiers 2-5 ever
+ *  attempted. _saaParseAddressParts is now tolerant of that. Each retry
+ *  still respects the 1-request/sec throttle Nominatim's usage policy
+ *  requires. */
 async function _saaGeocodeAddress(address) {
   const key = String(address || "").trim().toLowerCase();
   if (!key) throw new Error("No address to look up.");
@@ -203,20 +228,20 @@ async function _saaGeocodeAddress(address) {
   const parts = !loc ? _saaParseAddressParts(address) : null;
   if (!loc && parts) {
     await _saaFreeRouteThrottle();
-    loc = await _saaGeocodeQuery(
-      "https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us" +
+    let structuredUrl = "https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us" +
       "&street=" + encodeURIComponent(parts.street) +
-      "&city=" + encodeURIComponent(parts.city) +
       "&state=" + encodeURIComponent(parts.state) +
-      "&postalcode=" + encodeURIComponent(parts.zip)
-    );
+      "&postalcode=" + encodeURIComponent(parts.zip);
+    if (parts.city) structuredUrl += "&city=" + encodeURIComponent(parts.city);
+    loc = await _saaGeocodeQuery(structuredUrl);
   }
   if (!loc && parts) {
     const streetNoNumber = parts.street.replace(/^\s*\d+[a-zA-Z-]*\s+/, "").trim();
     if (streetNoNumber && streetNoNumber !== parts.street) {
       await _saaFreeRouteThrottle();
+      const cityBit = parts.city ? `${parts.city}, ` : "";
       loc = await _saaGeocodeQuery("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=" +
-        encodeURIComponent(`${streetNoNumber}, ${parts.city}, ${parts.state} ${parts.zip}`));
+        encodeURIComponent(`${streetNoNumber}, ${cityBit}${parts.state} ${parts.zip}`));
     }
   }
 
