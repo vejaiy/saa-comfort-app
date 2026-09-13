@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quotation | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260913b">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260913e">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260913b"></script>
-<script src="../assets/js/supabase-config.js?v=20260913b"></script>
-<script src="../assets/js/auth.js?v=20260913b"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260913e"></script>
+<script src="../assets/js/supabase-config.js?v=20260913e"></script>
+<script src="../assets/js/auth.js?v=20260913e"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -249,12 +249,12 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260913b"></script>
-<script src="../assets/js/worksheet.js?v=20260913b"></script>
-<script src="../assets/js/labor-widget.js?v=20260913b"></script>
-<script src="../assets/js/plenum-widget.js?v=20260913b"></script>
-<script src="../assets/js/print-quote.js?v=20260913b"></script>
-<script src="../assets/js/quotes-db.js?v=20260913b"></script>
+<script src="../assets/js/pricing-data.js?v=20260913e"></script>
+<script src="../assets/js/worksheet.js?v=20260913e"></script>
+<script src="../assets/js/labor-widget.js?v=20260913e"></script>
+<script src="../assets/js/plenum-widget.js?v=20260913e"></script>
+<script src="../assets/js/print-quote.js?v=20260913e"></script>
+<script src="../assets/js/quotes-db.js?v=20260913e"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
   saaAttachPhoneMask(document.getElementById('q-phone'));
@@ -418,6 +418,14 @@
       if (ductOn) lineItems.push({ name: 'Duct Cleaning', price: ductPrice });
       const firstName = document.getElementById('q-first').value.trim();
       const lastName = document.getElementById('q-last').value.trim();
+      // Cost breakdown saved alongside the quote so the Job Card can default
+      // its Actual Material/Labor/Other Cost fields from a linked quote
+      // (round 6 follow-up, 2026-09-13) -- laborCost is exactly the "Labor"
+      // line item above; materialCost is everything else (equipment +
+      // add-ons); otherCost is unused here (nothing in this worksheet
+      // doesn't fall under one of those two).
+      const laborCost = laborLineTotal;
+      const materialCost = grandTotal - laborLineTotal;
       return {
         jobTitle: quoteTypeLabel(),
         quoteType: quoteTypeSelect.value,
@@ -430,6 +438,9 @@
         quoteNumber: document.getElementById('q-number').value,
         lineItems: lineItems,
         grandTotal: grandTotal,
+        materialCost: materialCost,
+        laborCost: laborCost,
+        otherCost: 0,
       };
     }
   }
@@ -479,6 +490,9 @@
       phone: quote.phone,
       jobAddress: quote.address,
       total: quote.grandTotal,
+      materialCost: quote.materialCost,
+      laborCost: quote.laborCost,
+      otherCost: quote.otherCost,
       formState: saaSerializeFormState(),
     });
     setSaveButtonsDisabled(false);

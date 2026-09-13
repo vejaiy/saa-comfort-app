@@ -58,7 +58,13 @@ async function _saaNextQuoteNumber() {
  * payload: { quoteId (optional — pass the id of a quote already saved or
  *            retrieved this session to update it instead of creating a
  *            new one), quoteType, firstName, lastName, phone, jobAddress,
- *            total, formState }
+ *            total, materialCost, laborCost, otherCost, formState }
+ * materialCost/laborCost/otherCost: the quote's own cost breakdown (equipment
+ * + labor split the worksheet already computes for the printed line items),
+ * saved as plain columns alongside `total` so the Job Card's Actual
+ * Material/Labor/Other Cost fields can default from a linked quote without
+ * re-parsing `form_state` (round 6 follow-up, 2026-09-13). Optional — quotes
+ * saved before this existed simply have these columns null.
  * returns: { ok: true, quoteId, quoteNumber } | { ok: false, error }
  */
 async function saaSaveQuote(payload) {
@@ -73,6 +79,9 @@ async function saaSaveQuote(payload) {
       quote_type: payload.quoteType || "",
       job_address: payload.jobAddress || null,
       total: payload.total || 0,
+      material_cost: payload.materialCost != null ? payload.materialCost : null,
+      labor_cost: payload.laborCost != null ? payload.laborCost : null,
+      other_cost: payload.otherCost != null ? payload.otherCost : null,
       form_state: payload.formState || {},
       updated_at: new Date().toISOString(),
     };

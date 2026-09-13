@@ -410,6 +410,25 @@ async function jbSearchCustomerQuotes(job, query) {
           approvedEl.value = res.quotedAmount || 0;
           job.approved_amount = res.quotedAmount || 0;
         }
+        // Default Actual Material/Labor/Other Cost from the quote's own cost
+        // breakdown, same as Quoted Amount above -- picking a (new) quote
+        // resets these to that quote's numbers every time, on the
+        // assumption the office will adjust them to the real costs once
+        // work is done. Quotes saved before this breakdown existed have
+        // null here, not $0 -- leave the existing Actual Cost fields alone
+        // in that case rather than wiping them to zero (round 6 follow-up,
+        // 2026-09-13).
+        if (res.materialCost != null || res.laborCost != null || res.otherCost != null) {
+          const materialEl = document.getElementById("jbd-cost-material");
+          const laborEl = document.getElementById("jbd-cost-labor");
+          const otherEl = document.getElementById("jbd-cost-other");
+          materialEl.value = res.materialCost || 0;
+          laborEl.value = res.laborCost || 0;
+          otherEl.value = res.otherCost || 0;
+          job.actual_material_cost = res.materialCost || 0;
+          job.actual_labor_cost = res.laborCost || 0;
+          job.other_cost = res.otherCost || 0;
+        }
         jbComputeProfit();
         // Auto-populate the job sheet from the quote, same fields the New
         // Job popup's "Start from a Quote" flow fills. Address/city/zip are
@@ -497,13 +516,42 @@ function jbRenderInvoiceBox(job, invoice, payments) {
     ? payments.map((p) => `<div class="jb-payment-row">${_jbFormatDate(p.payment_date)} &middot; ${(p.method || "").replace(/^\w/, (c) => c.toUpperCase())} &middot; ${fmtMoney(Number(p.amount || 0))}</div>`).join("")
     : `<div class="muted" style="font-size:.8rem">No payments recorded yet.</div>`;
 
+  // An existing invoice's Amount Total is otherwise frozen at whatever it
+  // was when generated (saaJobsGetOrCreateInvoice only defaults a NEW
+  // invoice's amount -- an already-existing one is returned untouched) --
+  // so a Draft invoice created before the quote/approved amount was set
+  // (or before a different quote was linked) can sit at a stale number
+  // forever with nothing but the mismatch flag above to notice. Offer a
+  // one-click way to pull in the current Quoted/Approved Amount instead of
+  // retyping it -- Draft only, so a real Sent/Paid invoice is never
+  // touched by this (round 6 follow-up, 2026-09-13).
+  const quoteBasis = Number(job.approved_amount || job.quoted_amount || 0);
+  const showSyncBtn = invoice.status === "draft" && quoteBasis > 0 && Math.abs(Number(invoice.amount_total || 0) - quoteBasis) >= 0.01;
+  const syncBtnHtml = showSyncBtn
+    ? `<button type="button" class="btn btn-ghost btn-sm" id="jbd-inv-sync-btn" style="margin-top:4px">Use Quoted Amount (${fmtMoney(quoteBasis)})</button>`
+    : "";
+
+  // Discount and Other Costs (extra charges beyond the quote -- e.g. a
+  // part found on-site that wasn't in the original estimate) are both
+  // optional, so the fields stay in the Job Card for editing either way,
+  // but the printed customer-facing invoice only shows a line for either
+  // one when it's actually nonzero (round 6 follow-up, 2026-09-13).
+  const discount = Number(invoice.discount || 0);
+  const otherCharges = Number(invoice.additional_charges || 0);
+
   box.innerHTML = `
     <div class="field-row">
       <div class="field"><label>Invoice #</label><input type="text" value="${invoice.invoice_number || ""}" disabled></div>
       <div class="field"><label>Invoice Status</label><select id="jbd-inv-status">${_jbOptionsHtml(SAA_INVOICE_STATUS_OPTIONS, invoice.status)}</select></div>
     </div>
-    <div class="field"><label>Amount Total</label><input type="number" step="0.01" id="jbd-inv-amount" value="${invoice.amount_total || 0}"></div>
-    <div style="display:flex;gap:8px;margin:6px 0 10px">
+    <div class="field"><label>Amount</label><input type="number" step="0.01" id="jbd-inv-amount" value="${invoice.amount_total || 0}"></div>
+    ${syncBtnHtml}
+    <div class="field-row" style="margin-top:8px">
+      <div class="field"><label>Discount</label><input type="number" step="0.01" id="jbd-inv-discount" value="${discount || ""}" placeholder="0.00"></div>
+      <div class="field"><label>Other Costs</label><input type="number" step="0.01" id="jbd-inv-other" value="${otherCharges || ""}" placeholder="0.00"></div>
+    </div>
+    <div class="jb-profit-row" id="jbd-inv-total-row" style="margin-top:4px"><span>Total</span><strong id="jbd-inv-total-display">${fmtMoney(invoice.amount_total || 0)}</strong></div>
+    <div style="display:flex;gap:8px;margin:10px 0 10px">
       <button type="button" class="btn btn-ghost btn-sm" id="jbd-inv-save-btn">Update Invoice</button>
       <button type="button" class="btn btn-ghost btn-sm" id="jbd-inv-print-btn">Print Invoice</button>
       <span class="jb-badge jb-pay-${paymentStatus}">${_jbPaymentLabel[paymentStatus]}</span>
@@ -523,14 +571,51 @@ function jbRenderInvoiceBox(job, invoice, payments) {
     <button type="button" class="btn btn-navy btn-sm" id="jbd-pay-save-btn">Record Payment</button>
   `;
 
+  // Live Total = Amount - Discount + Other Costs, recomputed on every
+  // keystroke in any of the three fields, well before Update Invoice is
+  // clicked -- purely a display refresh (see saaJobsInvoiceTotalDue in
+  // jobs-db.js for the same math used for payment status/the printed
+  // invoice, kept in one place so they can't drift apart).
+  function recalcInvoiceTotal() {
+    const amt = parseFloat(document.getElementById("jbd-inv-amount").value) || 0;
+    const disc = parseFloat(document.getElementById("jbd-inv-discount").value) || 0;
+    const other = parseFloat(document.getElementById("jbd-inv-other").value) || 0;
+    document.getElementById("jbd-inv-total-display").textContent = fmtMoney(amt - disc + other);
+  }
+  ["jbd-inv-amount", "jbd-inv-discount", "jbd-inv-other"].forEach((id) => {
+    document.getElementById(id).addEventListener("input", recalcInvoiceTotal);
+  });
+
   document.getElementById("jbd-inv-save-btn").addEventListener("click", async () => {
+    const newAmount = parseFloat(document.getElementById("jbd-inv-amount").value) || 0;
+    const newDiscount = parseFloat(document.getElementById("jbd-inv-discount").value) || 0;
+    const newOther = parseFloat(document.getElementById("jbd-inv-other").value) || 0;
     const res = await saaJobsUpdateInvoice(invoice.id, {
       status: document.getElementById("jbd-inv-status").value,
-      amount_total: parseFloat(document.getElementById("jbd-inv-amount").value) || 0,
+      amount_total: newAmount,
+      discount: newDiscount,
+      additional_charges: newOther,
     });
-    if (res.ok) { _jbToast("Invoice updated."); invoice.status = document.getElementById("jbd-inv-status").value; invoice.amount_total = parseFloat(document.getElementById("jbd-inv-amount").value) || 0; jbRenderInvoiceBox(job, invoice, payments); }
-    else _jbToast(res.error, true);
+    if (res.ok) {
+      _jbToast("Invoice updated.");
+      invoice.status = document.getElementById("jbd-inv-status").value;
+      invoice.amount_total = newAmount;
+      invoice.discount = newDiscount;
+      invoice.additional_charges = newOther;
+      jbRenderInvoiceBox(job, invoice, payments);
+    } else _jbToast(res.error, true);
   });
+  if (showSyncBtn) {
+    // Only updates the field on screen -- the office still clicks Update
+    // Invoice to actually persist it, same "review before you commit"
+    // pattern as everything else here (nothing writes to the database on
+    // its own just because a number changed elsewhere).
+    document.getElementById("jbd-inv-sync-btn").addEventListener("click", () => {
+      document.getElementById("jbd-inv-amount").value = quoteBasis;
+      jbUpdateInvoiceQuoteFlag();
+      recalcInvoiceTotal();
+    });
+  }
   document.getElementById("jbd-inv-print-btn").addEventListener("click", () => {
     printFormalInvoice({
       invoiceNumber: invoice.invoice_number,
@@ -543,6 +628,8 @@ function jbRenderInvoiceBox(job, invoice, payments) {
       jobTitle: job.title || saaJobTypeLabel(job.job_type),
       description: job.recommended_action || "",
       amountTotal: invoice.amount_total,
+      discount: invoice.discount,
+      additionalCharges: invoice.additional_charges,
       amountPaid: paid,
       payments,
     });

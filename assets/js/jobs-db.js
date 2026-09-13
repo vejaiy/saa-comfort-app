@@ -234,11 +234,21 @@ async function saaJobsFetchAll() {
   });
 }
 
+/** The actual amount owed on an invoice, after an optional Discount and
+ *  optional Other Costs/Additional Charges (round 6 follow-up,
+ *  2026-09-13) -- `amount_total` alone is just the base charge (what the
+ *  quote/approved amount put there); this is what payment status and the
+ *  printed invoice's "Total Due" should be measured against. */
+function saaJobsInvoiceTotalDue(invoice) {
+  if (!invoice) return 0;
+  return Number(invoice.amount_total || 0) - Number(invoice.discount || 0) + Number(invoice.additional_charges || 0);
+}
+
 /** Unpaid / Partially Paid / Paid — derived from money actually
  *  received against the job's invoice, independent of the invoice
  *  document's own Draft/Sent/Paid/Void lifecycle. */
 function saaJobsPaymentStatus(invoice, amountPaid) {
-  const total = invoice ? Number(invoice.amount_total || 0) : 0;
+  const total = saaJobsInvoiceTotalDue(invoice);
   if (!invoice || total <= 0) return amountPaid > 0 ? "partial" : "unpaid";
   if (amountPaid >= total) return "paid";
   if (amountPaid > 0) return "partial";
@@ -566,7 +576,7 @@ async function saaJobsUpdateJob(jobId, fields) {
 async function saaJobsFetchCustomerQuotes(customerId, phone) {
   const { data, error } = await _saaClient
     .from("quotes")
-    .select("id,quote_number,quote_type,total,updated_at,customer_id,job_address")
+    .select("id,quote_number,quote_type,total,material_cost,labor_cost,other_cost,updated_at,customer_id,job_address")
     .eq("customer_id", customerId)
     .order("updated_at", { ascending: false });
   if (error) throw error;
@@ -587,7 +597,7 @@ async function saaJobsFetchCustomerQuotes(customerId, phone) {
 
   const { data: byPhone, error: phoneErr } = await _saaClient
     .from("quotes")
-    .select("id,quote_number,quote_type,total,updated_at,customer_id,job_address")
+    .select("id,quote_number,quote_type,total,material_cost,labor_cost,other_cost,updated_at,customer_id,job_address")
     .in("customer_id", otherIds)
     .order("updated_at", { ascending: false });
   if (phoneErr) throw phoneErr;
@@ -664,7 +674,11 @@ async function saaJobsDeleteJob(jobId) {
 
 async function saaJobsLinkQuote(jobId, quoteId) {
   try {
-    const { data: quote, error: qErr } = await _saaClient.from("quotes").select("total").eq("id", quoteId).single();
+    const { data: quote, error: qErr } = await _saaClient
+      .from("quotes")
+      .select("total,material_cost,labor_cost,other_cost")
+      .eq("id", quoteId)
+      .single();
     if (qErr) throw qErr;
     const { error } = await _saaClient
       .from("jobs")
@@ -673,7 +687,17 @@ async function saaJobsLinkQuote(jobId, quoteId) {
     if (error) throw error;
     // Keep the link two-way, same as a quote-to-job conversion from the New Job popup.
     await _saaClient.from("quotes").update({ job_id: jobId }).eq("id", quoteId);
-    return { ok: true, quotedAmount: quote.total || 0 };
+    // material_cost/labor_cost/other_cost are null on quotes saved before
+    // this column existed -- callers should treat a null here as "no
+    // breakdown available" rather than a real $0 (round 6 follow-up,
+    // 2026-09-13).
+    return {
+      ok: true,
+      quotedAmount: quote.total || 0,
+      materialCost: quote.material_cost,
+      laborCost: quote.labor_cost,
+      otherCost: quote.other_cost,
+    };
   } catch (e) {
     return { ok: false, error: (e && e.message) || String(e) };
   }
@@ -867,7 +891,8 @@ async function saaJobsRecordPayment(payload) {
     if (invErr) throw invErr;
     const payments = await saaJobsFetchPayments(payload.invoiceId);
     const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
-    if (invoice.status !== "void" && totalPaid >= Number(invoice.amount_total || 0) && Number(invoice.amount_total || 0) > 0) {
+    const totalDue = saaJobsInvoiceTotalDue(invoice);
+    if (invoice.status !== "void" && totalPaid >= totalDue && totalDue > 0) {
       await _saaClient.from("invoices").update({ status: "paid" }).eq("id", payload.invoiceId);
     }
     return { ok: true };

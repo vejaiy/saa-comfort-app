@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Repair | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260913b">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260913e">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260913b"></script>
-<script src="../assets/js/supabase-config.js?v=20260913b"></script>
-<script src="../assets/js/auth.js?v=20260913b"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260913e"></script>
+<script src="../assets/js/supabase-config.js?v=20260913e"></script>
+<script src="../assets/js/auth.js?v=20260913e"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -145,10 +145,10 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260913b"></script>
-<script src="../assets/js/worksheet.js?v=20260913b"></script>
-<script src="../assets/js/print-quote.js?v=20260913b"></script>
-<script src="../assets/js/quotes-db.js?v=20260913b"></script>
+<script src="../assets/js/pricing-data.js?v=20260913e"></script>
+<script src="../assets/js/worksheet.js?v=20260913e"></script>
+<script src="../assets/js/print-quote.js?v=20260913e"></script>
+<script src="../assets/js/quotes-db.js?v=20260913e"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
   saaAttachPhoneMask(document.getElementById('q-phone'));
@@ -209,6 +209,13 @@
         quoteNumber: document.getElementById('q-number').value,
         lineItems: lineItems,
         grandTotal: grandTotal,
+        // Repair pricing here is parts-only (no separate labor line, unlike
+        // the New Install/Replacement worksheet) -- so the whole total
+        // defaults to Actual Material Cost on the Job Card, with nothing to
+        // put under Actual Labor Cost (round 6 follow-up, 2026-09-13).
+        materialCost: grandTotal,
+        laborCost: 0,
+        otherCost: 0,
       };
     }
   }
@@ -258,6 +265,9 @@
       phone: quote.phone,
       jobAddress: quote.address,
       total: quote.grandTotal,
+      materialCost: quote.materialCost,
+      laborCost: quote.laborCost,
+      otherCost: quote.otherCost,
       formState: saaSerializeFormState(),
     });
     setSaveButtonsDisabled(false);

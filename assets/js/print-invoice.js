@@ -6,6 +6,11 @@
    NOT itemize internal cost fields (material/labor/other) on the
    customer-facing document — those stay in the Job Card for the
    office's own profit tracking.
+
+   Discount and Other Costs (round 6 follow-up, 2026-09-13) are
+   optional adjustments on top of the base Amount -- each only shows
+   its own summary line when it's actually nonzero, so a plain
+   invoice with neither still reads as a single clean total.
    ============================================================ */
 
 const SAA_INVOICE_INFO = {
@@ -25,13 +30,16 @@ function _saaInvEsc(s) {
  *   invoiceNumber, issueDate, dueDate, status,
  *   customer, phone, address,
  *   jobTitle, description,
- *   amountTotal, amountPaid,
+ *   amountTotal, discount, additionalCharges, amountPaid,
  *   payments: [{ payment_date, amount, method }]
  * }
  */
 function printFormalInvoice(opts) {
   const info = SAA_INVOICE_INFO;
-  const total = Number(opts.amountTotal || 0);
+  const amount = Number(opts.amountTotal || 0);
+  const discount = Number(opts.discount || 0);
+  const otherCosts = Number(opts.additionalCharges || 0);
+  const total = amount - discount + otherCosts;
   const paid = Number(opts.amountPaid || 0);
   const balance = Math.max(total - paid, 0);
 
@@ -140,12 +148,15 @@ function printFormalInvoice(opts) {
           <div style="font-weight:700">${_saaInvEsc(opts.jobTitle || "HVAC Service")}</div>
           ${opts.description ? `<div class="muted" style="font-size:.82rem;margin-top:2px">${_saaInvEsc(opts.description)}</div>` : ""}
         </td>
-        <td class="num">${fmtMoney(total)}</td>
+        <td class="num">${fmtMoney(amount)}</td>
       </tr>
     </tbody>
   </table>
 
   <div class="summary">
+    <div class="summary-row"><span>Amount</span><span>${fmtMoney(amount)}</span></div>
+    ${discount !== 0 ? `<div class="summary-row"><span>Discount</span><span>&minus;${fmtMoney(discount)}</span></div>` : ""}
+    ${otherCosts !== 0 ? `<div class="summary-row"><span>Other Costs</span><span>${fmtMoney(otherCosts)}</span></div>` : ""}
     <div class="summary-row total"><span>Total Due</span><span>${fmtMoney(total)}</span></div>
     <div class="summary-row"><span>Amount Paid</span><span>${fmtMoney(paid)}</span></div>
     <div class="summary-row balance ${balance <= 0 ? "zero" : ""}"><span>Balance Due</span><span>${fmtMoney(balance)}</span></div>
