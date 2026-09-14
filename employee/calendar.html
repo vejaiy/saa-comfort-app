@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260913v">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260914b">
 <script>
 if (new URLSearchParams(location.search).get('embed') === '1') {
   document.documentElement.classList.add('saa-embed');
@@ -14,9 +14,9 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260913v"></script>
-<script src="../assets/js/supabase-config.js?v=20260913v"></script>
-<script src="../assets/js/auth.js?v=20260913v"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260914b"></script>
+<script src="../assets/js/supabase-config.js?v=20260914b"></script>
+<script src="../assets/js/auth.js?v=20260914b"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -183,7 +183,10 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
   <div class="modal-card" style="max-width:360px">
     <h3>Reschedule / Reassign</h3>
     <div class="field"><label>Technician</label><select id="ra-tech"></select></div>
-    <div class="field"><label>Time</label><input type="time" id="ra-time"></div>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input type="date" id="ra-date"></div>
+      <div class="field"><label>Time</label><input type="time" id="ra-time"></div>
+    </div>
     <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
       <button type="button" class="btn btn-navy btn-sm" id="ra-save-btn">Save</button>
       <button type="button" class="btn btn-ghost btn-sm" id="ra-cancel-btn">Cancel</button>
@@ -513,17 +516,17 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260913v"></script>
-<script src="../assets/js/worksheet.js?v=20260913v"></script>
-<script src="../assets/js/calendar-db.js?v=20260913v"></script>
-<script src="../assets/js/jobs-db.js?v=20260913v"></script>
-<script src="../assets/js/job-photos-db.js?v=20260913v"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260913v"></script>
-<script src="../assets/js/camera-capture.js?v=20260913v"></script>
-<script src="../assets/js/print-invoice.js?v=20260913v"></script>
-<script src="../assets/js/maps-config.js?v=20260913v"></script>
-<script src="../assets/js/mileage-db.js?v=20260913v"></script>
-<script src="../assets/js/jobs.js?v=20260913v"></script>
-<script src="../assets/js/calendar.js?v=20260913v"></script>
+<script src="../assets/js/pricing-data.js?v=20260914b"></script>
+<script src="../assets/js/worksheet.js?v=20260914b"></script>
+<script src="../assets/js/calendar-db.js?v=20260914b"></script>
+<script src="../assets/js/jobs-db.js?v=20260914b"></script>
+<script src="../assets/js/job-photos-db.js?v=20260914b"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260914b"></script>
+<script src="../assets/js/camera-capture.js?v=20260914b"></script>
+<script src="../assets/js/print-invoice.js?v=20260914b"></script>
+<script src="../assets/js/maps-config.js?v=20260914b"></script>
+<script src="../assets/js/mileage-db.js?v=20260914b"></script>
+<script src="../assets/js/jobs.js?v=20260914b"></script>
+<script src="../assets/js/calendar.js?v=20260914b"></script>
 </body>
 </html>

@@ -1048,6 +1048,33 @@ async function saaJobsGetOrCreateInvoice(job) {
   }
 }
 
+/** Round 22 (2026-09-14): "Add provision to change customer name and
+ *  phone number" -- edits the underlying customers row directly (not
+ *  just this one job's copy of it), so the change is visible everywhere
+ *  else this customer shows up (other jobs, quotes, the Jobs list). */
+async function saaCustomersUpdateContact(customerId, fields) {
+  try {
+    const firstName = (fields.first_name || "").trim();
+    if (!firstName) throw new Error("First name is required.");
+    const patch = {
+      first_name: firstName,
+      last_name: (fields.last_name || "").trim() || null,
+      phone: (fields.phone || "").trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+    const { data, error } = await _saaClient
+      .from("customers")
+      .update(patch)
+      .eq("id", customerId)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return { ok: true, customer: data };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
 async function saaJobsUpdateInvoice(invoiceId, fields) {
   try {
     const { error } = await _saaClient

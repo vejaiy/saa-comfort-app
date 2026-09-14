@@ -42,6 +42,81 @@ function _jbCustName(c) {
   return [c.first_name, c.last_name].filter(Boolean).join(" ") || "—";
 }
 
+/** Round 22 (2026-09-14): "Add provision to change customer name and
+ *  phone number" -- the Job Card's Customer box used to be plain,
+ *  read-only text. This renders it with a small "Edit" button that
+ *  swaps in first/last name + phone fields, and writes straight to the
+ *  customers table (via saaCustomersUpdateContact) so a correction shows
+ *  up everywhere else this customer appears too, not just on this job. */
+function jbRenderCustomerBox(job) {
+  const box = document.getElementById("jbd-customer");
+  const c = job.customer;
+  box.innerHTML = `<div id="jbd-cust-view">
+      <strong>${_jbCustName(c)}</strong>
+      ${c && c.phone ? ` &middot; <a href="tel:${c.phone}">${saaFormatPhone(c.phone)}</a>` : ""}
+      ${c && c.email ? ` &middot; ${c.email}` : ""}
+      ${c ? `<button type="button" class="btn btn-ghost btn-sm" id="jbd-cust-edit-btn" style="margin-left:8px" title="Edit customer information">✎ Edit</button>` : ""}
+    </div>
+    <div id="jbd-cust-edit" hidden style="margin-top:6px">
+      <div class="field-row field-row-3">
+        <div class="field"><label>First Name</label><input type="text" id="jbd-cust-first"></div>
+        <div class="field"><label>Last Name</label><input type="text" id="jbd-cust-last"></div>
+        <div class="field"><label>Phone</label><input type="tel" id="jbd-cust-phone"></div>
+      </div>
+      <button type="button" class="btn btn-navy btn-sm" id="jbd-cust-save-btn">Save</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="jbd-cust-cancel-btn">Cancel</button>
+      <span class="muted" id="jbd-cust-edit-err" style="margin-left:8px;color:#b3261e"></span>
+    </div>`;
+
+  if (!c) return;
+  const editBtn = document.getElementById("jbd-cust-edit-btn");
+  const viewEl = document.getElementById("jbd-cust-view");
+  const editEl = document.getElementById("jbd-cust-edit");
+  editBtn.addEventListener("click", () => {
+    document.getElementById("jbd-cust-first").value = c.first_name || "";
+    document.getElementById("jbd-cust-last").value = c.last_name || "";
+    document.getElementById("jbd-cust-phone").value = c.phone || "";
+    document.getElementById("jbd-cust-edit-err").textContent = "";
+    viewEl.hidden = true;
+    editEl.hidden = false;
+    document.getElementById("jbd-cust-first").focus();
+  });
+  document.getElementById("jbd-cust-cancel-btn").addEventListener("click", () => {
+    editEl.hidden = true;
+    viewEl.hidden = false;
+  });
+  document.getElementById("jbd-cust-save-btn").addEventListener("click", async () => {
+    const errEl = document.getElementById("jbd-cust-edit-err");
+    const saveBtn = document.getElementById("jbd-cust-save-btn");
+    const fields = {
+      first_name: document.getElementById("jbd-cust-first").value,
+      last_name: document.getElementById("jbd-cust-last").value,
+      phone: document.getElementById("jbd-cust-phone").value,
+    };
+    if (!fields.first_name.trim()) {
+      errEl.textContent = "First name is required.";
+      return;
+    }
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+    const res = await saaCustomersUpdateContact(c.id, fields);
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Save";
+    if (!res.ok) {
+      errEl.textContent = res.error;
+      return;
+    }
+    // Update every in-memory copy of this customer (this job plus any
+    // other job/quote rows already loaded) so the Jobs list, other open
+    // jobs for the same customer, etc. all reflect the edit without a
+    // full page reload.
+    Object.assign(c, res.customer);
+    jbRenderCustomerBox(job);
+    _jbToast("Customer updated.");
+    jbLoadAll();
+  });
+}
+
 /** Real sequential job number (J-2026-0001), assigned once at creation —
  *  see _saaJobsNextJobNumber in jobs-db.js. Falls back to the old
  *  "JOB-<uuid8>" display only for a job row from before this existed. */
@@ -93,12 +168,12 @@ function jbRenderTable() {
     <tr class="jb-row" data-id="${j.id}">
       <td>${_jbJobNum(j)}</td>
       <td>${_jbFormatDate(j.created_at)}</td>
+      <td>${_jbFormatDate(j.scheduled_date)}</td>
       <td>${_jbCustName(j.customer)}</td>
       <td>${j.customer && j.customer.phone ? saaFormatPhone(j.customer.phone) : "—"}</td>
       <td>${[j.job_address, j.job_city].filter(Boolean).join(", ") || "—"}</td>
       <td>${saaJobTypeLabel(j.job_type)}</td>
       <td><span class="jb-badge jb-pri-${j.priority}">${_jbPriorityLabel[j.priority] || j.priority}</span></td>
-      <td>${_jbFormatDate(j.scheduled_date)}</td>
       <td>${j.technician ? j.technician.name : "Unassigned"}</td>
       <td><span class="jb-badge jb-status-${j.status}">${_jbStatusLabel[j.status] || j.status}</span></td>
       <td><span class="jb-badge jb-pay-${j.paymentStatus}">${_jbPaymentLabel[j.paymentStatus]}</span></td>
@@ -1076,9 +1151,7 @@ async function jbOpenDetail(jobId) {
 
   document.getElementById("jbd-title").textContent = job.title || saaJobTypeLabel(job.job_type);
   document.getElementById("jbd-jobnum").textContent = `${_jbJobNum(job)} · Received ${_jbFormatDate(job.created_at)}`;
-  document.getElementById("jbd-customer").innerHTML = `<strong>${_jbCustName(job.customer)}</strong>
-    ${job.customer && job.customer.phone ? ` &middot; <a href="tel:${job.customer.phone}">${saaFormatPhone(job.customer.phone)}</a>` : ""}
-    ${job.customer && job.customer.email ? ` &middot; ${job.customer.email}` : ""}`;
+  jbRenderCustomerBox(job);
 
   document.getElementById("jbd-type").innerHTML = _jbOptionsHtml(SAA_JOBS_TYPE_OPTIONS, job.job_type);
   document.getElementById("jbd-priority").innerHTML = _jbOptionsHtml(SAA_JOBS_PRIORITY_OPTIONS, job.priority);

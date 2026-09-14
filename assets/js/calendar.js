@@ -1038,11 +1038,20 @@ function saaCalWireStaticHandlers() {
     techSel.value = saaCalDrawerAppt.technician_id || "";
     const startMin = saaCalMinutesFromTimeStr(saaCalDrawerAppt.start_datetime);
     document.getElementById("ra-time").value = startMin != null ? saaCalFormatClock24(startMin) : "09:00";
+    // Round 23: default to the appointment's OWN date, not the calendar's
+    // current view-anchor date (saaCalCurrentDate). Those differ whenever
+    // this drawer is opened from Week/Month view for a day other than the
+    // one the grid is anchored on -- previously saving here silently moved
+    // the appointment onto the wrong day because there was no Date field
+    // at all and the save handler fell back to saaCalCurrentDate.
+    const apptDateStr = String(saaCalDrawerAppt.start_datetime || "").slice(0, 10);
+    document.getElementById("ra-date").value = apptDateStr || saaCalCurrentDate;
     document.getElementById("ra-status").textContent = "";
     document.getElementById("cal-reassign-modal").hidden = false;
   });
   document.getElementById("ra-save-btn").addEventListener("click", async () => {
     const techId = document.getElementById("ra-tech").value || null;
+    const dateVal = document.getElementById("ra-date").value || saaCalCurrentDate;
     const timeVal = document.getElementById("ra-time").value;
     const [hh, mm] = timeVal.split(":").map(Number);
     const startMinutes = hh * 60 + mm;
@@ -1054,8 +1063,8 @@ function saaCalWireStaticHandlers() {
       appointmentId: saaCalDrawerAppt.id,
       jobId: saaCalDrawerAppt.job_id,
       technicianId: techId,
-      startDatetime: saaCalTimeStr(saaCalCurrentDate, startMinutes),
-      endDatetime: saaCalTimeStr(saaCalCurrentDate, startMinutes + existingDur),
+      startDatetime: saaCalTimeStr(dateVal, startMinutes),
+      endDatetime: saaCalTimeStr(dateVal, startMinutes + existingDur),
     });
     if (res.ok) {
       document.getElementById("cal-reassign-modal").hidden = true;
