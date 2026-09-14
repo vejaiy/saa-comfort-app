@@ -133,22 +133,66 @@ function _jbOptionsHtml(pairs, selected) {
   return pairs.map(([v, l]) => `<option value="${v}"${v === selected ? " selected" : ""}>${l}</option>`).join("");
 }
 
-/* ============================== Table + filters ============================== */
+/* ============================== Table: columns, filters, sort ============================== */
+
+/* Round 24: "add filter and sort options for each column in Jobs" -- the
+ * Job Type/Status/Priority/Technician/Payment dropdowns already filtered
+ * (they just lived in a toolbar above the table, disconnected from their
+ * column); the other six columns had no per-column filter at all, and
+ * nothing anywhere let you sort. Each column now carries its own filter
+ * control directly under its header, and clicking any header sorts by
+ * it (click again to flip direction).
+ *
+ * `sortVal` returns the value to compare for that column. Text columns
+ * are lower-cased for a case-insensitive sort; a job with no scheduled
+ * date or no assigned technician sorts to the end in either direction by
+ * using a sentinel that's always "greater" than any real value.
+ */
+const _JB_COLUMNS = [
+  { key: "jobnum", filterId: "jb-filter-jobnum", kind: "text",
+    matchText: (j) => _jbJobNum(j), sortVal: (j) => _jbJobNum(j).toLowerCase() },
+  { key: "received", filterId: "jb-filter-received", kind: "text",
+    matchText: (j) => _jbFormatDate(j.created_at), sortVal: (j) => j.created_at || "" },
+  { key: "scheduled", filterId: "jb-filter-scheduled", kind: "text",
+    matchText: (j) => _jbFormatDate(j.scheduled_date), sortVal: (j) => j.scheduled_date || "￿" },
+  { key: "customer", filterId: "jb-filter-customer", kind: "text",
+    matchText: (j) => _jbCustName(j.customer), sortVal: (j) => _jbCustName(j.customer).toLowerCase() },
+  { key: "phone", filterId: "jb-filter-phone", kind: "text",
+    matchText: (j) => (j.customer && j.customer.phone ? saaFormatPhone(j.customer.phone) : ""), sortVal: (j) => (j.customer && j.customer.phone) || "" },
+  { key: "address", filterId: "jb-filter-address", kind: "text",
+    matchText: (j) => [j.job_address, j.job_city].filter(Boolean).join(", "), sortVal: (j) => [j.job_address, j.job_city].filter(Boolean).join(", ").toLowerCase() },
+  { key: "type", filterId: "jb-filter-type", kind: "select",
+    matchValue: (j) => j.job_type, sortVal: (j) => saaJobTypeLabel(j.job_type).toLowerCase() },
+  { key: "priority", filterId: "jb-filter-priority", kind: "select",
+    matchValue: (j) => j.priority, sortVal: (j) => SAA_JOBS_PRIORITY_OPTIONS.findIndex(([v]) => v === j.priority) },
+  { key: "tech", filterId: "jb-filter-tech", kind: "select",
+    matchValue: (j) => j.assigned_technician_id, sortVal: (j) => (j.technician ? j.technician.name.toLowerCase() : "￿") },
+  { key: "status", filterId: "jb-filter-status", kind: "select",
+    matchValue: (j) => j.status, sortVal: (j) => SAA_JOBS_STATUS_OPTIONS.findIndex(([v]) => v === j.status) },
+  { key: "payment", filterId: "jb-filter-payment", kind: "select",
+    matchValue: (j) => j.paymentStatus, sortVal: (j) => ({ unpaid: 0, partial: 1, paid: 2 }[j.paymentStatus] ?? 9) },
+];
+
+let _jbSort = { key: null, dir: 1 };
 
 function jbApplyFilters() {
   const q = (document.getElementById("jb-search").value || "").trim().toLowerCase();
-  const type = document.getElementById("jb-filter-type").value;
-  const status = document.getElementById("jb-filter-status").value;
-  const priority = document.getElementById("jb-filter-priority").value;
-  const tech = document.getElementById("jb-filter-tech").value;
-  const payment = document.getElementById("jb-filter-payment").value;
 
-  return _jbAllJobs.filter((j) => {
-    if (type && j.job_type !== type) return false;
-    if (status && j.status !== status) return false;
-    if (priority && j.priority !== priority) return false;
-    if (tech && j.assigned_technician_id !== tech) return false;
-    if (payment && j.paymentStatus !== payment) return false;
+  const colFilters = _JB_COLUMNS.map((col) => ({
+    col,
+    value: col.kind === "text"
+      ? (document.getElementById(col.filterId).value || "").trim().toLowerCase()
+      : document.getElementById(col.filterId).value,
+  })).filter((cf) => cf.value);
+
+  let rows = _jbAllJobs.filter((j) => {
+    for (const { col, value } of colFilters) {
+      if (col.kind === "select") {
+        if (col.matchValue(j) !== value) return false;
+      } else if (!col.matchText(j).toLowerCase().includes(value)) {
+        return false;
+      }
+    }
     if (q) {
       const hay = [
         _jbCustName(j.customer), j.customer && j.customer.phone, j.job_address, j.job_city, j.job_zip, j.title,
@@ -156,6 +200,28 @@ function jbApplyFilters() {
       if (!hay.includes(q)) return false;
     }
     return true;
+  });
+
+  if (_jbSort.key) {
+    const col = _JB_COLUMNS.find((c) => c.key === _jbSort.key);
+    if (col) {
+      rows = rows.slice().sort((a, b) => {
+        const va = col.sortVal(a), vb = col.sortVal(b);
+        if (va < vb) return -1 * _jbSort.dir;
+        if (va > vb) return 1 * _jbSort.dir;
+        return 0;
+      });
+    }
+  }
+
+  return rows;
+}
+
+function _jbUpdateSortArrows() {
+  document.querySelectorAll(".jb-sort-arrow").forEach((el) => {
+    const isActive = el.dataset.arrow === _jbSort.key;
+    el.classList.toggle("active", isActive);
+    el.textContent = isActive ? (_jbSort.dir === 1 ? "▲" : "▼") : "▲▼";
   });
 }
 
@@ -181,6 +247,7 @@ function jbRenderTable() {
   tbody.querySelectorAll(".jb-row").forEach((tr) => {
     tr.addEventListener("click", () => jbOpenDetail(tr.dataset.id));
   });
+  _jbUpdateSortArrows();
 }
 
 async function jbLoadAll() {
@@ -1395,9 +1462,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("jbn-type").innerHTML = _jbOptionsHtml(SAA_JOBS_TYPE_OPTIONS, "");
     document.getElementById("jbn-tech").innerHTML = `<option value="">Unassigned</option>` + _jbTechnicians.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
 
-    ["jb-search", "jb-filter-type", "jb-filter-status", "jb-filter-priority", "jb-filter-tech", "jb-filter-payment"].forEach((id) => {
+    const _jbFilterIds = ["jb-search"].concat(_JB_COLUMNS.map((c) => c.filterId));
+    _jbFilterIds.forEach((id) => {
       document.getElementById(id).addEventListener("input", jbRenderTable);
       document.getElementById(id).addEventListener("change", jbRenderTable);
+    });
+
+    document.querySelectorAll(".jb-sortable").forEach((th) => {
+      th.addEventListener("click", () => {
+        const key = th.dataset.sort;
+        _jbSort = (_jbSort.key === key) ? { key, dir: -_jbSort.dir } : { key, dir: 1 };
+        jbRenderTable();
+      });
+    });
+
+    document.getElementById("jb-clear-filters-btn").addEventListener("click", () => {
+      _jbFilterIds.forEach((id) => { document.getElementById(id).value = ""; });
+      _jbSort = { key: null, dir: 1 };
+      jbRenderTable();
     });
 
     document.getElementById("jb-new-btn").addEventListener("click", jbOpenNewJobModal);

@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jobs | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260914b">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260914c">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260914b"></script>
-<script src="../assets/js/supabase-config.js?v=20260914b"></script>
-<script src="../assets/js/auth.js?v=20260914b"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260914c"></script>
+<script src="../assets/js/supabase-config.js?v=20260914c"></script>
+<script src="../assets/js/auth.js?v=20260914c"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -65,25 +65,49 @@
 </div>
 
 <div class="jobs-toolbar">
-  <input type="text" id="jb-search" placeholder="Search name, phone, address&hellip;" style="flex:1;min-width:180px">
-  <select id="jb-filter-type"></select>
-  <select id="jb-filter-status"></select>
-  <select id="jb-filter-priority"></select>
-  <select id="jb-filter-tech"></select>
-  <select id="jb-filter-payment">
-    <option value="">All Payment Status</option>
-    <option value="unpaid">Unpaid</option>
-    <option value="partial">Partially Paid</option>
-    <option value="paid">Paid</option>
-  </select>
+  <input type="text" id="jb-search" placeholder="Quick search: name, phone, address&hellip;" style="flex:1;min-width:180px">
+  <button type="button" class="btn btn-ghost btn-sm" id="jb-clear-filters-btn">Clear Filters &amp; Sort</button>
 </div>
 
+<!-- Round 24: every column got a sort (click the header) and a filter
+     (the input/dropdown under it) -- previously Job Type/Status/Priority/
+     Technician/Payment had dropdown filters up in the toolbar above (now
+     moved down into their own column so it's clear which column each one
+     applies to) and the rest of the columns had no per-column filter at
+     all, plus there was no sorting anywhere except the natural DB order. -->
 <div class="jobs-table-wrap">
   <table class="jobs-table">
     <thead>
-      <tr>
-        <th>Job #</th><th>Date Received</th><th>Scheduled</th><th>Customer</th><th>Phone</th><th>Service Address</th>
-        <th>Job Type</th><th>Priority</th><th>Technician</th><th>Status</th><th>Payment</th>
+      <tr class="jb-th-row">
+        <th class="jb-sortable" data-sort="jobnum">Job # <span class="jb-sort-arrow" data-arrow="jobnum"></span></th>
+        <th class="jb-sortable" data-sort="received">Date Received <span class="jb-sort-arrow" data-arrow="received"></span></th>
+        <th class="jb-sortable" data-sort="scheduled">Scheduled <span class="jb-sort-arrow" data-arrow="scheduled"></span></th>
+        <th class="jb-sortable" data-sort="customer">Customer <span class="jb-sort-arrow" data-arrow="customer"></span></th>
+        <th class="jb-sortable" data-sort="phone">Phone <span class="jb-sort-arrow" data-arrow="phone"></span></th>
+        <th class="jb-sortable" data-sort="address">Service Address <span class="jb-sort-arrow" data-arrow="address"></span></th>
+        <th class="jb-sortable" data-sort="type">Job Type <span class="jb-sort-arrow" data-arrow="type"></span></th>
+        <th class="jb-sortable" data-sort="priority">Priority <span class="jb-sort-arrow" data-arrow="priority"></span></th>
+        <th class="jb-sortable" data-sort="tech">Technician <span class="jb-sort-arrow" data-arrow="tech"></span></th>
+        <th class="jb-sortable" data-sort="status">Status <span class="jb-sort-arrow" data-arrow="status"></span></th>
+        <th class="jb-sortable" data-sort="payment">Payment <span class="jb-sort-arrow" data-arrow="payment"></span></th>
+      </tr>
+      <tr class="jb-filter-row">
+        <th><input type="text" id="jb-filter-jobnum" class="jb-col-filter" placeholder="Filter&hellip;"></th>
+        <th><input type="text" id="jb-filter-received" class="jb-col-filter" placeholder="Filter&hellip;"></th>
+        <th><input type="text" id="jb-filter-scheduled" class="jb-col-filter" placeholder="Filter&hellip;"></th>
+        <th><input type="text" id="jb-filter-customer" class="jb-col-filter" placeholder="Filter&hellip;"></th>
+        <th><input type="text" id="jb-filter-phone" class="jb-col-filter" placeholder="Filter&hellip;"></th>
+        <th><input type="text" id="jb-filter-address" class="jb-col-filter" placeholder="Filter&hellip;"></th>
+        <th><select id="jb-filter-type" class="jb-col-filter"></select></th>
+        <th><select id="jb-filter-priority" class="jb-col-filter"></select></th>
+        <th><select id="jb-filter-tech" class="jb-col-filter"></select></th>
+        <th><select id="jb-filter-status" class="jb-col-filter"></select></th>
+        <th><select id="jb-filter-payment" class="jb-col-filter">
+          <option value="">All</option>
+          <option value="unpaid">Unpaid</option>
+          <option value="partial">Partially Paid</option>
+          <option value="paid">Paid</option>
+        </select></th>
       </tr>
     </thead>
     <tbody id="jb-tbody"></tbody>
@@ -419,15 +443,15 @@
 <div id="jb-toast" class="cal-toast" hidden></div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260914b"></script>
-<script src="../assets/js/worksheet.js?v=20260914b"></script>
-<script src="../assets/js/jobs-db.js?v=20260914b"></script>
-<script src="../assets/js/job-photos-db.js?v=20260914b"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260914b"></script>
-<script src="../assets/js/camera-capture.js?v=20260914b"></script>
-<script src="../assets/js/print-invoice.js?v=20260914b"></script>
-<script src="../assets/js/maps-config.js?v=20260914b"></script>
-<script src="../assets/js/mileage-db.js?v=20260914b"></script>
-<script src="../assets/js/jobs.js?v=20260914b"></script>
+<script src="../assets/js/pricing-data.js?v=20260914c"></script>
+<script src="../assets/js/worksheet.js?v=20260914c"></script>
+<script src="../assets/js/jobs-db.js?v=20260914c"></script>
+<script src="../assets/js/job-photos-db.js?v=20260914c"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260914c"></script>
+<script src="../assets/js/camera-capture.js?v=20260914c"></script>
+<script src="../assets/js/print-invoice.js?v=20260914c"></script>
+<script src="../assets/js/maps-config.js?v=20260914c"></script>
+<script src="../assets/js/mileage-db.js?v=20260914c"></script>
+<script src="../assets/js/jobs.js?v=20260914c"></script>
 </body>
 </html>

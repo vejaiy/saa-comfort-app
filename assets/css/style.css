@@ -463,10 +463,18 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .jobs-toolbar input[type="text"] { min-width: 200px; }
 .jobs-table-wrap { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); overflow-x: auto; }
 .jobs-table { width: 100%; border-collapse: collapse; font-size: .85rem; white-space: nowrap; }
-.jobs-table th { text-align: left; text-transform: uppercase; letter-spacing: .3px; font-size: .66rem; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--line); background: #f7fafb; position: sticky; top: 0; }
+.jobs-table th { text-align: left; text-transform: uppercase; letter-spacing: .3px; font-size: .66rem; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--line); background: #f7fafb; }
+.jobs-table thead tr.jb-th-row th { position: sticky; top: 0; z-index: 2; }
+.jobs-table thead tr.jb-filter-row th { position: sticky; top: 34px; z-index: 1; padding: 6px 8px; }
 .jobs-table td { padding: 10px 12px; border-bottom: 1px solid #f0f3f6; }
 .jobs-table tr.jb-row { cursor: pointer; }
 .jobs-table tr.jb-row:hover { background: #f5f8fa; }
+
+.jobs-table th.jb-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.jobs-table th.jb-sortable:hover { background: #eef3f6; color: var(--ink, #1a2733); }
+.jb-sort-arrow { display: inline-block; width: 9px; font-size: .7rem; opacity: .55; }
+.jb-sort-arrow.active { opacity: 1; color: var(--navy, #14304d); }
+.jb-col-filter { width: 100%; min-width: 90px; font-size: .76rem; font-weight: 400; text-transform: none; letter-spacing: normal; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; box-sizing: border-box; color: #1a2733; background: #fff; }
 
 .jb-badge { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: .72rem; font-weight: 700; background: #eef3f6; color: var(--muted); white-space: nowrap; }
 /* .jb-badge's own `display` overrides the browser's default [hidden]
