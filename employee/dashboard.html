@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dashboard | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260914c">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260915a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260914c"></script>
-<script src="../assets/js/supabase-config.js?v=20260914c"></script>
-<script src="../assets/js/auth.js?v=20260914c"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260915a"></script>
+<script src="../assets/js/supabase-config.js?v=20260915a"></script>
+<script src="../assets/js/auth.js?v=20260915a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -68,11 +68,23 @@
       <h3 style="margin-bottom:2px">📅 Dispatch Calendar</h3>
       <p class="muted" style="margin:0">The operational center — technician schedule, customer, job, and status all in one drag-and-drop board.</p>
     </div>
-    <a class="btn btn-ghost btn-sm" href="calendar.html" target="_blank" rel="noopener">Open Full Calendar ↗</a>
+    <button type="button" class="btn btn-ghost btn-sm" id="dash-cal-fullscreen-btn">Open Full Calendar ⤢</button>
   </div>
   <div class="dash-calendar-embed">
     <iframe src="calendar.html?embed=1" title="Dispatch Calendar" loading="lazy"></iframe>
   </div>
+</div>
+
+<!-- Round 26 (2026-09-14), per Vijayan: "Make dispatch calendar as button
+     and open the calendar in new full window add X to close in the new
+     window." "Open Full Calendar" used to be a target="_blank" link (a
+     real new browser tab); Vijayan confirmed he'd rather it stay in this
+     same tab as a full-viewport overlay (no header/menu bar) with an X to
+     close back to the Dashboard, so it works the same on a phone as on a
+     laptop and never risks a second, separately-logged-in tab. -->
+<div class="dash-cal-fullscreen" id="dash-cal-fullscreen" hidden>
+  <button type="button" class="dash-cal-fullscreen-close" id="dash-cal-fullscreen-close" title="Close" aria-label="Close">&times;</button>
+  <iframe id="dash-cal-fullscreen-iframe" title="Dispatch Calendar (full screen)"></iframe>
 </div>
 
 <a class="card category-card" href="jobs.html" style="display:flex;align-items:center;gap:18px;text-decoration:none;margin-bottom:14px">
@@ -175,8 +187,28 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260914c"></script>
-<script src="../assets/js/worksheet.js?v=20260914c"></script>
-
+<script src="../assets/js/pricing-data.js?v=20260915a"></script>
+<script src="../assets/js/worksheet.js?v=20260915a"></script>
+<script>
+(function () {
+  var overlay = document.getElementById('dash-cal-fullscreen');
+  var frame = document.getElementById('dash-cal-fullscreen-iframe');
+  function openCalFullscreen() {
+    frame.src = 'calendar.html?embed=1';
+    overlay.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+  function closeCalFullscreen() {
+    overlay.hidden = true;
+    frame.src = '';
+    document.body.style.overflow = '';
+  }
+  document.getElementById('dash-cal-fullscreen-btn').addEventListener('click', openCalFullscreen);
+  document.getElementById('dash-cal-fullscreen-close').addEventListener('click', closeCalFullscreen);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !overlay.hidden) closeCalFullscreen();
+  });
+})();
+</script>
 </body>
 </html>

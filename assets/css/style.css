@@ -267,11 +267,6 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
   .hero .hero-media { order: -1; max-width: 420px; margin: 0 auto 8px; }
 }
 
-/* ---------- van photo section (mid-page) ---------- */
-.van-section .van-frame { border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); max-width: 900px; margin: 0 auto; }
-.van-section .van-frame img { display: block; width: 100%; height: auto; }
-.van-section .section-head { text-align: center; max-width: 640px; margin-left: auto; margin-right: auto; }
-
 /* ============================================================
    Dispatch Calendar — operational center (2026-09-11)
    Status colors are the single source of truth for what an
@@ -290,6 +285,11 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .cal-page-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
 .cal-datebar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cal-datebar .cal-date-label { font-weight: 800; font-size: 1.05rem; color: var(--navy); min-width: 190px; }
+/* Round 26 (2026-09-14): "Make left and right arrows next to Today little
+   bigger" -- the prev/next buttons shared the same small btn-sm sizing as
+   every other toolbar button, which made the arrow glyph itself tiny and a
+   little hard to hit/see. Bump just these two, keep Today's own sizing. */
+.cal-datebar #cal-prev-btn, .cal-datebar #cal-next-btn { font-size: 1.3rem; line-height: 1; font-weight: 700; padding: 6px 16px; }
 .cal-summary-strip { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
 .cal-stat { background: #fff; border: 1px solid var(--line); border-radius: 100px; padding: 6px 14px; font-size: .85rem; font-weight: 700; color: var(--navy); display: flex; align-items: center; gap: 6px; }
 .cal-stat .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
@@ -339,6 +339,12 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .appt-resize-handle { position: absolute; top: 0; right: 0; bottom: 0; width: 8px; cursor: ew-resize; }
 .appt-resize-handle::after { content: ""; position: absolute; top: 50%; right: 2px; width: 3px; height: 60%; transform: translateY(-50%); border-right: 2px solid rgba(255,255,255,.6); }
 .appt-card.resizing { opacity: .85; box-shadow: 0 0 0 2px rgba(15,36,57,.5); }
+/* Round 25 (2026-09-14) multi-technician support: the same appointment now
+   also renders on technician 2/3's own track when they're helping on a
+   job. Their copy is a striped, non-draggable echo of the primary's card
+   (cursor:default overrides .appt-card's grab cursor) -- it's still there
+   to show that tech is busy at that time, just not the one to drag. */
+.appt-card.appt-card-helper { cursor: default; background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.35) 0 6px, rgba(255,255,255,0) 6px 12px); opacity: .85; }
 
 .cal-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; font-size: .78rem; color: var(--muted); }
 .cal-legend .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 5px; }
@@ -476,6 +482,13 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .jb-sort-arrow.active { opacity: 1; color: var(--navy, #14304d); }
 .jb-col-filter { width: 100%; min-width: 90px; font-size: .76rem; font-weight: 400; text-transform: none; letter-spacing: normal; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; box-sizing: border-box; color: #1a2733; background: #fff; }
 
+/* Round 26 (2026-09-14): Jobs list "Quote $" column -- a plain-looking
+   button styled as a link so it reads as clickable without looking like
+   every other row-opening cell; stopPropagation in jobs.js keeps its click
+   from also opening the Job Card underneath it. */
+.jb-quote-link { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--navy); text-decoration: underline; cursor: pointer; }
+.jb-quote-link:hover { color: #0d1f33; }
+
 .jb-badge { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: .72rem; font-weight: 700; background: #eef3f6; color: var(--muted); white-space: nowrap; }
 /* .jb-badge's own `display` overrides the browser's default [hidden]
    rule (same class of bug already fixed once for .modal-overlay -- see
@@ -562,6 +575,16 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .dash-calendar-embed iframe { width: 100%; border: 0; display: block; height: 72vh; min-height: 480px; max-height: 760px; }
 @media (max-width: 900px) { .dash-calendar-embed iframe { height: 60vh; min-height: 400px; } }
 @media (max-width: 600px) { .dash-calendar-embed iframe { height: 52vh; min-height: 340px; } }
+
+/* ===== Dashboard: "Open Full Calendar" full-screen overlay (round 26,
+   2026-09-14) — same tab, no header/menu chrome, X in the corner to close.
+   z-index 400 clears everything else in this file (toast tops out at 300),
+   and it also sits above whatever modal/drawer the calendar iframe itself
+   might open, since those live inside the iframe's own stacking context. */
+.dash-cal-fullscreen { position: fixed; inset: 0; z-index: 400; background: #fff; }
+.dash-cal-fullscreen iframe { width: 100%; height: 100%; border: 0; display: block; }
+.dash-cal-fullscreen-close { position: fixed; top: 12px; right: 16px; z-index: 401; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: #fff; color: var(--navy); font-size: 1.7rem; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); padding: 0; }
+.dash-cal-fullscreen-close:hover { background: #f3f5f7; }
 
 /* ===== Job Card: Photos (round 3) ===== */
 .jb-photo-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }

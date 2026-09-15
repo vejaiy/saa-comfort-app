@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Repair | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260914c">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260915a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260914c"></script>
-<script src="../assets/js/supabase-config.js?v=20260914c"></script>
-<script src="../assets/js/auth.js?v=20260914c"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260915a"></script>
+<script src="../assets/js/supabase-config.js?v=20260915a"></script>
+<script src="../assets/js/auth.js?v=20260915a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -169,10 +169,10 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260914c"></script>
-<script src="../assets/js/worksheet.js?v=20260914c"></script>
-<script src="../assets/js/print-quote.js?v=20260914c"></script>
-<script src="../assets/js/quotes-db.js?v=20260914c"></script>
+<script src="../assets/js/pricing-data.js?v=20260915a"></script>
+<script src="../assets/js/worksheet.js?v=20260915a"></script>
+<script src="../assets/js/print-quote.js?v=20260915a"></script>
+<script src="../assets/js/quotes-db.js?v=20260915a"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
   saaAttachPhoneMask(document.getElementById('q-phone'));
@@ -333,6 +333,22 @@
   document.getElementById('rq-close-btn').addEventListener('click', () => {
     document.getElementById('retrieve-modal').hidden = true;
   });
+  // Shared by the search-results "load" click below and by the Jobs list's
+  // Quote $ column (round 26, 2026-09-14): clicking a job's quoted amount
+  // opens repair.html?quote=<id> for a repair-type quote, auto-loading it
+  // the same way a manual Retrieve Saved Quote search does.
+  async function _saaLoadQuoteInto(quoteId, status) {
+    if (status) status.textContent = 'Loading…';
+    const loaded = await saaLoadQuote(quoteId);
+    if (!loaded.ok) { if (status) status.textContent = 'Error: ' + loaded.error; return loaded; }
+    if (loaded.quote.form_state) saaApplyFormState(loaded.quote.form_state);
+    saaRenderBomExtrasNote(loaded.quote.form_state);
+    _saaCurrentQuoteId = loaded.quote.id;
+    document.getElementById('q-number').value = loaded.quote.quote_number || '';
+    updateAll();
+    return loaded;
+  }
+
   document.getElementById('rq-search-btn').addEventListener('click', async () => {
     const firstName = document.getElementById('rq-first').value.trim();
     const lastName = document.getElementById('rq-last').value.trim();
@@ -350,15 +366,8 @@
     status.textContent = res.results.length + ' match' + (res.results.length === 1 ? '' : 'es') + ' found.';
     saaRenderQuoteResults(results, res.results, {
       onLoad: async (quoteId) => {
-        status.textContent = 'Loading…';
-        const loaded = await saaLoadQuote(quoteId);
-        if (!loaded.ok) { status.textContent = 'Error: ' + loaded.error; return; }
-        if (loaded.quote.form_state) saaApplyFormState(loaded.quote.form_state);
-        saaRenderBomExtrasNote(loaded.quote.form_state);
-        _saaCurrentQuoteId = loaded.quote.id;
-        document.getElementById('q-number').value = loaded.quote.quote_number || '';
-        document.getElementById('retrieve-modal').hidden = true;
-        updateAll();
+        const loaded = await _saaLoadQuoteInto(quoteId, status);
+        if (loaded.ok) document.getElementById('retrieve-modal').hidden = true;
       },
       onDeleted: () => {
         document.getElementById('rq-search-btn').click();
@@ -369,6 +378,12 @@
   document.querySelector('main').addEventListener('input', updateAll);
   document.querySelector('main').addEventListener('change', updateAll);
   updateAll();
+
+  // Deep link from the Jobs list's Quote $ column: repair.html?quote=<id>
+  {
+    const _qId = new URLSearchParams(window.location.search).get('quote');
+    if (_qId) _saaLoadQuoteInto(_qId, document.getElementById('save-status'));
+  }
 </script>
 </body>
 </html>

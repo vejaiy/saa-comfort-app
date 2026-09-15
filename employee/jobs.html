@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jobs | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260914c">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260915a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260914c"></script>
-<script src="../assets/js/supabase-config.js?v=20260914c"></script>
-<script src="../assets/js/auth.js?v=20260914c"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260915a"></script>
+<script src="../assets/js/supabase-config.js?v=20260915a"></script>
+<script src="../assets/js/auth.js?v=20260915a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -90,6 +90,7 @@
         <th class="jb-sortable" data-sort="tech">Technician <span class="jb-sort-arrow" data-arrow="tech"></span></th>
         <th class="jb-sortable" data-sort="status">Status <span class="jb-sort-arrow" data-arrow="status"></span></th>
         <th class="jb-sortable" data-sort="payment">Payment <span class="jb-sort-arrow" data-arrow="payment"></span></th>
+        <th class="jb-sortable" data-sort="quote">Quote $ <span class="jb-sort-arrow" data-arrow="quote"></span></th>
       </tr>
       <tr class="jb-filter-row">
         <th><input type="text" id="jb-filter-jobnum" class="jb-col-filter" placeholder="Filter&hellip;"></th>
@@ -108,6 +109,7 @@
           <option value="partial">Partially Paid</option>
           <option value="paid">Paid</option>
         </select></th>
+        <th><input type="text" id="jb-filter-quote" class="jb-col-filter" placeholder="Filter&hellip;"></th>
       </tr>
     </thead>
     <tbody id="jb-tbody"></tbody>
@@ -170,6 +172,13 @@
       <div class="field"><label>Scheduled Date</label><input type="date" id="jbn-date"></div>
       <div class="field"><label>Scheduled Time</label><input type="time" id="jbn-time"></div>
     </div>
+    <!-- Round 25 (2026-09-14), per Vijayan: "Add option to add 2 more
+         technician to a job." Optional -- most jobs still need just the
+         one technician set above. -->
+    <div class="field-row">
+      <div class="field"><label>Technician 2 <span class="muted" style="font-weight:400">(optional)</span></label><select id="jbn-tech2"></select></div>
+      <div class="field"><label>Technician 3 <span class="muted" style="font-weight:400">(optional)</span></label><select id="jbn-tech3"></select></div>
+    </div>
     <div class="field">
       <label>Priority</label>
       <div class="cal-priority-row" id="jbn-priority-row"></div>
@@ -213,6 +222,17 @@
           <div class="field-row">
             <div class="field"><label>Status</label><select id="jbd-status"></select></div>
             <div class="field"><label>Technician</label><select id="jbd-tech"></select></div>
+          </div>
+          <!-- Round 25 (2026-09-14), per Vijayan: "Support multiple
+               technician to a job. Add option to add 2 more technician to
+               a job." Optional -- these drive the Dispatch Calendar the
+               same as the primary Technician above (their own track, same
+               appointment time), but only the primary technician's slot
+               drives automatic mileage calculation; see the Mileage
+               section further down for technician 2/3's own opt-in entry. -->
+          <div class="field-row">
+            <div class="field"><label>Technician 2 <span class="muted" style="font-weight:400">(optional)</span></label><select id="jbd-tech2"></select></div>
+            <div class="field"><label>Technician 3 <span class="muted" style="font-weight:400">(optional)</span></label><select id="jbd-tech3"></select></div>
           </div>
           <div class="field-row">
             <div class="field"><label>Scheduled Date</label><input type="date" id="jbd-scheduled"></div>
@@ -368,6 +388,30 @@
             <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbd-mileage-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Miles</button></div>
           </div>
           <div class="muted" id="jbd-mileage-note" style="font-size:.78rem"></div>
+
+          <!-- Round 25 (2026-09-14), per Vijayan: "Mileage will be default
+               to 1 tech. add provision to add mileage to multiple tech if
+               they drive separately." Technician 2/3 never get an
+               automatic mileage calculation the way the primary does --
+               these blocks only appear once that slot has a technician,
+               and stay purely opt-in/manual (a technician who rode along
+               in the same vehicle needs nothing entered here at all). -->
+          <div class="jbd-mileage-slot" id="jbd-mileage2-block" hidden style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)">
+            <div class="muted" style="font-size:.78rem;margin-bottom:6px">If Technician 2 drove separately:</div>
+            <div class="field-row">
+              <div class="field"><label>Miles Driven</label><input type="number" step="0.1" min="0" id="jbd-mileage2-miles" placeholder="0.0"></div>
+              <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbd-mileage2-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Miles</button></div>
+            </div>
+            <div class="muted" id="jbd-mileage2-note" style="font-size:.78rem"></div>
+          </div>
+          <div class="jbd-mileage-slot" id="jbd-mileage3-block" hidden style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)">
+            <div class="muted" style="font-size:.78rem;margin-bottom:6px">If Technician 3 drove separately:</div>
+            <div class="field-row">
+              <div class="field"><label>Miles Driven</label><input type="number" step="0.1" min="0" id="jbd-mileage3-miles" placeholder="0.0"></div>
+              <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbd-mileage3-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Miles</button></div>
+            </div>
+            <div class="muted" id="jbd-mileage3-note" style="font-size:.78rem"></div>
+          </div>
         </div>
 
         <div class="drawer-section">
@@ -443,15 +487,15 @@
 <div id="jb-toast" class="cal-toast" hidden></div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260914c"></script>
-<script src="../assets/js/worksheet.js?v=20260914c"></script>
-<script src="../assets/js/jobs-db.js?v=20260914c"></script>
-<script src="../assets/js/job-photos-db.js?v=20260914c"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260914c"></script>
-<script src="../assets/js/camera-capture.js?v=20260914c"></script>
-<script src="../assets/js/print-invoice.js?v=20260914c"></script>
-<script src="../assets/js/maps-config.js?v=20260914c"></script>
-<script src="../assets/js/mileage-db.js?v=20260914c"></script>
-<script src="../assets/js/jobs.js?v=20260914c"></script>
+<script src="../assets/js/pricing-data.js?v=20260915a"></script>
+<script src="../assets/js/worksheet.js?v=20260915a"></script>
+<script src="../assets/js/jobs-db.js?v=20260915a"></script>
+<script src="../assets/js/job-photos-db.js?v=20260915a"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260915a"></script>
+<script src="../assets/js/camera-capture.js?v=20260915a"></script>
+<script src="../assets/js/print-invoice.js?v=20260915a"></script>
+<script src="../assets/js/maps-config.js?v=20260915a"></script>
+<script src="../assets/js/mileage-db.js?v=20260915a"></script>
+<script src="../assets/js/jobs.js?v=20260915a"></script>
 </body>
 </html>
