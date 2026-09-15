@@ -249,6 +249,11 @@ async function saaJobsFetchAll() {
     return Object.assign({}, j, {
       customer: custById[j.customer_id] || null,
       technician: techById[j.assigned_technician_id] || null,
+      // Round 25 (2026-09-14) multi-technician support: technician2/technician3
+      // mirror `technician` for the optional 2nd/3rd crew slots. `select("*")`
+      // above already brings back assigned_technician_id_2/_3 on the raw row.
+      technician2: j.assigned_technician_id_2 ? techById[j.assigned_technician_id_2] || null : null,
+      technician3: j.assigned_technician_id_3 ? techById[j.assigned_technician_id_3] || null : null,
       linkedQuote: j.linked_quote_id ? quoteById[j.linked_quote_id] || null : null,
       invoice,
       amountPaid: paid,
@@ -380,8 +385,37 @@ async function saaJobsSetCompletedTime(jobId, hhmm) {
  *  to lengthen/shorten it would silently snap the duration back to
  *  default every time. Duration only resets to default when the start
  *  time actually changes (a real reschedule) or there was no existing
- *  appointment time to begin with. */
-async function saaJobsSyncAppointmentSchedule(jobId, { technicianId, scheduledDate, scheduledTime, jobType }) {
+ *  appointment time to begin with.
+ *
+ *  Round 28 (2026-09-15) fix: that comparison used to be a plain
+ *  `existing.start_datetime === start` string check against the naive
+ *  "<date>T<HH>:<MM>:00" string this function builds locally. `start` and
+ *  `end` on `appointments` are `timestamp with time zone` columns, though
+ *  — so the value PostgREST hands back always carries an explicit offset
+ *  (e.g. "2026-09-14T07:30:00+00:00", confirmed directly against the live
+ *  database), which can never equal the offset-less string built here.
+ *  That meant this "keep the existing duration" check *never actually
+ *  matched against the real database* (it looked like it worked because
+ *  `sitetest8`'s mock Supabase client stores/returns whatever string is
+ *  inserted completely unchanged, with no timezone formatting at all) —
+ *  every single Job Card save, including just opening and closing the
+ *  card with zero edits (Close always saves) or the Round 26 autosave
+ *  firing on any field, silently snapped a dispatcher-resized appointment
+ *  back to its job type's default duration. Fixed by comparing the two
+ *  timestamps on their date+hour+minute only (via
+ *  `_saaJobsDateTimeMinuteKey`, tolerant of a "T" or " " separator and
+ *  any trailing seconds/offset), not on exact string equality. */
+function _saaJobsDateTimeMinuteKey(s) {
+  const m = String(s || "").match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})/);
+  return m ? `${m[1]}T${m[2]}:${m[3]}` : null;
+}
+// Round 25 (2026-09-14), per Vijayan: "multiple technician drive the
+// calendar" -- technicianId2/technicianId3 (optional) are carried onto the
+// same appointment row as technician_id_2/technician_id_3 so the Dispatch
+// Calendar can place this appointment on all assigned technicians' tracks,
+// not just the primary's. Only the primary technicianId still drives
+// start/end time and appointment status the way it always has.
+async function saaJobsSyncAppointmentSchedule(jobId, { technicianId, technicianId2, technicianId3, scheduledDate, scheduledTime, jobType }) {
   try {
     let start = null, end = null;
     if (technicianId && scheduledDate) {
@@ -395,7 +429,7 @@ async function saaJobsSyncAppointmentSchedule(jobId, { technicianId, scheduledDa
         .maybeSingle();
       if (exErr) throw exErr;
 
-      if (existing && existing.start_datetime === start && existing.end_datetime) {
+      if (existing && existing.end_datetime && _saaJobsDateTimeMinuteKey(existing.start_datetime) === _saaJobsDateTimeMinuteKey(start)) {
         end = existing.end_datetime;
       } else {
         const durations = await saaJobsFetchAppointmentTypes();
@@ -405,7 +439,13 @@ async function saaJobsSyncAppointmentSchedule(jobId, { technicianId, scheduledDa
     }
     const { error } = await _saaClient
       .from("appointments")
-      .update({ technician_id: technicianId || null, start_datetime: start, end_datetime: end })
+      .update({
+        technician_id: technicianId || null,
+        technician_id_2: technicianId2 || null,
+        technician_id_3: technicianId3 || null,
+        start_datetime: start,
+        end_datetime: end,
+      })
       .eq("job_id", jobId);
     if (error) throw error;
     return { ok: true };
@@ -497,6 +537,10 @@ async function saaJobsCreateJob(payload) {
         job_state: payload.jobState || "TX",
         job_zip: payload.jobZip || null,
         assigned_technician_id: payload.technicianId || null,
+        // Round 25 (2026-09-14): optional 2nd/3rd technician, same as the
+        // Job Card's own Technician 2/3 selects.
+        assigned_technician_id_2: payload.technicianId2 || null,
+        assigned_technician_id_3: payload.technicianId3 || null,
         scheduled_date: payload.scheduledDate || null,
         scheduled_time: payload.scheduledTime || null,
         linked_quote_id: payload.linkedQuoteId || null,
@@ -519,6 +563,8 @@ async function saaJobsCreateJob(payload) {
     const { error: aErr } = await _saaClient.from("appointments").insert({
       job_id: job.id,
       technician_id: payload.technicianId || null,
+      technician_id_2: payload.technicianId2 || null,
+      technician_id_3: payload.technicianId3 || null,
       start_datetime: start,
       end_datetime: end,
       status: "scheduled",
