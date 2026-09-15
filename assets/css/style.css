@@ -481,6 +481,11 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .jb-sort-arrow { display: inline-block; width: 9px; font-size: .7rem; opacity: .55; }
 .jb-sort-arrow.active { opacity: 1; color: var(--navy, #14304d); }
 .jb-col-filter { width: 100%; min-width: 90px; font-size: .76rem; font-weight: 400; text-transform: none; letter-spacing: normal; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; box-sizing: border-box; color: #1a2733; background: #fff; }
+/* Vijayan: "Make filtered column title in bright color" -- a column with
+   an active filter (its Filter box/dropdown has a value) gets its header
+   title highlighted, independent of the sort-arrow's own active state. */
+.jb-th-label.jb-th-filtered { color: var(--orange, #e8632c); font-weight: 700; }
+.jobs-table th.jb-sortable:hover .jb-th-label.jb-th-filtered { color: var(--orange, #e8632c); }
 
 /* Round 26 (2026-09-14): Jobs list "Quote $" column -- a plain-looking
    button styled as a link so it reads as clickable without looking like

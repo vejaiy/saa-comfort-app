@@ -11,6 +11,7 @@ let _jbAllJobs = [];
 let _jbTechnicians = [];
 let _jbSelectedCust = null; // { id } or { isNew, customer: {...} } — New Job popup
 let _jbCurrentJob = null; // the job object currently open in the detail modal
+let _jbAutosaveTimer = null; // Round 26 (2026-09-14) autosave debounce -- see jbScheduleAutosave
 let _jbEquipByType = { condenser: null, coil: null, furnace: null };
 let _jbCurrentInvoice = null;
 let _jbCurrentPayments = [];
@@ -165,13 +166,59 @@ const _JB_COLUMNS = [
     matchValue: (j) => j.job_type, sortVal: (j) => saaJobTypeLabel(j.job_type).toLowerCase() },
   { key: "priority", filterId: "jb-filter-priority", kind: "select",
     matchValue: (j) => j.priority, sortVal: (j) => SAA_JOBS_PRIORITY_OPTIONS.findIndex(([v]) => v === j.priority) },
+  // Round 25 (2026-09-14) multi-technician support: filtering by a
+  // technician now matches a job they're assigned to in ANY slot
+  // (primary or helper) -- matchValue returns an array here instead of a
+  // scalar; jbApplyFilters' select-kind branch below checks membership
+  // when it sees an array. Sort still orders by the PRIMARY technician's
+  // name only, same as before.
   { key: "tech", filterId: "jb-filter-tech", kind: "select",
-    matchValue: (j) => j.assigned_technician_id, sortVal: (j) => (j.technician ? j.technician.name.toLowerCase() : "￿") },
+    matchValue: (j) => [j.assigned_technician_id, j.assigned_technician_id_2, j.assigned_technician_id_3].filter(Boolean),
+    sortVal: (j) => (j.technician ? j.technician.name.toLowerCase() : "￿") },
   { key: "status", filterId: "jb-filter-status", kind: "select",
     matchValue: (j) => j.status, sortVal: (j) => SAA_JOBS_STATUS_OPTIONS.findIndex(([v]) => v === j.status) },
   { key: "payment", filterId: "jb-filter-payment", kind: "select",
     matchValue: (j) => j.paymentStatus, sortVal: (j) => ({ unpaid: 0, partial: 1, paid: 2 }[j.paymentStatus] ?? 9) },
+  // Round 26 (2026-09-14), per Vijayan: "add a column to show associated
+  // quotation $ amount and when the $ amount is clicked it should open up
+  // the quotation." Filter matches either the formatted amount or the
+  // quote number; missing-quote jobs sort as if their amount were
+  // infinite, same "always sorts last" idea _jbQuoteAmount's sibling
+  // columns use for their own blank values.
+  { key: "quote", filterId: "jb-filter-quote", kind: "text",
+    matchText: (j) => [_jbQuoteAmount(j) != null ? fmtMoney(_jbQuoteAmount(j)) : "", j.linkedQuote && j.linkedQuote.quote_number].filter(Boolean).join(" "),
+    sortVal: (j) => { const amt = _jbQuoteAmount(j); return amt == null ? Infinity : amt; } },
 ];
+
+/** The $ amount to show in the Jobs list's Quote $ column: the job's own
+ *  quoted_amount if it has one, else the linked quote's total (covers a
+ *  job that was linked to a quote before quoted_amount existed on it),
+ *  else null (no quote associated at all -- renders as "—", not clickable). */
+/** Round 25 (2026-09-14) multi-technician support: the Jobs list
+ *  Technician column now lists everyone assigned to the job (primary
+ *  first), not just the primary -- "None" when nobody's assigned at all. */
+function _jbTechDisplayNames(j) {
+  const names = [j.technician, j.technician2, j.technician3].filter(Boolean).map((t) => t.name);
+  return names.length ? names.join(", ") : "None";
+}
+
+function _jbQuoteAmount(j) {
+  if (j.quoted_amount != null && j.quoted_amount !== "") return j.quoted_amount;
+  if (j.linkedQuote && j.linkedQuote.total != null) return j.linkedQuote.total;
+  return null;
+}
+
+function _jbQuoteCellHtml(j) {
+  const amt = _jbQuoteAmount(j);
+  if (amt == null) return "—";
+  // A quoted_amount can exist with no linked_quote_id at all (typed
+  // straight into the Job Card, no saved quote behind it) -- show the
+  // number but don't make it a dead link. Repair-worksheet quotes save
+  // with quote_type "repair" and live on repair.html, not quotation.html.
+  if (!j.linked_quote_id) return fmtMoney(amt);
+  const page = (j.linkedQuote && j.linkedQuote.quote_type === "repair") ? "repair.html" : "quotation.html";
+  return `<button type="button" class="jb-quote-link" data-quote-id="${j.linked_quote_id}" data-quote-page="${page}">${fmtMoney(amt)}</button>`;
+}
 
 let _jbSort = { key: null, dir: 1 };
 
@@ -188,7 +235,8 @@ function jbApplyFilters() {
   let rows = _jbAllJobs.filter((j) => {
     for (const { col, value } of colFilters) {
       if (col.kind === "select") {
-        if (col.matchValue(j) !== value) return false;
+        const mv = col.matchValue(j);
+        if (Array.isArray(mv) ? !mv.includes(value) : mv !== value) return false;
       } else if (!col.matchText(j).toLowerCase().includes(value)) {
         return false;
       }
@@ -225,6 +273,22 @@ function _jbUpdateSortArrows() {
   });
 }
 
+/** Vijayan: "Make filtered column title in bright color" -- a column
+ *  whose own filter box (text or dropdown) currently has a value gets its
+ *  header title highlighted in the brand orange, so it's obvious at a
+ *  glance which columns are actively narrowing the list, separate from
+ *  the small sort-direction arrow (which only shows the active SORT
+ *  column, not which ones are filtered). */
+function _jbUpdateFilterHeaderHighlight() {
+  _JB_COLUMNS.forEach((col) => {
+    const input = document.getElementById(col.filterId);
+    const label = document.querySelector(`.jb-sortable[data-sort="${col.key}"] .jb-th-label`);
+    if (!input || !label) return;
+    const active = !!(input.value || "").trim();
+    label.classList.toggle("jb-th-filtered", active);
+  });
+}
+
 function jbRenderTable() {
   const tbody = document.getElementById("jb-tbody");
   if (!tbody) return; // embedded Job Card context (e.g. calendar.html) has no Jobs List table
@@ -240,14 +304,25 @@ function jbRenderTable() {
       <td>${[j.job_address, j.job_city].filter(Boolean).join(", ") || "—"}</td>
       <td>${saaJobTypeLabel(j.job_type)}</td>
       <td><span class="jb-badge jb-pri-${j.priority}">${_jbPriorityLabel[j.priority] || j.priority}</span></td>
-      <td>${j.technician ? j.technician.name : "Unassigned"}</td>
+      <td>${_jbTechDisplayNames(j)}</td>
       <td><span class="jb-badge jb-status-${j.status}">${_jbStatusLabel[j.status] || j.status}</span></td>
       <td><span class="jb-badge jb-pay-${j.paymentStatus}">${_jbPaymentLabel[j.paymentStatus]}</span></td>
+      <td>${_jbQuoteCellHtml(j)}</td>
     </tr>`).join("");
   tbody.querySelectorAll(".jb-row").forEach((tr) => {
     tr.addEventListener("click", () => jbOpenDetail(tr.dataset.id));
   });
+  // The Quote $ link opens the quotation in a new tab instead of the Job
+  // Card the rest of the row opens -- stop the click from also bubbling up
+  // to the row's own listener above.
+  tbody.querySelectorAll(".jb-quote-link").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (btn.dataset.quoteId) window.open(`${btn.dataset.quotePage}?quote=${btn.dataset.quoteId}`, "_blank", "noopener");
+    });
+  });
   _jbUpdateSortArrows();
+  _jbUpdateFilterHeaderHighlight();
 }
 
 async function jbLoadAll() {
@@ -342,6 +417,8 @@ function jbOpenNewJobModal() {
   document.getElementById("jbn-state").value = "TX";
   document.getElementById("jbn-type").selectedIndex = 0;
   document.getElementById("jbn-tech").value = "";
+  document.getElementById("jbn-tech2").value = "";
+  document.getElementById("jbn-tech3").value = "";
   document.getElementById("jbn-status").textContent = "";
   jbRenderPriorityRow("jbn-priority-row", "normal", (p) => { _jbNewPriority = p; });
   document.getElementById("jb-new-modal").hidden = false;
@@ -409,6 +486,13 @@ function jbRenderPriorityRow(mountId, selected, onPick) {
 async function jbSaveNewJob() {
   const statusEl = document.getElementById("jbn-status");
   if (!_jbSelectedCust) { statusEl.textContent = "Select or add a customer first."; return; }
+  // Round 25 (2026-09-14): the same technician can't fill two of the
+  // three slots on one job.
+  const pickedTechs = [document.getElementById("jbn-tech").value, document.getElementById("jbn-tech2").value, document.getElementById("jbn-tech3").value].filter(Boolean);
+  if (new Set(pickedTechs).size !== pickedTechs.length) {
+    statusEl.textContent = "The same technician can't be picked in more than one Technician slot.";
+    return;
+  }
   const payload = {
     jobType: document.getElementById("jbn-type").value,
     title: document.getElementById("jbn-title").value.trim(),
@@ -417,6 +501,8 @@ async function jbSaveNewJob() {
     jobState: document.getElementById("jbn-state").value.trim().toUpperCase() || "TX",
     jobZip: document.getElementById("jbn-zip").value.trim(),
     technicianId: document.getElementById("jbn-tech").value || null,
+    technicianId2: document.getElementById("jbn-tech2").value || null,
+    technicianId3: document.getElementById("jbn-tech3").value || null,
     scheduledDate: document.getElementById("jbn-date").value || null,
     scheduledTime: document.getElementById("jbn-time").value || null,
     priority: _jbNewPriority,
@@ -1211,9 +1297,66 @@ async function jbCalculateMileage() {
   }
 }
 
+/** Round 25 (2026-09-14) multi-technician mileage -- technician 2/3's own
+ *  opt-in Mileage block (n is 2 or 3). Deliberately simpler than the
+ *  primary's: no live "Trip: X → Y" context line, no automatic background
+ *  calculation on every save (see jbSaveDetail) -- per Vijayan, this is
+ *  only for "if they drive separately," so it starts blank and stays
+ *  exactly whatever the office last calculated or typed in for that
+ *  technician's own leg. */
+function _jbMileageSlotTechId(n) {
+  const sel = document.getElementById(`jbd-tech${n}`);
+  return (sel && sel.value) || null;
+}
+
+async function jbRenderMileageSlot(job, n) {
+  const techId = _jbMileageSlotTechId(n);
+  const block = document.getElementById(`jbd-mileage${n}-block`);
+  block.hidden = !techId;
+  if (!techId) return;
+  const milesEl = document.getElementById(`jbd-mileage${n}-miles`);
+  const noteEl = document.getElementById(`jbd-mileage${n}-note`);
+  const existing = await saaMileageFetchForJob(job.id, techId);
+  milesEl.value = existing && existing.miles != null ? existing.miles : "";
+  job[`_jbMileage${n}MilesAtOpen`] = milesEl.value;
+  noteEl.textContent = existing
+    ? (existing.source === "manual" ? "Entered manually." : "Auto-calculated from addresses.")
+    : "";
+}
+
+async function jbCalculateMileageSlot(n) {
+  if (!_jbCurrentJob) return;
+  const techId = _jbMileageSlotTechId(n);
+  if (!techId) return;
+  const snap = _jbMileageSnapshot();
+  const btn = document.getElementById(`jbd-mileage${n}-calc-btn`);
+  btn.disabled = true;
+  btn.textContent = "Calculating…";
+  try {
+    let res = await saaMileageRecalcForJob(snap, false, techId);
+    if (!res.ok && res.manual) {
+      const ok = await saaConfirm("This trip's mileage was entered manually. Recalculate and overwrite it?", { title: "Overwrite manual entry", okLabel: "Recalculate", cancelLabel: "Cancel" });
+      if (!ok) return;
+      res = await saaMileageRecalcForJob(snap, true, techId);
+    }
+    if (res.ok) {
+      document.getElementById(`jbd-mileage${n}-miles`).value = res.log.miles != null ? res.log.miles : "";
+      _jbCurrentJob[`_jbMileage${n}MilesAtOpen`] = document.getElementById(`jbd-mileage${n}-miles`).value;
+      document.getElementById(`jbd-mileage${n}-note`).textContent = "Auto-calculated from addresses.";
+      _jbToast(`${res.log.miles} miles calculated.`);
+    } else {
+      _jbToast(res.error, true);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "📍 Calculate Miles";
+  }
+}
+
 async function jbOpenDetail(jobId) {
   const job = _jbAllJobs.find((j) => j.id === jobId);
   if (!job) return;
+  clearTimeout(_jbAutosaveTimer); // cancel any pending autosave left over from whatever job was open before
   _jbCurrentJob = job;
 
   document.getElementById("jbd-title").textContent = job.title || saaJobTypeLabel(job.job_type);
@@ -1223,7 +1366,13 @@ async function jbOpenDetail(jobId) {
   document.getElementById("jbd-type").innerHTML = _jbOptionsHtml(SAA_JOBS_TYPE_OPTIONS, job.job_type);
   document.getElementById("jbd-priority").innerHTML = _jbOptionsHtml(SAA_JOBS_PRIORITY_OPTIONS, job.priority);
   document.getElementById("jbd-status").innerHTML = _jbOptionsHtml(SAA_JOBS_STATUS_OPTIONS, job.status);
-  document.getElementById("jbd-tech").innerHTML = `<option value="">Unassigned</option>` + _jbTechnicians.map((t) => `<option value="${t.id}"${t.id === job.assigned_technician_id ? " selected" : ""}>${t.name}</option>`).join("");
+  document.getElementById("jbd-tech").innerHTML = `<option value="">None</option>` + _jbTechnicians.map((t) => `<option value="${t.id}"${t.id === job.assigned_technician_id ? " selected" : ""}>${t.name}</option>`).join("");
+  // Round 25 (2026-09-14): optional Technician 2/3 -- same option list,
+  // each pre-selected to whatever's on the job already.
+  document.getElementById("jbd-tech2").innerHTML = `<option value="">None</option>` + _jbTechnicians.map((t) => `<option value="${t.id}"${t.id === job.assigned_technician_id_2 ? " selected" : ""}>${t.name}</option>`).join("");
+  document.getElementById("jbd-tech3").innerHTML = `<option value="">None</option>` + _jbTechnicians.map((t) => `<option value="${t.id}"${t.id === job.assigned_technician_id_3 ? " selected" : ""}>${t.name}</option>`).join("");
+  document.getElementById("jbd-mileage2-block").hidden = !job.assigned_technician_id_2;
+  document.getElementById("jbd-mileage3-block").hidden = !job.assigned_technician_id_3;
   document.getElementById("jbd-scheduled").value = job.scheduled_date || "";
   document.getElementById("jbd-time").value = job.scheduled_time || "";
   document.getElementById("jbd-completed").value = job.completed_date || "";
@@ -1247,7 +1396,7 @@ async function jbOpenDetail(jobId) {
   document.getElementById("jbd-cost-other").value = job.other_cost || 0;
   jbComputeProfit();
   ["jbd-quoted", "jbd-approved", "jbd-cost-material", "jbd-cost-labor", "jbd-cost-other"].forEach((id) => {
-    document.getElementById(id).oninput = jbComputeProfit;
+    document.getElementById(id).oninput = () => { jbComputeProfit(); jbScheduleAutosave(); };
   });
 
   document.getElementById("jbd-sig-name").value = job.customer_signature_name || "";
@@ -1267,6 +1416,8 @@ async function jbOpenDetail(jobId) {
   _jbCurrentPayments = job.invoice ? await saaJobsFetchPayments(job.invoice.id) : [];
   jbRenderInvoiceBox(job, _jbCurrentInvoice, _jbCurrentPayments);
   await jbRenderMileageSection(job);
+  if (job.assigned_technician_id_2) await jbRenderMileageSlot(job, 2);
+  if (job.assigned_technician_id_3) await jbRenderMileageSlot(job, 3);
 
   _jbPhotos = await saaPhotosFetch(job.id);
   jbRenderPhotoGrid();
@@ -1281,7 +1432,20 @@ async function jbOpenDetail(jobId) {
   document.getElementById("jb-detail-modal").hidden = false;
 }
 
-async function jbSaveDetail() {
+/** Round 26 (2026-09-14), per Vijayan: "Make data entry in job card as auto
+ *  save instead of scrolling down and saving every time." jbScheduleAutosave
+ *  (below) debounces a call to this same function -- it still does the
+ *  exact full save (job fields, equipment, mileage, appointment sync) the
+ *  "Save Job Card" button always has, just triggered automatically instead
+ *  of by a click, so nothing about WHAT gets saved needed to change. Pass
+ *  { silent: true } from the autosave path to skip the "Job Card saved."
+ *  toast on every keystroke pause -- the inline status message next to the
+ *  buttons still updates either way. Clearing the pending timer at the top
+ *  means a manual Save click (or Close, which also calls this) can't be
+ *  followed a moment later by a redundant autosave firing on top of it. */
+async function jbSaveDetail(opts) {
+  opts = opts || {};
+  clearTimeout(_jbAutosaveTimer);
   const job = _jbCurrentJob;
   if (!job) return;
   const statusMsg = document.getElementById("jbd-status-msg");
@@ -1292,6 +1456,9 @@ async function jbSaveDetail() {
     priority: document.getElementById("jbd-priority").value,
     status: document.getElementById("jbd-status").value,
     assigned_technician_id: document.getElementById("jbd-tech").value || null,
+    // Round 25 (2026-09-14): optional 2nd/3rd technician.
+    assigned_technician_id_2: document.getElementById("jbd-tech2").value || null,
+    assigned_technician_id_3: document.getElementById("jbd-tech3").value || null,
     scheduled_date: document.getElementById("jbd-scheduled").value || null,
     scheduled_time: document.getElementById("jbd-time").value || null,
     completed_date: document.getElementById("jbd-completed").value || null,
@@ -1338,6 +1505,8 @@ async function jbSaveDetail() {
   // this is what makes saving here place (or move) it on the Dispatch Calendar grid.
   await saaJobsSyncAppointmentSchedule(job.id, {
     technicianId: patch.assigned_technician_id,
+    technicianId2: patch.assigned_technician_id_2,
+    technicianId3: patch.assigned_technician_id_3,
     scheduledDate: patch.scheduled_date,
     scheduledTime: patch.scheduled_time,
     jobType: patch.job_type,
@@ -1406,9 +1575,51 @@ async function jbSaveDetail() {
     saaMileageEnsureForJob(_jbMileageSnapshot());
   }
 
+  // Technician 2/3 mileage (Round 25, 2026-09-14): opt-in only -- unlike
+  // the primary leg above, an untouched/blank field here never triggers a
+  // background auto-calculation (there's no saaMileageEnsureForJob-style
+  // "else" branch), since these only exist for a technician who drove
+  // separately and someone explicitly said so.
+  for (const n of [2, 3]) {
+    const techId = document.getElementById(`jbd-tech${n}`).value || null;
+    if (!techId) continue;
+    const milesEl = document.getElementById(`jbd-mileage${n}-miles`);
+    const milesVal = milesEl.value;
+    if (milesVal === (job[`_jbMileage${n}MilesAtOpen`] || "")) continue;
+    const snap = _jbMileageSnapshot();
+    if (milesVal.trim() === "") {
+      await saaMileageDeleteForJob(job.id, techId);
+      job[`_jbMileage${n}MilesAtOpen`] = "";
+      document.getElementById(`jbd-mileage${n}-note`).textContent = "";
+    } else {
+      const mRes = await saaMileageSetManualForJob(snap, parseFloat(milesVal), techId);
+      if (mRes.ok) {
+        job[`_jbMileage${n}MilesAtOpen`] = milesVal;
+        document.getElementById(`jbd-mileage${n}-note`).textContent = "Entered manually.";
+      } else {
+        _jbToast(mRes.error, true);
+      }
+    }
+  }
+
   statusMsg.textContent = "Saved.";
   await jbLoadAll();
-  _jbToast("Job Card saved.");
+  if (!opts.silent) _jbToast("Job Card saved.");
+}
+
+/** Debounces a background jbSaveDetail() call so editing any tracked field
+ *  in the open Job Card saves it ~1.2s after the tech/office stops typing
+ *  or changes a dropdown/date -- no more scrolling down to "Save Job Card"
+ *  after every field. Guarded on the modal actually being open so a timer
+ *  can't outlive it (jbCloseDetail flushes with a real save first anyway,
+ *  and jbSaveDetail clears any pending timer the instant it runs). */
+function jbScheduleAutosave() {
+  const modal = document.getElementById("jb-detail-modal");
+  if (!_jbCurrentJob || !modal || modal.hidden) return;
+  clearTimeout(_jbAutosaveTimer);
+  const statusMsg = document.getElementById("jbd-status-msg");
+  if (statusMsg) statusMsg.textContent = "Unsaved changes…";
+  _jbAutosaveTimer = setTimeout(() => { jbSaveDetail({ silent: true }); }, 1200);
 }
 
 /** Save-and-exit: used by the Close (X) button, the Close button, and a
@@ -1460,7 +1671,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("jb-filter-priority").innerHTML = `<option value="">All Priorities</option>` + _jbOptionsHtml(SAA_JOBS_PRIORITY_OPTIONS, "");
     document.getElementById("jb-filter-tech").innerHTML = `<option value="">All Technicians</option>` + _jbTechnicians.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
     document.getElementById("jbn-type").innerHTML = _jbOptionsHtml(SAA_JOBS_TYPE_OPTIONS, "");
-    document.getElementById("jbn-tech").innerHTML = `<option value="">Unassigned</option>` + _jbTechnicians.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
+    document.getElementById("jbn-tech").innerHTML = `<option value="">None</option>` + _jbTechnicians.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
+    document.getElementById("jbn-tech2").innerHTML = `<option value="">None</option>` + _jbTechnicians.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
+    document.getElementById("jbn-tech3").innerHTML = `<option value="">None</option>` + _jbTechnicians.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
 
     const _jbFilterIds = ["jb-search"].concat(_JB_COLUMNS.map((c) => c.filterId));
     _jbFilterIds.forEach((id) => {
@@ -1527,6 +1740,72 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("jbd-close-btn").addEventListener("click", jbCloseDetail);
   document.getElementById("jbd-delete-btn").addEventListener("click", jbDeleteCurrentJob);
   document.getElementById("jb-detail-close-btn").addEventListener("click", jbCloseDetail);
+
+  // Round 26 (2026-09-14) autosave wiring -- every field jbSaveDetail's
+  // patch actually reads (the Quoted/Approved/Cost fields are wired
+  // separately above, alongside jbComputeProfit) plus every Equipment
+  // field. These elements are static (present once in the page's HTML,
+  // never recreated), so this is wired ONCE here rather than re-wired on
+  // every jbOpenDetail -- jbScheduleAutosave itself doesn't care which job
+  // is open, it just re-reads _jbCurrentJob when its debounce timer fires.
+  // Deliberately excluded: Customer name/phone (own Save button, separate
+  // customers-table save), the Quote search box (wired above), and
+  // Invoice/Payment (their own Update Invoice/Record Payment buttons) --
+  // none of those fields are part of jbSaveDetail's patch anyway.
+  [
+    "jbd-type", "jbd-priority", "jbd-status", "jbd-tech", "jbd-scheduled", "jbd-time",
+    "jbd-completed", "jbd-completed-time", "jbd-address", "jbd-city", "jbd-state", "jbd-zip",
+    "jbd-problem", "jbd-findings", "jbd-recommend", "jbd-sig-name", "jbd-sig-date", "jbd-notes",
+    "jbd-mileage-miles",
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    el.addEventListener("input", jbScheduleAutosave);
+    el.addEventListener("change", jbScheduleAutosave);
+  });
+  document.querySelectorAll(".jb-eq-fields input, .jb-eq-fields select").forEach((el) => {
+    el.addEventListener("input", jbScheduleAutosave);
+    el.addEventListener("change", jbScheduleAutosave);
+  });
+
+  // Same duplicate-technician guard as the tech2/3 handler below, for the
+  // primary Technician select.
+  document.getElementById("jbd-tech").addEventListener("change", (e) => {
+    const val = e.target.value;
+    if (val) {
+      const others = [document.getElementById("jbd-tech2").value, document.getElementById("jbd-tech3").value];
+      if (others.includes(val)) {
+        _jbToast("That technician is already assigned to this job in another slot.", true);
+        e.target.value = "";
+      }
+    }
+  });
+
+  // Round 25 (2026-09-14) Technician 2/3 wiring: picking a technician here
+  // shows/loads that slot's own opt-in Mileage block; a slot left blank
+  // hides it again (the saved mileage row, if any, is left alone -- only
+  // clearing Miles Driven itself and saving deletes it). Also guards
+  // against assigning the SAME technician to more than one slot on one
+  // job, which wouldn't make sense on the calendar (one person can't have
+  // two tracks for one appointment).
+  [2, 3].forEach((n) => {
+    document.getElementById(`jbd-tech${n}`).addEventListener("change", async (e) => {
+      const val = e.target.value;
+      if (val) {
+        const others = [document.getElementById("jbd-tech").value, document.getElementById("jbd-tech2").value, document.getElementById("jbd-tech3").value]
+          .filter((v, i) => v && i !== (n - 1));
+        if (others.includes(val)) {
+          _jbToast("That technician is already assigned to this job in another slot.", true);
+          e.target.value = "";
+          document.getElementById(`jbd-mileage${n}-block`).hidden = true;
+          return;
+        }
+      }
+      if (_jbCurrentJob) await jbRenderMileageSlot(_jbCurrentJob, n);
+      jbScheduleAutosave();
+    });
+  });
+  document.getElementById("jbd-mileage2-calc-btn").addEventListener("click", () => jbCalculateMileageSlot(2));
+  document.getElementById("jbd-mileage3-calc-btn").addEventListener("click", () => jbCalculateMileageSlot(3));
   document.getElementById("jb-detail-modal").addEventListener("click", (e) => {
     if (e.target.id === "jb-detail-modal") jbCloseDetail(); // clicked the backdrop, not the card
   });
