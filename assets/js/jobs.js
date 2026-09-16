@@ -146,8 +146,13 @@ function _jbOptionsHtml(pairs, selected) {
  *
  * `sortVal` returns the value to compare for that column. Text columns
  * are lower-cased for a case-insensitive sort; a job with no scheduled
- * date or no assigned technician sorts to the end in either direction by
- * using a sentinel that's always "greater" than any real value.
+ * date, no assigned technician, or no quote returns `null` from
+ * `sortVal`, which jbApplyFilters' comparator always sorts to the end,
+ * in EITHER direction (Round 31 fix -- these three previously used a
+ * sentinel value multiplied by the sort direction like every other
+ * value, so a blank only actually sorted last in ascending order; flipped
+ * to descending, it sorted first instead, silently contradicting this
+ * exact comment).
  */
 const _JB_COLUMNS = [
   { key: "jobnum", filterId: "jb-filter-jobnum", kind: "text",
@@ -155,7 +160,7 @@ const _JB_COLUMNS = [
   { key: "received", filterId: "jb-filter-received", kind: "text",
     matchText: (j) => _jbFormatDate(j.created_at), sortVal: (j) => j.created_at || "" },
   { key: "scheduled", filterId: "jb-filter-scheduled", kind: "text",
-    matchText: (j) => _jbFormatDate(j.scheduled_date), sortVal: (j) => j.scheduled_date || "￿" },
+    matchText: (j) => _jbFormatDate(j.scheduled_date), sortVal: (j) => j.scheduled_date || null },
   { key: "customer", filterId: "jb-filter-customer", kind: "text",
     matchText: (j) => _jbCustName(j.customer), sortVal: (j) => _jbCustName(j.customer).toLowerCase() },
   { key: "phone", filterId: "jb-filter-phone", kind: "text",
@@ -174,7 +179,7 @@ const _JB_COLUMNS = [
   // name only, same as before.
   { key: "tech", filterId: "jb-filter-tech", kind: "select",
     matchValue: (j) => [j.assigned_technician_id, j.assigned_technician_id_2, j.assigned_technician_id_3].filter(Boolean),
-    sortVal: (j) => (j.technician ? j.technician.name.toLowerCase() : "￿") },
+    sortVal: (j) => (j.technician ? j.technician.name.toLowerCase() : null) },
   { key: "status", filterId: "jb-filter-status", kind: "select",
     matchValue: (j) => j.status, sortVal: (j) => SAA_JOBS_STATUS_OPTIONS.findIndex(([v]) => v === j.status) },
   { key: "payment", filterId: "jb-filter-payment", kind: "select",
@@ -187,7 +192,7 @@ const _JB_COLUMNS = [
   // columns use for their own blank values.
   { key: "quote", filterId: "jb-filter-quote", kind: "text",
     matchText: (j) => [_jbQuoteAmount(j) != null ? fmtMoney(_jbQuoteAmount(j)) : "", j.linkedQuote && j.linkedQuote.quote_number].filter(Boolean).join(" "),
-    sortVal: (j) => { const amt = _jbQuoteAmount(j); return amt == null ? Infinity : amt; } },
+    sortVal: (j) => _jbQuoteAmount(j) },
 ];
 
 /** The $ amount to show in the Jobs list's Quote $ column: the job's own
@@ -220,7 +225,14 @@ function _jbQuoteCellHtml(j) {
   return `<button type="button" class="jb-quote-link" data-quote-id="${j.linked_quote_id}" data-quote-page="${page}">${fmtMoney(amt)}</button>`;
 }
 
-let _jbSort = { key: null, dir: 1 };
+// Round 31 (2026-09-15), per Vijayan: "Always open the job page with
+// schedule date filtered from newest to oldest" -- the Jobs list now
+// defaults to sorting by Scheduled, newest first, instead of opening
+// unsorted (natural DB order, newest-CREATED first). _JB_DEFAULT_SORT is
+// also what "Clear Filters & Sort" resets to, so that button restores the
+// same default view a fresh page load shows, not a different one.
+const _JB_DEFAULT_SORT = { key: "scheduled", dir: -1 };
+let _jbSort = Object.assign({}, _JB_DEFAULT_SORT);
 
 function jbApplyFilters() {
   const q = (document.getElementById("jb-search").value || "").trim().toLowerCase();
@@ -255,6 +267,11 @@ function jbApplyFilters() {
     if (col) {
       rows = rows.slice().sort((a, b) => {
         const va = col.sortVal(a), vb = col.sortVal(b);
+        // A blank (null) value always sorts last, regardless of sort
+        // direction -- see the _JB_COLUMNS comment above (Round 31 fix).
+        if (va == null && vb == null) return 0;
+        if (va == null) return 1;
+        if (vb == null) return -1;
         if (va < vb) return -1 * _jbSort.dir;
         if (va > vb) return 1 * _jbSort.dir;
         return 0;
@@ -748,7 +765,10 @@ function jbRenderInvoiceBox(job, invoice, payments) {
     return;
   }
   const paid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const paymentStatus = saaJobsPaymentStatus(invoice, paid);
+  // Round 31: pass whether a payment ROW exists at all (payments.length),
+  // not just the $ sum -- a $0 payment sums to 0 same as no payment at
+  // all, but only the former means "reviewed, confirmed nothing owed."
+  const paymentStatus = saaJobsPaymentStatus(invoice, paid, payments.length > 0);
   const paymentsHtml = payments.length
     ? payments.map((p) => `<div class="jb-payment-row">${_jbFormatDate(p.payment_date)} &middot; ${(p.method || "").replace(/^\w/, (c) => c.toUpperCase())} &middot; ${fmtMoney(Number(p.amount || 0))}</div>`).join("")
     : `<div class="muted" style="font-size:.8rem">No payments recorded yet.</div>`;
@@ -802,7 +822,7 @@ function jbRenderInvoiceBox(job, invoice, payments) {
     </div>
     <div class="jb-payments-list">${paymentsHtml}</div>
     <div class="field-row" style="margin-top:8px">
-      <div class="field"><label>Payment Amount</label><input type="number" step="0.01" id="jbd-pay-amount"></div>
+      <div class="field"><label>Payment Amount</label><input type="number" step="0.01" min="0" id="jbd-pay-amount" placeholder="0.00"></div>
       <div class="field"><label>Date</label><input type="date" id="jbd-pay-date" value="${new Date().toISOString().slice(0, 10)}"></div>
     </div>
     <div class="field-row">
@@ -813,6 +833,7 @@ function jbRenderInvoiceBox(job, invoice, payments) {
       <div class="field"><label>Reference #</label><input type="text" id="jbd-pay-ref"></div>
     </div>
     <button type="button" class="btn btn-navy btn-sm" id="jbd-pay-save-btn">Record Payment</button>
+    <p class="muted" style="font-size:.78rem;margin:4px 0 0">Enter 0 for a no-charge visit (e.g. a free follow-up check) &mdash; this confirms nothing is owed and marks it Paid.</p>
   `;
 
   // Live Total = Amount - Discount + Other Costs, recomputed on every
@@ -1691,7 +1712,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     document.getElementById("jb-clear-filters-btn").addEventListener("click", () => {
       _jbFilterIds.forEach((id) => { document.getElementById(id).value = ""; });
-      _jbSort = { key: null, dir: 1 };
+      _jbSort = Object.assign({}, _JB_DEFAULT_SORT);
       jbRenderTable();
     });
 

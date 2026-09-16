@@ -237,7 +237,14 @@ async function saaJobsFetchAll() {
   const techById = Object.fromEntries((technicians || []).map((t) => [t.id, t]));
   const quoteById = Object.fromEntries((quotes || []).map((q) => [q.id, q]));
   const paidByInvoice = {};
-  (payments || []).forEach((p) => { paidByInvoice[p.invoice_id] = (paidByInvoice[p.invoice_id] || 0) + Number(p.amount || 0); });
+  // Round 31: tracked separately from the $ sum above -- a recorded $0
+  // payment contributes nothing to paidByInvoice but still needs to count
+  // as "reviewed, nothing due" for saaJobsPaymentStatus below.
+  const hasPaymentByInvoice = {};
+  (payments || []).forEach((p) => {
+    paidByInvoice[p.invoice_id] = (paidByInvoice[p.invoice_id] || 0) + Number(p.amount || 0);
+    hasPaymentByInvoice[p.invoice_id] = true;
+  });
 
   // most-recent invoice per job (invoices already ordered desc by created_at)
   const invoiceByJob = {};
@@ -246,6 +253,7 @@ async function saaJobsFetchAll() {
   return (jobs || []).map((j) => {
     const invoice = invoiceByJob[j.id] || null;
     const paid = invoice ? paidByInvoice[invoice.id] || 0 : 0;
+    const hasPayment = invoice ? !!hasPaymentByInvoice[invoice.id] : false;
     return Object.assign({}, j, {
       customer: custById[j.customer_id] || null,
       technician: techById[j.assigned_technician_id] || null,
@@ -257,7 +265,7 @@ async function saaJobsFetchAll() {
       linkedQuote: j.linked_quote_id ? quoteById[j.linked_quote_id] || null : null,
       invoice,
       amountPaid: paid,
-      paymentStatus: saaJobsPaymentStatus(invoice, paid),
+      paymentStatus: saaJobsPaymentStatus(invoice, paid, hasPayment),
     });
   });
 }
@@ -274,10 +282,20 @@ function saaJobsInvoiceTotalDue(invoice) {
 
 /** Unpaid / Partially Paid / Paid — derived from money actually
  *  received against the job's invoice, independent of the invoice
- *  document's own Draft/Sent/Paid/Void lifecycle. */
-function saaJobsPaymentStatus(invoice, amountPaid) {
+ *  document's own Draft/Sent/Paid/Void lifecycle.
+ *
+ *  Round 31 (2026-09-15), per Vijayan: a job with nothing owed (no
+ *  invoice, or an invoice totalling $0 -- e.g. a free follow-up check)
+ *  used to be stuck showing "Unpaid" forever, since there was no way to
+ *  reach "Paid" when there's no positive total to be paid in full
+ *  against. `hasPayment` (true once at least one payment ROW exists for
+ *  this invoice, even a $0.00 one -- see saaJobsRecordPayment, which now
+ *  accepts $0) is the office's explicit "reviewed, nothing due" signal:
+ *  recording a $0 payment on a no-charge job now flips it to Paid, while
+ *  a job that simply hasn't been billed/reviewed yet still reads Unpaid. */
+function saaJobsPaymentStatus(invoice, amountPaid, hasPayment) {
   const total = saaJobsInvoiceTotalDue(invoice);
-  if (!invoice || total <= 0) return amountPaid > 0 ? "partial" : "unpaid";
+  if (!invoice || total <= 0) return hasPayment ? "paid" : "unpaid";
   if (amountPaid >= total) return "paid";
   if (amountPaid > 0) return "partial";
   return "unpaid";
@@ -1146,10 +1164,17 @@ async function saaJobsFetchPayments(invoiceId) {
 
 /** Records a payment, then bumps the invoice's own status to Paid once
  *  payments cover the total (a Draft/Sent invoice with money in hand is
- *  as good as paid; Void is left alone either way). */
+ *  as good as paid; Void is left alone either way).
+ *
+ *  Round 31 (2026-09-15), per Vijayan: a no-charge job (e.g. a free
+ *  follow-up check) had no way to be marked settled -- $0 was rejected
+ *  outright here, and even if it hadn't been, a $0 total could never
+ *  reach "paid" below (see the totalDue>0 guard this round removed for
+ *  that case). Now $0 is a valid, explicit "nothing owed, confirmed" entry
+ *  -- only a genuinely negative amount is rejected. */
 async function saaJobsRecordPayment(payload) {
   try {
-    if (!(payload.amount > 0)) return { ok: false, error: "Enter a payment amount greater than $0." };
+    if (!(payload.amount >= 0)) return { ok: false, error: "Enter a payment amount of $0 or more." };
     const { error: payErr } = await _saaClient.from("payments").insert({
       invoice_id: payload.invoiceId,
       customer_id: payload.customerId,
@@ -1166,7 +1191,11 @@ async function saaJobsRecordPayment(payload) {
     const payments = await saaJobsFetchPayments(payload.invoiceId);
     const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
     const totalDue = saaJobsInvoiceTotalDue(invoice);
-    if (invoice.status !== "void" && totalPaid >= totalDue && totalDue > 0) {
+    // Nothing owed (totalDue <= 0): the payment record itself -- even the
+    // $0 one that was just inserted -- IS the "settled" signal, since
+    // there's no positive total for totalPaid to catch up to.
+    const settled = totalDue > 0 ? totalPaid >= totalDue : payments.length > 0;
+    if (invoice.status !== "void" && settled) {
       await _saaClient.from("invoices").update({ status: "paid" }).eq("id", payload.invoiceId);
     }
     return { ok: true };
