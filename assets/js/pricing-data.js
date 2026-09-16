@@ -101,7 +101,7 @@ const COIL_MATERIALS = [
   { group: "MATERIALS", category: "Drainage",         item: "PVC fitting 3/4\" straight", unit: "Bag", qty: 1, price: 6, included: true },
   { group: "MATERIALS", category: "Drainage",         item: "P-trap / condensate trap", unit: "EA", qty: 1, price: 15, notes: "Configuration dependent", included: true },
   { group: "MATERIALS", category: "Drainage",         item: "Cleanout / vent fittings", unit: "LOT", qty: 1, price: 10, notes: "For serviceability and drain configuration", included: true },
-  { group: "MATERIALS", category: "Safety",           item: "Primary drain float/overflow switch", unit: "EA", qty: 1, price: 25, notes: "Safety shutoff; application dependent", included: false },
+  { group: "MATERIALS", category: "Safety",           item: "Primary drain float/overflow switch (Safe-T-Switch, SS2-GEN3)", unit: "EA", qty: 1, price: 30.17, spec: "Daikin/Goodman part #97087", notes: "Safety shutoff; application dependent — updated 2026-09-16 to the actual Safe-T-Switch SS2-GEN3 model/price per Vijayan's request (was a generic $25 placeholder; real cost from a 2026-09-15 receipt).", included: false },
   { group: "MATERIALS", category: "Equipment Support", item: "Structural support / hanging hardware", unit: "LOT", qty: 1, price: 75, notes: "Angles, rods, brackets, anchors", included: false },
   { group: "MATERIALS", category: "Equipment Support", item: "Vibration isolation pads", unit: "Set", qty: 0, price: 20, notes: "Where applicable", included: false },
   { group: "MATERIALS", category: "Electrical",       item: "Low-voltage wire/connectors", unit: "LOT", qty: 1, price: 15, notes: "For safety switches/controls", included: true },
@@ -114,6 +114,24 @@ const COIL_MATERIALS = [
   { group: "MATERIALS", category: "Permits",          item: "Permit/inspection allowance", unit: "LOT", qty: 1, price: 50, notes: "Local jurisdiction dependent", included: false },
   { group: "MATERIALS", category: "Disposable",       item: "Old equipment disposal fee / plastic packaging recycle fee", unit: "EA", qty: 1, price: 150, included: false },
   { group: "MATERIALS", category: "Cleaning",         item: "Bucket", unit: "EA", qty: 1, price: 15, included: true },
+  // Round 26 (2026-09-14), per Vijayan: "Add Heater stand 2 qty, $30 each
+  // for Coils change worksheet" -- opt-in like the other job-site-dependent
+  // support hardware above (Structural support / Vibration isolation), so
+  // it defaults off but pre-fills qty 2 the moment it's switched on.
+  // Round 32 (2026-09-16): Vijayan asked to mark this included by default.
+  { group: "MATERIALS", category: "Equipment Support", item: "Heater stand", unit: "EA", qty: 2, price: 30, notes: "Elevates the indoor coil/air handler off the platform where required", included: true },
+  // Round 32 (2026-09-16), per Vijayan: "CC MAC Air Filter Media, 16x25x4.5,
+  // M11 to coil change worksheet mark included" -- real Daikin/Goodman OEM
+  // media filter cartridge; price from a 2026-09-14 receipt (job
+  // J-2026-0004-Sreedhar, Invoice 2122677).
+  { group: "MATERIALS", category: "Air Distribution", item: "CC MAC Air Filter Media, 16x25x4.5, M11", unit: "EA", qty: 1, price: 70.15, spec: "Daikin/Goodman OEM media filter cartridge, 16x25x4.5, MERV 11", included: true },
+  // Round 32 (2026-09-16), per Vijayan: "Add poly backed canvas 2qty to
+  // Coils change worksheet" -- Everbilt 4ft x 14ft poly-backed canvas drop
+  // cloth, same job-site-protection role as the HDX Painter's Plastic row
+  // above; price from Home Depot. No "mark included" instruction was given
+  // for this one, so it defaults off (opt-in) like the other job-dependent
+  // protection/support items on this sheet -- flip on per job as needed.
+  { group: "MATERIALS", category: "Job Site Protection", item: "Poly Backed Canvas Drop Cloth (Everbilt, 4ft x 14ft)", unit: "EA", qty: 2, price: 34.98, spec: "Everbilt 4 ft. x 14 ft. Poly Backed Canvas Drop Cloth", notes: "Heavier-duty floor/furnishing protection alternative to the plastic sheeting above.", included: false },
 ];
 
 /* ---- Furnace Change worksheet — starter list (no source sheet data; edit freely) ---- */
@@ -128,6 +146,23 @@ const FURNACE_MATERIALS = [
   { group: "MATERIALS", category: "Permits",    item: "Permit/inspection allowance", unit: "LOT", qty: 1, price: 50, included: false },
   { group: "MATERIALS", category: "Disposable", item: "Old equipment disposal fee", unit: "EA", qty: 1, price: 75, included: false },
   { group: "MATERIALS", category: "Electrical", item: "Wire nuts / misc electrical", unit: "Bag", qty: 1, price: 10, included: true },
+  // Round 26 (2026-09-14), per Vijayan: "...and 2qty, $30 each for furnace
+  // change worksheet" -- same opt-in Heater stand item as Coil Change above.
+  // Round 32 (2026-09-16): Vijayan asked to mark this included by default.
+  { group: "MATERIALS", category: "Equipment Support", item: "Heater stand", unit: "EA", qty: 2, price: 30, notes: "Elevates the furnace off the platform where required", included: true },
+  // Round 32 (2026-09-16), per Vijayan: "Add items 1211NPL qty1, 12CAP,
+  // Qty2, 1290ELB, qty2, 123NPL qty1, Mastic Tape 3"X100', CC MAC Air Filter
+  // Media, 16x25x4.5, M11 to Furnace change worksheet mark all these
+  // included" -- all six real parts/prices from a 2026-09-15 Daikin Pearland
+  // pick ticket (the four small PVC fittings) and a 2026-09-14 Daikin
+  // Goodman-Katy invoice (Mastic Tape, filter media), both tied to job
+  // J-2026-0004-Sreedhar's condensate-drain/high-efficiency-furnace tie-in.
+  { group: "MATERIALS", category: "Plumbing / PVC Fittings", item: "1/2\" x 11\" Nipple", unit: "EA", qty: 1, price: 4.09, spec: "SKU 1211NPL", included: true },
+  { group: "MATERIALS", category: "Plumbing / PVC Fittings", item: "1/2\" Cap", unit: "EA", qty: 2, price: 1.29, spec: "SKU 12CAP", included: true },
+  { group: "MATERIALS", category: "Plumbing / PVC Fittings", item: "1/2\" 90 Deg Elbow", unit: "EA", qty: 2, price: 1.74, spec: "SKU 1290ELB", included: true },
+  { group: "MATERIALS", category: "Plumbing / PVC Fittings", item: "1/2\" x 3\" Nipple", unit: "EA", qty: 1, price: 1.01, spec: "SKU 123NPL", included: true },
+  { group: "MATERIALS", category: "Adhesives & Sealants", item: "Mastic Tape, 3\" x 100'", unit: "EA", qty: 1, price: 38.82, spec: "SKU 304100-HC", notes: "Price from the 2026-09-14 job-billed purchase (a separate 2026-09-11 SAA-Tools restock of the same tape rang up at $28.19 — flagged in case that's the number Vijayan intended).", included: true },
+  { group: "MATERIALS", category: "Air", item: "CC MAC Air Filter Media, 16x25x4.5, M11", unit: "EA", qty: 1, price: 70.15, spec: "Daikin/Goodman OEM media filter cartridge, 16x25x4.5, MERV 11", included: true },
 ];
 
 /* ---- Repair worksheet (employee/repair.html, added 2026-09-12) ----
