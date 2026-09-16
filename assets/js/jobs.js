@@ -557,6 +557,21 @@ function jbComputeProfit() {
   const quoted = parseFloat(document.getElementById("jbd-quoted").value) || 0;
   const totalActual = material + labor + other;
   const base = approved || quoted || 0;
+  // Round 33 (2026-09-16): Actual Material Cost and Actual Labor Cost both
+  // default to 0 until the office fills them in, which made every fresh
+  // job read as a "$300 profit, 100% margin" the moment it was Approved --
+  // before a single real cost had been entered. That's not a real margin,
+  // it's an empty form, so hold off computing Gross Profit/Margin at all
+  // until at least one of the two actual-cost fields is nonzero.
+  const costsEntered = material > 0 || labor > 0;
+  if (!costsEntered) {
+    document.getElementById("jbd-profit-box").innerHTML = `
+      <div class="jb-profit-row"><span>Total Actual Cost</span><strong>${fmtMoney(totalActual)}</strong></div>
+      <div class="jb-profit-row"><span>Gross Profit</span><strong class="jb-pending">Pending actual costs</strong></div>
+      <div class="jb-profit-row"><span>Gross Margin %</span><strong class="jb-pending">&mdash;</strong></div>`;
+    jbUpdateInvoiceQuoteFlag();
+    return;
+  }
   const profit = base - totalActual;
   const marginPct = base > 0 ? (profit / base) * 100 : 0;
   document.getElementById("jbd-profit-box").innerHTML = `
@@ -607,10 +622,28 @@ async function jbRenderQuoteSection(job) {
     linkedBox.hidden = false;
     searchWrap.hidden = true;
     linkedBox.innerHTML = `Linked to Quote <strong>${job.linkedQuote.quote_number || "—"}</strong> (${job.linkedQuote.quote_type || ""}) &mdash; ${fmtMoney(job.linkedQuote.total || 0)}
-      <button type="button" class="btn btn-ghost btn-sm" id="jbd-unlink-quote-btn" style="margin-left:8px">Change</button>`;
+      <button type="button" class="btn btn-ghost btn-sm" id="jbd-unlink-quote-btn" style="margin-left:8px">Change</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="jbd-remove-quote-btn" style="margin-left:4px">Remove Quotation</button>`;
     document.getElementById("jbd-unlink-quote-btn").addEventListener("click", () => {
       linkedBox.hidden = true;
       searchWrap.hidden = false;
+    });
+    // Round 33 (2026-09-16): "Change" above only swaps in the search box to
+    // pick a REPLACEMENT quote -- there was no way to detach a job from a
+    // quote entirely. This clears the link outright (the quote itself, and
+    // the job's own Quoted Amount, are both left untouched).
+    document.getElementById("jbd-remove-quote-btn").addEventListener("click", async () => {
+      const proceed = await saaConfirm(
+        `Remove the link to Quote ${job.linkedQuote.quote_number || "this quote"}? The quote itself won't be deleted, and Quoted Amount stays as-is -- only the connection between this job and that quote is cleared.`,
+        { title: "Remove Quotation", okLabel: "Remove Link" }
+      );
+      if (!proceed) return;
+      const res = await saaJobsUnlinkQuote(job.id, job.linked_quote_id);
+      if (!res.ok) { _jbToast(res.error, true); return; }
+      job.linked_quote_id = null;
+      job.linkedQuote = null;
+      jbRenderQuoteSection(job);
+      _jbToast("Quotation link removed.");
     });
   } else {
     linkedBox.hidden = true;
@@ -814,7 +847,7 @@ function jbRenderInvoiceBox(job, invoice, payments) {
       <div class="field"><label>Discount</label><input type="number" step="0.01" id="jbd-inv-discount" value="${discount || ""}" placeholder="0.00"></div>
       <div class="field"><label>Other Costs</label><input type="number" step="0.01" id="jbd-inv-other" value="${otherCharges || ""}" placeholder="0.00"></div>
     </div>
-    <div class="jb-profit-row" id="jbd-inv-total-row" style="margin-top:4px"><span>Total</span><strong id="jbd-inv-total-display">${fmtMoney(invoice.amount_total || 0)}</strong></div>
+    <div class="jb-profit-row" id="jbd-inv-total-row" style="margin-top:4px"><span>Total</span><strong id="jbd-inv-total-display">${fmtMoney(saaJobsInvoiceTotalDue(invoice))}</strong></div>
     <div style="display:flex;gap:8px;margin:10px 0 10px">
       <button type="button" class="btn btn-ghost btn-sm" id="jbd-inv-save-btn">Update Invoice</button>
       <button type="button" class="btn btn-ghost btn-sm" id="jbd-inv-print-btn">Print Invoice</button>
@@ -1271,9 +1304,18 @@ async function _jbUpdateMileageContext() {
   }
   const leg = await saaMileageLegContext(snap);
   const dest = saaMileageJobAddress(snap);
+  // Round 33 (2026-09-16): a from-address that isn't the shop was read as a
+  // bug ("this is not company address") -- it's actually this technician's
+  // PRIOR job of the same day chaining into this one (see the design note
+  // atop mileage-db.js: only the day's first leg starts from the shop).
+  // Spelling that out here instead of just showing the bare address should
+  // make it read as intentional instead of wrong.
+  const legNote = leg.legOrder === 1
+    ? " (first stop of the day, from the shop)"
+    : ` (leg ${leg.legOrder} of the day — starts where this technician's previous job ended)`;
   ctxEl.textContent = dest
-    ? `Trip: ${leg.fromAddress} → ${dest}`
-    : `Trip starts at: ${leg.fromAddress} (add a Service Address to complete the route)`;
+    ? `Trip: ${leg.fromAddress} → ${dest}${legNote}`
+    : `Trip starts at: ${leg.fromAddress}${legNote} (add a Service Address to complete the route)`;
 }
 
 /** Full render on Job Card open — context line plus the saved Miles

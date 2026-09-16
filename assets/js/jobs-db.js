@@ -828,6 +828,28 @@ async function saaJobsLinkQuote(jobId, quoteId) {
   }
 }
 
+/** Round 33 (2026-09-16): the reverse of saaJobsLinkQuote -- clears the
+ *  job's link to a Quote without touching Quoted Amount (that's a
+ *  separately-editable field the office may have already adjusted) and
+ *  without deleting the quote itself. Frees the quote's own job_id back to
+ *  null too (mirroring the delete-job cleanup below) so it's available to
+ *  link to a different job, or this same one again, later. */
+async function saaJobsUnlinkQuote(jobId, quoteId) {
+  try {
+    const { error } = await _saaClient
+      .from("jobs")
+      .update({ linked_quote_id: null, updated_at: new Date().toISOString() })
+      .eq("id", jobId);
+    if (error) throw error;
+    if (quoteId) {
+      await _saaClient.from("quotes").update({ job_id: null }).eq("id", quoteId).eq("job_id", jobId);
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
 async function saaJobsFetchLatestEquipment(customerId) {
   const { data, error } = await _saaClient
     .from("equipment")

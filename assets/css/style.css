@@ -542,6 +542,7 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .jb-profit-box { background: #f5f8fa; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 8px; }
 .jb-profit-row { display: flex; justify-content: space-between; font-size: .85rem; padding: 3px 0; }
 .jb-negative { color: var(--danger); }
+.jb-pending { color: var(--muted); font-style: italic; font-weight: 400; }
 .jb-payments-list { font-size: .82rem; color: var(--muted); margin: 4px 0; }
 .jb-payment-row { padding: 2px 0; }
 
