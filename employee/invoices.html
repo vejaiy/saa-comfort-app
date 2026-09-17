@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Invoices | Employee | SAA Comfort Air LLC</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260917b">
+
+<style>body.emp-shell{visibility:hidden}</style>
+</head>
+<body class="emp-shell">
+<script src="../assets/js/vendor/supabase.js?v=20260917b"></script>
+<script src="../assets/js/supabase-config.js?v=20260917b"></script>
+<script src="../assets/js/auth.js?v=20260917b"></script>
+<script>saaRequireAuth();</script>
+<header class="emp-header">
+  <div class="container">
+    <div>
+      <a class="brand" href="dashboard.html" style="font-size:1rem">
+        <span class="mark" style="width:34px;height:34px;font-size:.62rem;letter-spacing:-0.3px">SAA</span>
+        <span>Employee Tools</span>
+      </a>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select onchange="if(this.value) window.location.href=this.value" style="width:auto;min-width:170px">
+        <option value="">Jump to page&hellip;</option>
+        <option value="dashboard.html">Dashboard</option>
+        <option value="calendar.html">Dispatch Calendar</option>
+        <option value="quotation.html">Quotation</option>
+        <option value="repair.html">Repair</option>
+        <option value="condenser-change.html">Condenser Change</option>
+        <option value="coil-change.html">Coil Change</option>
+        <option value="furnace-change.html">Furnace Change</option>
+        <option value="plenum-change.html">Plenum Change</option>
+        <option value="drainline-maintenance.html">Drainline Maintenance</option>
+        <option value="duct-cleaning.html">Duct Cleaning</option>
+        <option value="labor.html">Labor</option>
+        <option value="inspection.html">Inspection / QC</option>
+        <option value="maintenance-plan.html">Maintenance Plan</option>
+        <option value="custom-solutions.html">Custom HVAC Solutions</option>
+        <option value="jobs.html">Jobs</option>
+        <option value="bill-of-material.html">Bill of Material</option>
+        <option value="invoices.html" selected>Invoices</option>
+        <option value="payments.html">Payments</option>
+        <option value="mileage.html">Mileage</option>
+        <option value="instruction-manual.html">Instruction Manual</option>
+        <option value="tool-list.html">Tool List</option>
+        <option value="receipts.html">Receipts</option>
+      </select>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Dashboard</a>
+      <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
+      <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
+    </div>
+  </div>
+</header>
+<main class="container" style="padding:26px 20px 60px">
+
+<div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Invoices</div>
+<div class="page-title-row"><h1>Invoices</h1><a class="page-close-btn" href="dashboard.html" title="Close" aria-label="Close">&times;</a></div>
+<div class="note-box blue">Every invoice raised across every job, newest first. Click a row to open that job's Job Card, where you can update, print, or record a payment against it.</div>
+
+<div class="jobs-toolbar">
+  <select id="inv-status-filter"><option value="">All Statuses</option><option value="draft">Draft</option><option value="sent">Sent</option><option value="paid">Paid</option><option value="void">Void</option></select>
+  <select id="inv-pay-filter"><option value="">All Payment Status</option><option value="unpaid">Unpaid</option><option value="partial">Partially Paid</option><option value="paid">Paid</option></select>
+  <input type="text" id="inv-search" placeholder="Invoice #, job #, customer, or phone&hellip;" style="min-width:240px">
+  <button type="button" class="btn btn-ghost btn-sm" id="inv-clear-btn">Clear Filters</button>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <h3 style="margin:0">Invoices</h3>
+    <span class="muted" id="inv-summary" style="font-size:.85rem"></span>
+  </div>
+  <div class="jobs-table-wrap">
+    <table class="jobs-table">
+      <thead>
+        <tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Job</th><th>Amount</th><th>Total Due</th><th>Paid</th><th>Balance</th><th>Status</th><th>Payment</th></tr>
+      </thead>
+      <tbody id="inv-tbody"></tbody>
+    </table>
+    <p class="muted" id="inv-empty" style="text-align:center;padding:30px" hidden>No invoices match your filters.</p>
+  </div>
+</div>
+
+</main>
+<script src="../assets/js/pricing-data.js?v=20260917b"></script>
+<script src="../assets/js/worksheet.js?v=20260917b"></script>
+<script src="../assets/js/jobs-db.js?v=20260917b"></script>
+<script src="../assets/js/invoices-db.js?v=20260917b"></script>
+<script>
+  // Same document-status labels the Job Card's own Invoice Status select
+  // uses (_jbInvoiceLabel in jobs.js) -- kept as a local copy here rather
+  // than loading all of jobs.js, which assumes a Job Card's DOM exists.
+  const _invStatusLabel = { draft: "Draft", sent: "Sent", paid: "Paid", void: "Void" };
+  const _invPayLabel = { unpaid: "Unpaid", partial: "Partially Paid", paid: "Paid" };
+
+  function _invEsc(s) {
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function _invCustName(c) {
+    if (!c) return "&mdash;";
+    return _invEsc([c.first_name, c.last_name].filter(Boolean).join(" ") || "(no name)");
+  }
+  function _invJobLabel(job) {
+    if (!job) return "&mdash;";
+    return _invEsc(job.job_number || saaJobTypeLabel(job.job_type));
+  }
+
+  function _invFilters() {
+    return {
+      status: document.getElementById("inv-status-filter").value || undefined,
+      paymentStatus: document.getElementById("inv-pay-filter").value || undefined,
+      search: document.getElementById("inv-search").value || undefined,
+    };
+  }
+
+  async function renderInvoices() {
+    const rows = await saaInvoicesFetchAll(_invFilters());
+    const tbody = document.getElementById("inv-tbody");
+    document.getElementById("inv-empty").hidden = rows.length > 0;
+    const totalDue = rows.reduce((sum, r) => sum + (Number(r.totalDue) || 0), 0);
+    const totalPaid = rows.reduce((sum, r) => sum + (Number(r.amountPaid) || 0), 0);
+    document.getElementById("inv-summary").textContent = rows.length
+      ? `${rows.length} invoice${rows.length === 1 ? "" : "s"} &middot; ${fmtMoney(totalDue)} billed &middot; ${fmtMoney(totalPaid)} collected`.replace(/&middot;/g, "\u00b7")
+      : "";
+
+    tbody.innerHTML = rows.map((r) => {
+      const balance = (Number(r.totalDue) || 0) - (Number(r.amountPaid) || 0);
+      return `<tr class="jb-row" data-job-id="${r.job ? r.job.id : ""}" style="cursor:${r.job ? "pointer" : "default"}">
+        <td>${_invEsc(r.invoice_number)}</td>
+        <td>${_invEsc(r.issue_date || (r.created_at || "").slice(0, 10))}</td>
+        <td>${_invCustName(r.customer)}</td>
+        <td>${_invJobLabel(r.job)}</td>
+        <td>${fmtMoney(r.amount_total)}</td>
+        <td>${fmtMoney(r.totalDue)}</td>
+        <td>${fmtMoney(r.amountPaid)}</td>
+        <td>${fmtMoney(balance)}</td>
+        <td><span class="jb-badge">${_invStatusLabel[r.status] || r.status || "&mdash;"}</span></td>
+        <td><span class="jb-badge jb-pay-${r.paymentStatus}">${_invPayLabel[r.paymentStatus] || r.paymentStatus}</span></td>
+      </tr>`;
+    }).join("");
+
+    tbody.querySelectorAll("tr.jb-row[data-job-id]").forEach((tr) => {
+      const jobId = tr.dataset.jobId;
+      if (!jobId) return;
+      tr.addEventListener("click", () => { window.location.href = `jobs.html?job=${encodeURIComponent(jobId)}`; });
+    });
+  }
+
+  let _invSearchTimer = null;
+  document.getElementById("inv-status-filter").addEventListener("change", renderInvoices);
+  document.getElementById("inv-pay-filter").addEventListener("change", renderInvoices);
+  document.getElementById("inv-search").addEventListener("input", () => {
+    clearTimeout(_invSearchTimer);
+    _invSearchTimer = setTimeout(renderInvoices, 200);
+  });
+  document.getElementById("inv-clear-btn").addEventListener("click", () => {
+    document.getElementById("inv-status-filter").value = "";
+    document.getElementById("inv-pay-filter").value = "";
+    document.getElementById("inv-search").value = "";
+    renderInvoices();
+  });
+
+  renderInvoices();
+</script>
+</body>
+</html>

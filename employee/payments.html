@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payments | Employee | SAA Comfort Air LLC</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260917b">
+
+<style>body.emp-shell{visibility:hidden}</style>
+</head>
+<body class="emp-shell">
+<script src="../assets/js/vendor/supabase.js?v=20260917b"></script>
+<script src="../assets/js/supabase-config.js?v=20260917b"></script>
+<script src="../assets/js/auth.js?v=20260917b"></script>
+<script>saaRequireAuth();</script>
+<header class="emp-header">
+  <div class="container">
+    <div>
+      <a class="brand" href="dashboard.html" style="font-size:1rem">
+        <span class="mark" style="width:34px;height:34px;font-size:.62rem;letter-spacing:-0.3px">SAA</span>
+        <span>Employee Tools</span>
+      </a>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select onchange="if(this.value) window.location.href=this.value" style="width:auto;min-width:170px">
+        <option value="">Jump to page&hellip;</option>
+        <option value="dashboard.html">Dashboard</option>
+        <option value="calendar.html">Dispatch Calendar</option>
+        <option value="quotation.html">Quotation</option>
+        <option value="repair.html">Repair</option>
+        <option value="condenser-change.html">Condenser Change</option>
+        <option value="coil-change.html">Coil Change</option>
+        <option value="furnace-change.html">Furnace Change</option>
+        <option value="plenum-change.html">Plenum Change</option>
+        <option value="drainline-maintenance.html">Drainline Maintenance</option>
+        <option value="duct-cleaning.html">Duct Cleaning</option>
+        <option value="labor.html">Labor</option>
+        <option value="inspection.html">Inspection / QC</option>
+        <option value="maintenance-plan.html">Maintenance Plan</option>
+        <option value="custom-solutions.html">Custom HVAC Solutions</option>
+        <option value="jobs.html">Jobs</option>
+        <option value="bill-of-material.html">Bill of Material</option>
+        <option value="invoices.html">Invoices</option>
+        <option value="payments.html" selected>Payments</option>
+        <option value="mileage.html">Mileage</option>
+        <option value="instruction-manual.html">Instruction Manual</option>
+        <option value="tool-list.html">Tool List</option>
+        <option value="receipts.html">Receipts</option>
+      </select>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Dashboard</a>
+      <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
+      <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
+    </div>
+  </div>
+</header>
+<main class="container" style="padding:26px 20px 60px">
+
+<div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Payments</div>
+<div class="page-title-row"><h1>Payments</h1><a class="page-close-btn" href="dashboard.html" title="Close" aria-label="Close">&times;</a></div>
+<div class="note-box blue">Every payment recorded across every job, newest first. Click a row to open that job's Job Card.</div>
+
+<div class="jobs-toolbar">
+  <input type="text" id="pay-search" placeholder="Invoice #, job #, customer, phone, or reference #&hellip;" style="min-width:260px">
+  <input type="date" id="pay-date-from" title="From date">
+  <span class="muted" style="align-self:center">to</span>
+  <input type="date" id="pay-date-to" title="To date">
+  <button type="button" class="btn btn-ghost btn-sm" id="pay-clear-btn">Clear Filters</button>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <h3 style="margin:0">Payments</h3>
+    <span class="muted" id="pay-summary" style="font-size:.85rem"></span>
+  </div>
+  <div class="jobs-table-wrap">
+    <table class="jobs-table">
+      <thead>
+        <tr><th>Date</th><th>Customer</th><th>Job</th><th>Invoice #</th><th>Amount</th><th>Method</th><th>Reference #</th><th>Notes</th></tr>
+      </thead>
+      <tbody id="pay-tbody"></tbody>
+    </table>
+    <p class="muted" id="pay-empty" style="text-align:center;padding:30px" hidden>No payments match your filters.</p>
+  </div>
+</div>
+
+</main>
+<script src="../assets/js/pricing-data.js?v=20260917b"></script>
+<script src="../assets/js/worksheet.js?v=20260917b"></script>
+<script src="../assets/js/jobs-db.js?v=20260917b"></script>
+<script src="../assets/js/payments-db.js?v=20260917b"></script>
+<script>
+  function _payEsc(s) {
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function _payCustName(c) {
+    if (!c) return "&mdash;";
+    return _payEsc([c.first_name, c.last_name].filter(Boolean).join(" ") || "(no name)");
+  }
+  function _payJobLabel(job) {
+    if (!job) return "&mdash;";
+    return _payEsc(job.job_number || saaJobTypeLabel(job.job_type));
+  }
+
+  function _payFilters() {
+    return {
+      search: document.getElementById("pay-search").value || undefined,
+      dateFrom: document.getElementById("pay-date-from").value || undefined,
+      dateTo: document.getElementById("pay-date-to").value || undefined,
+    };
+  }
+
+  async function renderPayments() {
+    const rows = await saaPaymentsFetchAll(_payFilters());
+    const tbody = document.getElementById("pay-tbody");
+    document.getElementById("pay-empty").hidden = rows.length > 0;
+    const total = rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+    document.getElementById("pay-summary").textContent = rows.length
+      ? `${rows.length} payment${rows.length === 1 ? "" : "s"} &middot; ${fmtMoney(total)} total`.replace(/&middot;/g, "\u00b7")
+      : "";
+
+    tbody.innerHTML = rows.map((r) => {
+      const jobId = r.job ? r.job.id : "";
+      return `<tr class="jb-row" data-job-id="${jobId}" style="cursor:${jobId ? "pointer" : "default"}">
+        <td>${_payEsc(r.payment_date)}</td>
+        <td>${_payCustName(r.customer)}</td>
+        <td>${_payJobLabel(r.job)}</td>
+        <td>${_payEsc(r.invoice ? r.invoice.invoice_number : "")}</td>
+        <td>${fmtMoney(r.amount)}</td>
+        <td>${_payEsc(r.method)}</td>
+        <td>${_payEsc(r.reference_number)}</td>
+        <td class="muted" style="font-size:.82rem">${_payEsc(r.notes)}</td>
+      </tr>`;
+    }).join("");
+
+    tbody.querySelectorAll("tr.jb-row[data-job-id]").forEach((tr) => {
+      const jobId = tr.dataset.jobId;
+      if (!jobId) return;
+      tr.addEventListener("click", () => { window.location.href = `jobs.html?job=${encodeURIComponent(jobId)}`; });
+    });
+  }
+
+  let _paySearchTimer = null;
+  document.getElementById("pay-search").addEventListener("input", () => {
+    clearTimeout(_paySearchTimer);
+    _paySearchTimer = setTimeout(renderPayments, 200);
+  });
+  document.getElementById("pay-date-from").addEventListener("change", renderPayments);
+  document.getElementById("pay-date-to").addEventListener("change", renderPayments);
+  document.getElementById("pay-clear-btn").addEventListener("click", () => {
+    document.getElementById("pay-search").value = "";
+    document.getElementById("pay-date-from").value = "";
+    document.getElementById("pay-date-to").value = "";
+    renderPayments();
+  });
+
+  renderPayments();
+</script>
+</body>
+</html>
