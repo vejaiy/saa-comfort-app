@@ -27,8 +27,16 @@ function _tlFilters() {
 
 /* ---- Stock Counts ---- */
 
+// Round 37 (2026-09-17), per Vijayan's annotated screenshot ("Add 'print
+// tool list' button to print in pdf and also add a download button to
+// download in excel format"): both buttons act on whatever's currently
+// on screen, so this is refreshed at the end of every renderInventory()
+// (i.e. it already reflects the Type/search filters above the table).
+let _tlLastInventoryRows = [];
+
 async function renderInventory() {
   const rows = await saaToolInventoryFetchAll(_tlFilters());
+  _tlLastInventoryRows = rows;
   const tbody = document.getElementById("tl-inv-tbody");
   document.getElementById("tl-inv-empty").hidden = rows.length > 0;
   document.getElementById("tl-inv-count").textContent = rows.length
@@ -94,6 +102,59 @@ document.getElementById("tl-inv-add-btn").addEventListener("click", async () => 
   status.textContent = "Added.";
   renderInventory();
 });
+
+function _tlFilterNote() {
+  const parts = [];
+  const type = document.getElementById("tl-type-filter").value;
+  const search = document.getElementById("tl-search").value.trim();
+  if (type) parts.push(_tlTypeLabel(type));
+  if (search) parts.push(`matching "${search}"`);
+  return parts.length ? "filtered: " + parts.join(", ") : "";
+}
+
+function _tlPrintList() {
+  printToolList({
+    generatedOn: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    filterNote: _tlFilterNote(),
+    rows: _tlLastInventoryRows,
+  });
+}
+
+// Same CSV-via-Blob approach as the Mileage page's tax-summary export
+// (_mpDownloadTaxCsv in mileage-page.js) -- opens straight into Excel,
+// no extra library needed.
+function _tlCsvField(v) {
+  const s = String(v == null ? "" : v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function _tlDownloadCsv() {
+  const header = ["Item", "Category", "Type", "Qty on Hand", "Unit", "Last Purchased", "Notes"];
+  const lines = [header.map(_tlCsvField).join(",")];
+  _tlLastInventoryRows.forEach((r) => {
+    lines.push([
+      _tlCsvField(r.item_name),
+      _tlCsvField(r.category),
+      _tlCsvField(_tlTypeLabel(r.type)),
+      _tlCsvField(r.quantity_on_hand),
+      _tlCsvField(r.unit_of_measure),
+      _tlCsvField(r.last_purchase_date),
+      _tlCsvField(r.notes),
+    ].join(","));
+  });
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `SAA-tool-list-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById("tl-print-btn").addEventListener("click", _tlPrintList);
+document.getElementById("tl-download-btn").addEventListener("click", _tlDownloadCsv);
 
 /* ---- Purchase Ledger ---- */
 

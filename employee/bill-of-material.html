@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bill of Material | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260916b">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260917a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260916b"></script>
-<script src="../assets/js/supabase-config.js?v=20260916b"></script>
-<script src="../assets/js/auth.js?v=20260916b"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260917a"></script>
+<script src="../assets/js/supabase-config.js?v=20260917a"></script>
+<script src="../assets/js/auth.js?v=20260917a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -111,11 +111,11 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260916b"></script>
-<script src="../assets/js/worksheet.js?v=20260916b"></script>
-<script src="../assets/js/jobs-db.js?v=20260916b"></script>
-<script src="../assets/js/bom-db.js?v=20260916b"></script>
-<script src="../assets/js/print-bom.js?v=20260916b"></script>
+<script src="../assets/js/pricing-data.js?v=20260917a"></script>
+<script src="../assets/js/worksheet.js?v=20260917a"></script>
+<script src="../assets/js/jobs-db.js?v=20260917a"></script>
+<script src="../assets/js/bom-db.js?v=20260917a"></script>
+<script src="../assets/js/print-bom.js?v=20260917a"></script>
 <script>
   let _bomJob = null;
 
@@ -196,30 +196,59 @@
     renderBomJob();
   }
 
+  // Round 37 (2026-09-17): shared renderer for both the type-to-search
+  // results (saaBomSearchJobs) and the newest-to-oldest pick list shown on
+  // click before anything's typed (saaBomRecentJobs) -- same row markup,
+  // same click-to-load behavior, just a different source list.
+  function _bomRenderResultsList(results, box, emptyMsg) {
+    if (!results.length) {
+      box.innerHTML = `<div class="cal-cust-result muted">${emptyMsg}</div>`;
+      box.hidden = false;
+      return;
+    }
+    box.innerHTML = results.map((j) => `
+      <div class="cal-cust-result" data-id="${j.id}">
+        <div class="name">${_bomJobNum(j)} &middot; ${saaJobTypeLabel(j.job_type)}</div>
+        <div class="addr">${_bomCustName(j.customer)}${j.customer && j.customer.phone ? " — " + saaFormatPhone(j.customer.phone) : ""}</div>
+      </div>`).join("");
+    box.hidden = false;
+    box.querySelectorAll(".cal-cust-result[data-id]").forEach((el) => {
+      el.addEventListener("click", () => loadJob(results.find((r) => r.id === el.dataset.id)));
+    });
+  }
+
   let _bomSearchTimer = null;
   document.getElementById("bom-search").addEventListener("input", (e) => {
     clearTimeout(_bomSearchTimer);
     const q = e.target.value.trim();
     const box = document.getElementById("bom-search-results");
+    if (!q) { _bomShowRecent(); return; }
     if (q.length < 2) { box.hidden = true; return; }
     _bomSearchTimer = setTimeout(async () => {
       const results = await saaBomSearchJobs(q);
-      if (!results.length) {
-        box.innerHTML = `<div class="cal-cust-result muted">No matching jobs.</div>`;
-        box.hidden = false;
-        return;
-      }
-      box.innerHTML = results.map((j) => `
-        <div class="cal-cust-result" data-id="${j.id}">
-          <div class="name">${_bomJobNum(j)} &middot; ${saaJobTypeLabel(j.job_type)}</div>
-          <div class="addr">${_bomCustName(j.customer)}${j.customer && j.customer.phone ? " — " + saaFormatPhone(j.customer.phone) : ""}</div>
-        </div>`).join("");
-      box.hidden = false;
-      box.querySelectorAll(".cal-cust-result[data-id]").forEach((el) => {
-        el.addEventListener("click", () => loadJob(results.find((r) => r.id === el.dataset.id)));
-      });
+      _bomRenderResultsList(results, box, "No matching jobs.");
     }, 200);
   });
+
+  // Per Vijayan's annotation: "Once clicked show job list in newest to
+  // oldest, allow to click and pick one job" -- clicking into the field
+  // while it's still empty offers a pick list up front; typing a
+  // name/number/phone still narrows it down exactly as before.
+  async function _bomShowRecent() {
+    const box = document.getElementById("bom-search-results");
+    box.innerHTML = `<div class="cal-cust-result muted">Loading recent jobs&hellip;</div>`;
+    box.hidden = false;
+    const results = await saaBomRecentJobs(15);
+    if (!document.getElementById("bom-search").value.trim()) _bomRenderResultsList(results, box, "No jobs yet.");
+  }
+  ["focus", "click"].forEach((evt) => {
+    document.getElementById("bom-search").addEventListener(evt, (e) => {
+      if (e.target.value.trim()) return;
+      const box = document.getElementById("bom-search-results");
+      if (box.hidden) _bomShowRecent();
+    });
+  });
+
   document.addEventListener("click", (e) => {
     const box = document.getElementById("bom-search-results");
     if (!box.hidden && !e.target.closest(".cal-cust-search-wrap")) box.hidden = true;

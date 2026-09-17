@@ -207,7 +207,17 @@ function _jbTechDisplayNames(j) {
   return names.length ? names.join(", ") : "None";
 }
 
+// Round 37 (2026-09-17), per Vijayan's annotated screenshot ("This job is
+// only $250 with $50 discount" against a job showing Quote $ "$300.00"):
+// quoted_amount is a one-time snapshot taken when a quote is linked to a
+// job (saaJobsLinkQuote) and never updated again, but an invoice's
+// Discount/Additional Charges (jbd-inv-discount, saaJobsInvoiceTotalDue)
+// are exactly the kind of after-the-fact adjustment that can leave it
+// stale -- once a job has an invoice, that invoice's actual Total Due is
+// the truth about what the job is really for, so it now wins over the
+// frozen quoted_amount/linked-quote total.
 function _jbQuoteAmount(j) {
+  if (j.invoice) return saaJobsInvoiceTotalDue(j.invoice);
   if (j.quoted_amount != null && j.quoted_amount !== "") return j.quoted_amount;
   if (j.linkedQuote && j.linkedQuote.total != null) return j.linkedQuote.total;
   return null;
@@ -1270,6 +1280,27 @@ function jbWireBomLink(job) {
   });
 }
 
+/* ============================== Quotation quick link ============================== */
+/* Round 37 (2026-09-17), per Vijayan's annotated screenshot ("Quotation"
+ * hand-written and circled next to the Checklist/Receipt/Invoice/Bill of
+ * Material quick-access row) plus the plain-text instruction "add
+ * quotation to job card" -- same idea as jbWireBomLink above: a plain
+ * link to the actual Quotation/Repair worksheet page, not an inline
+ * editor. When the job already has a linked quote, deep-link straight to
+ * it (same quotation.html?quote=<id> / repair.html?quote=<id> pattern the
+ * Jobs list's Quote $ column already uses); otherwise send them to a
+ * blank Quotation page to start one, since there's nothing to load yet. */
+function jbWireQuoteLink(job) {
+  const link = document.getElementById("jbd-quick-quote-btn");
+  if (!link) return;
+  if (job.linked_quote_id) {
+    const page = (job.linkedQuote && job.linkedQuote.quote_type === "repair") ? "repair.html" : "quotation.html";
+    link.href = `${page}?quote=${encodeURIComponent(job.linked_quote_id)}`;
+  } else {
+    link.href = "quotation.html";
+  }
+}
+
 /* ============================== Mileage ============================== */
 
 /** Builds a plain snapshot from the Job Card's LIVE field values (not the
@@ -1491,6 +1522,7 @@ async function jbOpenDetail(jobId) {
   jbRenderInspectionSummary();
 
   jbWireBomLink(job);
+  jbWireQuoteLink(job);
 
   document.getElementById("jb-detail-modal").hidden = false;
 }

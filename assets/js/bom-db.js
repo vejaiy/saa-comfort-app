@@ -56,6 +56,25 @@ async function saaBomSearchJobs(query) {
   return jobs.slice(0, 12).map((j) => Object.assign({}, j, { customer: custById[j.customer_id] || null }));
 }
 
+/** Round 37 (2026-09-17), per Vijayan's annotation on "Find a job": "Once
+ *  clicked show job list in newest to oldest, allow to click and pick one
+ *  job" -- alongside typing a name/number/phone (saaBomSearchJobs above,
+ *  unchanged), clicking into the still-empty field should offer a pick
+ *  list too. Same result shape as saaBomSearchJobs so the page can render
+ *  either list with one function. */
+async function saaBomRecentJobs(limit) {
+  const JOB_COLS = "id,job_number,title,job_type,status,customer_id,linked_quote_id,created_at";
+  const { data: jobs, error } = await _saaClient.from("jobs").select(JOB_COLS)
+    .order("created_at", { ascending: false }).limit(limit || 15);
+  if (error || !jobs) return [];
+  const custIds = [...new Set(jobs.map((j) => j.customer_id).filter(Boolean))];
+  const { data: customers } = custIds.length
+    ? await _saaClient.from("customers").select("id,first_name,last_name,phone").in("id", custIds)
+    : { data: [] };
+  const custById = Object.fromEntries((customers || []).map((c) => [c.id, c]));
+  return jobs.map((j) => Object.assign({}, j, { customer: custById[j.customer_id] || null }));
+}
+
 /** Loads one job's full detail for the Bill of Material page: the job
  *  itself, its customer, its linked quote (WITH form_state — the pieces
  *  saaJobsFetchAll's lighter quote select leaves out), and any

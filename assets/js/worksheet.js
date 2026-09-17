@@ -260,6 +260,37 @@ function renderFlatPriceTable(mountEl, rows) {
    included and at what qty).
    No cost is included anywhere in this — per "no need to populate
    cost, just populate qty and unit in order form". */
+// Round 37 (2026-09-17), per Vijayan's annotated Bill of Material
+// screenshot (job J-2026-0005-Sreedhar): "(per System tonnage above)"
+// crossed out and "3.5 ton" hand-written in front of it, with "Should
+// show tonnage selected in front." -- the Round 36 fix made this wording
+// generic (right, since it no longer lies about a hardcoded 3-ton unit),
+// but a bare pointer phrase still isn't the actual answer, and the shop
+// pulling parts off this printed list has no picker to go look at. Strips
+// a trailing "(per ... above)" pointer phrase so the real tonnage/tier can
+// be substituted in its place, whatever the exact wording ends up being.
+function _saaBomLinkedBaseName(item) {
+  return String(item || "").replace(/\s*\(per [^)]*\)\s*$/i, "").trim();
+}
+
+/** Resolves a tonnageLinked/tierLinked row's description using the
+ *  linked picker's actual saved value (formState[`${mountId}-linked`])
+ *  -- "3.5 ton Condenser unit" / "Evaporator coil ... 3.5 ton" style
+ *  prefix for tonnage (matching the "3.5 ton" wording the tonnage picker
+ *  itself already uses, see tonnageLabel() on quotation.html), an
+ *  " — <tier label>" suffix for furnace tier since FURNACE_TIERS labels
+ *  are full descriptive phrases, not a short magnitude like tonnage. */
+function _saaBomLinkedDescription(mountId, formState, src) {
+  const base = _saaBomLinkedBaseName(src.item);
+  const linked = formState[`${mountId}-linked`];
+  const val = linked && linked.v;
+  if (!val) return src.item;
+  if (src.tonnageLinked) return `${val} ton ${base}`;
+  const tiers = typeof FURNACE_TIERS !== "undefined" ? FURNACE_TIERS : [];
+  const tier = tiers.find((t) => String(t.id) === String(val));
+  return tier ? `${base} — ${tier.label}` : src.item;
+}
+
 function saaDeriveBomItemsFromFormState(formState, quoteType) {
   formState = formState || {};
   function rowsFromSpec(mountId, rows, opts) {
@@ -277,7 +308,10 @@ function saaDeriveBomItemsFromFormState(formState, quoteType) {
       const qtyState = formState[`${mountId}__qty__${idx}`];
       const qty = qtyState ? (parseFloat(qtyState.v) || 0) : (src.qty || 0);
       if (!src.item || qty <= 0) return;
-      out.push({ description: src.item, unit: src.unit || "", qty, section: opts.section || "Other" });
+      const description = (src.tonnageLinked || src.tierLinked)
+        ? _saaBomLinkedDescription(mountId, formState, src)
+        : src.item;
+      out.push({ description, unit: src.unit || "", qty, section: opts.section || "Other" });
     });
     return out;
   }
