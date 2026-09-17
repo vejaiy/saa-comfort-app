@@ -76,7 +76,7 @@ function _saaBomPrintHeader(info) {
 // -- group printed rows the same way the on-screen Bill of Material page
 // does (renderBomItems in gen_bom.py), so the shop sees materials broken
 // out by equipment on paper too.
-const SAA_BOM_PRINT_SECTION_ORDER = ["Condenser", "Coil", "Furnace", "Other", "Added Manually"];
+const SAA_BOM_PRINT_SECTION_ORDER = ["Condenser", "Coil", "Furnace", "Plenum", "Other", "Added Manually"];
 function _saaBomItemsTable(items) {
   const list = items || [];
   const bySection = {};

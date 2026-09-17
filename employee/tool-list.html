@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tool List | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260916a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260916b">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260916a"></script>
-<script src="../assets/js/supabase-config.js?v=20260916a"></script>
-<script src="../assets/js/auth.js?v=20260916a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260916b"></script>
+<script src="../assets/js/supabase-config.js?v=20260916b"></script>
+<script src="../assets/js/auth.js?v=20260916b"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -55,17 +55,108 @@
 <main class="container" style="padding:26px 20px 60px">
 
 <div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Tool List</div>
-<h1>Tool List</h1>
-<div class="stub-note card" style="max-width:520px;margin:20px auto">
-  <div style="font-size:2rem">🚧</div>
-  <h3>Coming soon</h3>
-  <p class="muted">An owned-tool inventory isn't tracked here yet — useful for knowing what's on the truck vs. what needs buying per job.</p>
-  <a class="btn btn-ghost" href="dashboard.html">&larr; Back to Dashboard</a>
+<div class="page-title-row">
+  <h1>SAA Tools &amp; Supplies</h1>
+<a class="page-close-btn" href="dashboard.html" title="Close" aria-label="Close">&times;</a>
+</div>
+<p class="muted" style="margin-top:-6px">Shop-owned tools and consumable supplies &mdash; not billed to a specific job (those go through Bill of Material instead). Stock Counts below is the current quantity on hand for each item, editable right in the table; Purchase Ledger is the full purchase history it was built from.</p>
+
+<div class="jobs-toolbar">
+  <select id="tl-type-filter"><option value="">All Types</option><option value="tools">Tools</option><option value="supplies">Supplies</option></select>
+  <input type="text" id="tl-search" placeholder="Search item, vendor, or category&hellip;" style="min-width:220px">
+  <button type="button" class="btn btn-ghost btn-sm" id="tl-clear-btn">Clear Filters</button>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <h3 style="margin:0">Stock Counts</h3>
+    <span class="muted" id="tl-inv-count" style="font-size:.85rem"></span>
+  </div>
+  <p class="muted" style="font-size:.85rem;margin-top:4px">Edit the Qty on Hand field directly to record what's actually on the shelf or the truck &mdash; it saves as soon as you tab or click away.</p>
+  <div class="jobs-table-wrap">
+    <table class="jobs-table">
+      <thead>
+        <tr><th>Item</th><th>Category</th><th>Type</th><th>Qty on Hand</th><th>Last Purchased</th><th>Notes</th><th></th></tr>
+      </thead>
+      <tbody id="tl-inv-tbody"></tbody>
+    </table>
+    <p class="muted" id="tl-inv-empty" style="text-align:center;padding:30px" hidden>No inventory items match your filters.</p>
+  </div>
+</div>
+
+<div class="card" style="margin-top:20px;max-width:700px">
+  <h3>Add Inventory Item</h3>
+  <p class="muted" style="font-size:.85rem">For a tool or supply you're stocking that isn't in the ledger yet &mdash; e.g. something bought before receipts were tracked here.</p>
+  <div class="field-row">
+    <div class="field" style="flex:2"><label>Item Name</label><input type="text" id="tl-inv-add-name" placeholder="e.g. Refrigerant Leak Detector"></div>
+    <div class="field"><label>Category</label><input type="text" id="tl-inv-add-category" placeholder="e.g. Tools &amp; Equipment"></div>
+  </div>
+  <div class="field-row">
+    <div class="field" style="max-width:140px"><label>Type</label>
+      <select id="tl-inv-add-type"><option value="tools">Tools</option><option value="supplies">Supplies</option></select>
+    </div>
+    <div class="field" style="max-width:110px"><label>Qty on Hand</label><input type="number" step="any" id="tl-inv-add-qty" placeholder="0"></div>
+    <div class="field" style="max-width:140px"><label>Unit</label><input type="text" id="tl-inv-add-unit" placeholder="e.g. EA, box"></div>
+  </div>
+  <div class="field"><label>Notes</label><input type="text" id="tl-inv-add-notes" placeholder="Optional"></div>
+  <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
+    <button type="button" class="btn btn-navy btn-sm" id="tl-inv-add-btn">Add Item</button>
+    <span class="muted" id="tl-inv-add-status" style="font-size:.85rem"></span>
+  </div>
+</div>
+
+<div class="card" style="margin-top:26px">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <h3 style="margin:0">Purchase Ledger</h3>
+    <span class="muted" id="tl-purch-totals" style="font-size:.85rem"></span>
+  </div>
+  <p class="muted" style="font-size:.85rem;margin-top:4px">Every SAA-Tools / SAA-Supplies line item on record, backfilled from receipts and Amazon order confirmations. A negative amount is a return.</p>
+  <div class="jobs-toolbar" style="margin-bottom:10px">
+    <input type="date" id="tl-date-from" title="From date">
+    <span class="muted" style="align-self:center">to</span>
+    <input type="date" id="tl-date-to" title="To date">
+  </div>
+  <div class="jobs-table-wrap">
+    <table class="jobs-table">
+      <thead>
+        <tr><th>Date</th><th>Vendor</th><th>Item</th><th>Category</th><th>Type</th><th>Qty</th><th>Unit Price</th><th>Item Total</th><th>Tax</th><th>Receipt / Order #</th><th>Notes</th><th></th></tr>
+      </thead>
+      <tbody id="tl-purch-tbody"></tbody>
+    </table>
+    <p class="muted" id="tl-purch-empty" style="text-align:center;padding:30px" hidden>No purchases match your filters.</p>
+  </div>
+</div>
+
+<div class="card" style="margin-top:20px;max-width:820px">
+  <h3>Add a Purchase</h3>
+  <div class="field-row">
+    <div class="field" style="max-width:150px"><label>Date</label><input type="date" id="tl-purch-add-date"></div>
+    <div class="field"><label>Vendor</label><input type="text" id="tl-purch-add-vendor" placeholder="e.g. The Home Depot"></div>
+    <div class="field" style="flex:2"><label>Item Name</label><input type="text" id="tl-purch-add-name" placeholder="Item description"></div>
+  </div>
+  <div class="field-row">
+    <div class="field"><label>Category</label><input type="text" id="tl-purch-add-category" placeholder="e.g. Tools &amp; Equipment"></div>
+    <div class="field" style="max-width:140px"><label>Type</label>
+      <select id="tl-purch-add-type"><option value="tools">Tools</option><option value="supplies">Supplies</option></select>
+    </div>
+    <div class="field" style="max-width:90px"><label>Qty</label><input type="number" step="any" id="tl-purch-add-qty" value="1"></div>
+  </div>
+  <div class="field-row">
+    <div class="field" style="max-width:130px"><label>Unit Price</label><input type="number" step="0.01" id="tl-purch-add-price" placeholder="0.00"></div>
+    <div class="field" style="max-width:130px"><label>Sales Tax</label><input type="number" step="0.01" id="tl-purch-add-tax" placeholder="0.00"></div>
+    <div class="field"><label>Receipt / Order #</label><input type="text" id="tl-purch-add-receipt" placeholder="Optional"></div>
+  </div>
+  <div class="field"><label>Notes</label><input type="text" id="tl-purch-add-notes" placeholder="Optional &mdash; e.g. 'Return' or 'Reassigned from job'"></div>
+  <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
+    <button type="button" class="btn btn-navy btn-sm" id="tl-purch-add-btn">Add Purchase</button>
+    <span class="muted" id="tl-purch-add-status" style="font-size:.85rem"></span>
+  </div>
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260916a"></script>
-<script src="../assets/js/worksheet.js?v=20260916a"></script>
-
+<script src="../assets/js/pricing-data.js?v=20260916b"></script>
+<script src="../assets/js/worksheet.js?v=20260916b"></script>
+<script src="../assets/js/tools-db.js?v=20260916b"></script>
+<script src="../assets/js/tools-page.js?v=20260916b"></script>
 </body>
 </html>

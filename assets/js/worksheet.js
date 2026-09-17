@@ -285,6 +285,38 @@ function saaDeriveBomItemsFromFormState(formState, quoteType) {
     const st = formState[toggleId];
     return (st && st.c) ? [{ description, unit: unit || "EA", qty: 1, section: section || "Other" }] : [];
   }
+  // Plenum Change (Round 35: "Include materials require for plenum in bill
+  // of materials") doesn't use the row-array table shape every other
+  // worksheet does -- it's the standalone plenumWidget (plenum-widget.js),
+  // whose fields are named `${mountId}__type__${eq}`/`__cab__${eq}`/
+  // `__qty__${eq}` for the two cabinet rows (CCoil, Furnace) plus a
+  // `${mountId}-collars__qty__${i}` row per DUCT_COLLARS entry -- read
+  // directly here rather than through rowsFromSpec, which assumes the
+  // included/qty-by-index shape those other worksheets use.
+  function plenumItems(mountId) {
+    const gate = formState["tgl-plenum"];
+    if (!gate || !gate.c) return [];
+    const types = typeof PLENUM_TYPES !== "undefined" ? PLENUM_TYPES : [];
+    const out = [];
+    [["CCoil", "Coil Cabinet Plenum"], ["Furnace", "Furnace Cabinet Plenum"]].forEach(([eq, label]) => {
+      const qtyState = formState[`${mountId}__qty__${eq}`];
+      const qty = qtyState ? (parseFloat(qtyState.v) || 0) : 0;
+      if (qty <= 0) return;
+      const type = (formState[`${mountId}__type__${eq}`] || {}).v || "";
+      const cab = (formState[`${mountId}__cab__${eq}`] || {}).v || "";
+      const match = types.find((p) => p.equipment === eq && p.type === type && p.cabinet === cab);
+      const desc = `${label} — ${type || "?"}, Cabinet ${cab || "?"}${match ? ` (${match.size})` : ""}`;
+      out.push({ description: desc, unit: "EA", qty, section: "Plenum" });
+    });
+    const collars = typeof DUCT_COLLARS !== "undefined" ? DUCT_COLLARS : [];
+    collars.forEach((c, idx) => {
+      const qtyState = formState[`${mountId}-collars__qty__${idx}`];
+      const qty = qtyState ? (parseFloat(qtyState.v) || 0) : 0;
+      if (qty <= 0) return;
+      out.push({ description: `Duct collar ${c.size}`, unit: "EA", qty, section: "Plenum" });
+    });
+    return out;
+  }
   // NOTE: pricing-data.js declares these with top-level `const`, which
   // creates a global lexical binding but NOT a `window.X` property -- so
   // this reads the bare identifiers directly (safe: emp_page() always
@@ -311,7 +343,8 @@ function saaDeriveBomItemsFromFormState(formState, quoteType) {
       rowsFromSpec("detail-condenser", typeof CONDENSER_MATERIALS !== "undefined" ? CONDENSER_MATERIALS : [], { enabledIf: "tgl-condenser", section: "Condenser" }),
       rowsFromSpec("detail-coil", typeof COIL_MATERIALS !== "undefined" ? COIL_MATERIALS : [], { enabledIf: "tgl-coil", section: "Coil" }),
       rowsFromSpec("detail-furnace", typeof FURNACE_MATERIALS !== "undefined" ? FURNACE_MATERIALS : [], { enabledIf: "tgl-furnace", section: "Furnace" }),
-      rowsFromSpec("detail-drainpan", typeof DRAINPAN_ROWS !== "undefined" ? DRAINPAN_ROWS : [], { enabledIf: "tgl-drainpan", excludeCategories: ["Labor"], section: "Other" })
+      rowsFromSpec("detail-drainpan", typeof DRAINPAN_ROWS !== "undefined" ? DRAINPAN_ROWS : [], { enabledIf: "tgl-drainpan", excludeCategories: ["Labor"], section: "Other" }),
+      plenumItems("detail-plenum")
     );
   }
   items = items.concat(flatToggle("tgl-thermostat", "Thermostat", "EA", "Other"));

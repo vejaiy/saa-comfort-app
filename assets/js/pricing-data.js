@@ -55,7 +55,7 @@ const ZONES = [
    group: MATERIALS | ACCESSORIES   included: true (counted by default) | false (technician toggles on)
    tonnageLinked: true -> row's price is driven by the tonnage picker */
 const CONDENSER_MATERIALS = [
-  { group: "MATERIALS",   category: "Equipment",    item: "3-ton condenser unit (size below)", unit: "EA", qty: 1, price: 2500, spec: "AHRI-matched, 208/230V-1ph — confirm refrigerant type (R-410A vs A2L R-454B)", notes: "New outdoor condensing unit sized to match the existing coil/furnace.", included: true, tonnageLinked: true },
+  { group: "MATERIALS",   category: "Equipment",    item: "Condenser unit (per System tonnage above)", unit: "EA", qty: 1, price: 2500, spec: "AHRI-matched, 208/230V-1ph — confirm refrigerant type (R-410A vs A2L R-454B)", notes: "New outdoor condensing unit sized to match the existing coil/furnace.", included: true, tonnageLinked: true },
   { group: "MATERIALS",   category: "Refrigeration", item: "Refrigerant charge", unit: "OZ", qty: 0.08, price: 200, spec: "R-410A or A2L per system, ~8-10 lb typical for 3-ton", notes: "Refrigerant weighed to nameplate spec, adjusted for line length.", included: true },
   { group: "MATERIALS",   category: "Refrigeration", item: "POE refrigerant oil", unit: "OZ", qty: 1, price: 20, spec: "POE, viscosity per condenser OEM spec", notes: "Compatible lubricant added per manufacturer spec.", included: true },
   { group: "MATERIALS",   category: "Refrigeration", item: "Line-set flare nuts / couplings", unit: "EA", qty: 0, price: 15, spec: "Match existing line-set OD (3/8\" & 3/4\" typical 3-ton)", notes: "Reconnects line set to new condenser fittings.", included: false },
@@ -81,7 +81,7 @@ const CONDENSER_MATERIALS = [
 
 /* ---- Coil Change worksheet (source: 'Coil Change' rows 2-33) ---- */
 const COIL_MATERIALS = [
-  { group: "MATERIALS", category: "Refrigeration",   item: "Evaporator coil – matched replacement (size below)", unit: "EA", qty: 1, price: 1000, notes: "OEM/matched coil; size and refrigerant dependent", included: true, tonnageLinked: true },
+  { group: "MATERIALS", category: "Refrigeration",   item: "Evaporator coil – matched replacement (per System tonnage above)", unit: "EA", qty: 1, price: 1000, notes: "OEM/matched coil; size and refrigerant dependent", included: true, tonnageLinked: true },
   { group: "MATERIALS", category: "Refrigeration",   item: "TXV / metering device", unit: "EA", qty: 0, price: 80, notes: "If not supplied with coil or replacement is required", included: false },
   { group: "MATERIALS", category: "Refrigeration",   item: "Filter-drier", unit: "EA", qty: 0, price: 50, notes: "Replace when refrigeration circuit is opened", included: true },
   { group: "MATERIALS", category: "Refrigeration",   item: "Refrigerant R-410A ($200/25lb allowance)", unit: "OZ", qty: 0.08, price: 200, spec: "EPA-approved, dual-port, R-410A/A2L rated", notes: "Allowance only; use actual refrigerant and charge requirement", included: true },
@@ -136,7 +136,7 @@ const COIL_MATERIALS = [
 
 /* ---- Furnace Change worksheet — starter list (no source sheet data; edit freely) ---- */
 const FURNACE_MATERIALS = [
-  { group: "MATERIALS", category: "Equipment",  item: "Furnace unit (tier below)", unit: "EA", qty: 1, price: 1500, notes: "Sized to duct system and BTU load", included: true, tierLinked: true },
+  { group: "MATERIALS", category: "Equipment",  item: "Furnace unit (per Furnace tier above)", unit: "EA", qty: 1, price: 1500, notes: "Sized to duct system and BTU load", included: true, tierLinked: true },
   { group: "MATERIALS", category: "Venting",    item: "Flue / vent pipe extension", unit: "LOT", qty: 1, price: 60, notes: "Category I or PVC intake/exhaust depending on tier", included: false },
   { group: "MATERIALS", category: "Gas",        item: "Gas line / flex connector", unit: "EA", qty: 1, price: 35, notes: "Sized to furnace BTU input", included: true },
   { group: "MATERIALS", category: "Gas",        item: "Gas line pipe & pipe fitting", unit: "EA", qty: 1, price: 15, notes: "Black iron pipe/fittings for the gas line run", included: true },

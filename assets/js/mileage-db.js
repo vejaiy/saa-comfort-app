@@ -309,10 +309,25 @@ async function saaMileageComputeDistance(originAddress, destAddress) {
 
 /* ---- Reads ---- */
 
-async function saaMileageFetchForJob(jobId) {
-  const { data, error } = await _saaClient.from("mileage_logs").select("*").eq("job_id", jobId).maybeSingle();
-  if (error) return null;
-  return data;
+/** Round 25 (2026-09-14) multi-technician support: a job can now have more
+ *  than one mileage_logs row (one per technician slot that's logged a
+ *  leg), so this takes an optional technicianId to fetch a SPECIFIC slot's
+ *  row. Every existing call site keeps working unchanged by simply not
+ *  passing one -- it then returns whichever row comes back first, which in
+ *  practice is the only row that exists for a job that still has just the
+ *  one (primary) technician driving mileage, exactly like before this
+ *  round. New technician-2/3 mileage call sites pass technicianId
+ *  explicitly to reach their own leg. */
+async function saaMileageFetchForJob(jobId, technicianId) {
+  // leg_type: "trip" excludes a possible return_to_shop row for the same
+  // job (Round 35) -- without this, a job that also happens to be its
+  // technician's last stop of the day could return either row here
+  // arbitrarily, since both share the same job_id/technician_id.
+  let query = _saaClient.from("mileage_logs").select("*").eq("job_id", jobId).eq("leg_type", "trip");
+  if (technicianId) query = query.eq("technician_id", technicianId);
+  const { data, error } = await query;
+  if (error || !data || !data.length) return null;
+  return data[0];
 }
 
 /** This technician's OTHER scheduled jobs the same day, oldest-first —
@@ -335,9 +350,14 @@ async function _saaMileageTechJobsForDate(technicianId, dateStr, excludeJobId) {
  *  stops that day, and the address the leg before it ends at (the
  *  company address for leg 1). Used both to auto-calculate and to show
  *  "From: ..." context even before a distance has been computed. */
-async function saaMileageLegContext(job) {
-  if (!job || !job.assigned_technician_id || !job.scheduled_date) return null;
-  const others = await _saaMileageTechJobsForDate(job.assigned_technician_id, job.scheduled_date, job.id);
+/** technicianId defaults to job.assigned_technician_id (the primary slot,
+ *  same as before Round 25) -- pass it explicitly to get technician 2/3's
+ *  own leg-chain context instead, since each technician slot drives its
+ *  own separate day's chain of stops. */
+async function saaMileageLegContext(job, technicianId) {
+  const techId = technicianId || (job && job.assigned_technician_id);
+  if (!job || !techId || !job.scheduled_date) return null;
+  const others = await _saaMileageTechJobsForDate(techId, job.scheduled_date, job.id);
   const thisTime = job.scheduled_time || "";
   const before = others.filter((j) => (j.scheduled_time || "").localeCompare(thisTime) < 0);
   const legOrder = before.length + 1;
@@ -411,40 +431,56 @@ async function saaMileageFetchAll({ technicianId, dateFrom, dateTo, jobQuery } =
  *  {ok:false, error}. Never overwrites a row that was last set manually
  *  unless force is true — recalculating a manual entry is an explicit
  *  choice, not something a routine refresh should do quietly. */
-async function saaMileageRecalcForJob(job, force) {
+/** technicianId defaults to job.assigned_technician_id (primary slot) --
+ *  every pre-Round-25 call site that doesn't pass one keeps calculating
+ *  exactly the automatic primary-tech leg it always has. Passing an
+ *  explicit technicianId (technician 2 or 3's id) calculates THAT
+ *  technician's own separate leg for the same job instead, upserted as
+ *  its own mileage_logs row (job_id, technician_id) now that the unique
+ *  constraint allows one row per job PER technician rather than one per
+ *  job total. */
+async function saaMileageRecalcForJob(job, force, technicianId) {
   try {
-    if (!job.assigned_technician_id) throw new Error("Assign a technician before calculating mileage.");
+    const techId = technicianId || job.assigned_technician_id;
+    if (!techId) throw new Error("Assign a technician before calculating mileage.");
     const toAddress = saaMileageJobAddress(job);
     if (!toAddress) throw new Error("This job needs a Service Address before mileage can be calculated.");
     if (!job.scheduled_date) throw new Error("This job needs a Scheduled Date before mileage can be calculated.");
 
-    const existing = await saaMileageFetchForJob(job.id);
+    const existing = await saaMileageFetchForJob(job.id, techId);
     if (existing && existing.source === "manual" && !force) {
       return { ok: false, error: "This leg was set manually — recalculating would overwrite it.", manual: true };
     }
 
-    const ctx = await saaMileageLegContext(job);
+    const ctx = await saaMileageLegContext(job, techId);
     const miles = await saaMileageComputeDistance(ctx.fromAddress, toAddress);
 
     const { data, error } = await _saaClient
       .from("mileage_logs")
       .upsert(
         {
-          technician_id: job.assigned_technician_id,
+          technician_id: techId,
           job_id: job.id,
           log_date: job.scheduled_date,
           leg_order: ctx.legOrder,
+          leg_type: "trip",
           from_address: ctx.fromAddress,
           to_address: toAddress,
           miles,
           source: "auto",
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "job_id" }
+        { onConflict: "job_id,technician_id,leg_type" }
       )
       .select("*")
       .single();
     if (error) throw error;
+    // Round 35 ("update miles to include to and from"): whichever job is
+    // now this technician's last stop of the day gets an extra leg back to
+    // the shop -- a save/recalc anywhere in the day's chain can change who
+    // that is, so resync every time rather than only when the last job
+    // itself is touched.
+    await saaMileageSyncReturnLeg(techId, job.scheduled_date);
     return { ok: true, log: data };
   } catch (e) {
     return { ok: false, error: (e && e.message) || String(e) };
@@ -463,9 +499,9 @@ async function saaMileageRecalcForJob(job, force) {
  *  all just mean this job's mileage stays as it was (fixable by hand
  *  from the Job Card or the Mileage page). A manually-set leg is always
  *  left alone, same guarantee as the "Calculate Miles" button. */
-async function saaMileageEnsureForJob(job) {
+async function saaMileageEnsureForJob(job, technicianId) {
   try {
-    return await saaMileageRecalcForJob(job);
+    return await saaMileageRecalcForJob(job, undefined, technicianId);
   } catch (e) {
     return { ok: false, error: (e && e.message) || String(e) };
   }
@@ -476,40 +512,134 @@ async function saaMileageEnsureForJob(job) {
  *  the Mileage page), but the mile figure is whatever the office/tech
  *  typed in, and source is stamped 'manual' so a later recalc won't
  *  silently clobber it. */
-async function saaMileageSetManualForJob(job, miles) {
+async function saaMileageSetManualForJob(job, miles, technicianId) {
   try {
-    if (!job.assigned_technician_id) throw new Error("Assign a technician before logging mileage.");
+    const techId = technicianId || job.assigned_technician_id;
+    if (!techId) throw new Error("Assign a technician before logging mileage.");
     const toAddress = saaMileageJobAddress(job) || "(no address on file)";
     if (!job.scheduled_date) throw new Error("This job needs a Scheduled Date before mileage can be logged.");
-    const ctx = await saaMileageLegContext(job);
+    const ctx = await saaMileageLegContext(job, techId);
     const { data, error } = await _saaClient
       .from("mileage_logs")
       .upsert(
         {
-          technician_id: job.assigned_technician_id,
+          technician_id: techId,
           job_id: job.id,
           log_date: job.scheduled_date,
           leg_order: ctx.legOrder,
+          leg_type: "trip",
           from_address: ctx.fromAddress,
           to_address: toAddress,
           miles: miles == null ? null : Number(miles),
           source: "manual",
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "job_id" }
+        { onConflict: "job_id,technician_id,leg_type" }
       )
       .select("*")
       .single();
     if (error) throw error;
+    await saaMileageSyncReturnLeg(techId, job.scheduled_date);
     return { ok: true, log: data };
   } catch (e) {
     return { ok: false, error: (e && e.message) || String(e) };
   }
 }
 
-async function saaMileageDeleteForJob(jobId) {
-  const { error } = await _saaClient.from("mileage_logs").delete().eq("job_id", jobId);
-  return error ? { ok: false, error: error.message } : { ok: true };
+/** Keeps the "drive back to the shop" leg in sync with whichever job is
+ *  actually this technician's LAST scheduled stop on this date (Round 35:
+ *  "update miles to include to and from" -- the office wants a full
+ *  shop -> job -> job -> ... -> shop day captured, not just the drive
+ *  between stops, so each day's last job gets an extra leg_type
+ *  'return_to_shop' row back to SAA_COMPANY_ADDRESS). Called after every
+ *  write/delete that could change who that last job is, so the return
+ *  leg follows the schedule automatically instead of needing a manual
+ *  fix every time a job is added, rescheduled, or removed. A
+ *  manually-corrected return leg (source: 'manual') is left alone as
+ *  long as it still points at the real last job, same guarantee the
+ *  trip-leg upserts give a manually-set Miles Driven value. Never
+ *  throws -- this is best-effort background sync, same as
+ *  saaMileageEnsureForJob. */
+async function saaMileageSyncReturnLeg(technicianId, dateStr) {
+  try {
+    if (!technicianId || !dateStr) return;
+    const jobs = await _saaMileageTechJobsForDate(technicianId, dateStr, null);
+
+    const { data: existingRows } = await _saaClient
+      .from("mileage_logs")
+      .select("*")
+      .eq("technician_id", technicianId)
+      .eq("log_date", dateStr)
+      .eq("leg_type", "return_to_shop");
+    const existing = (existingRows || [])[0] || null;
+
+    if (!jobs.length) {
+      // No scheduled stops left this day for this technician -- nothing to
+      // return from, so clear any stale return leg.
+      if (existing) await _saaClient.from("mileage_logs").delete().eq("id", existing.id);
+      return;
+    }
+
+    const lastJob = jobs[jobs.length - 1];
+    if (existing && existing.job_id === lastJob.id) {
+      if (existing.source === "manual") return; // already correct, and hand-corrected -- leave it
+    } else if (existing) {
+      // The last job of the day changed (reschedule, new later job added,
+      // earlier job removed) -- the old return leg no longer belongs here.
+      if (existing.source === "manual") return; // a manual override stays until someone clears it themselves
+      await _saaClient.from("mileage_logs").delete().eq("id", existing.id);
+    }
+
+    const fromAddress = saaMileageJobAddress(lastJob) || SAA_COMPANY_ADDRESS;
+    const miles = await saaMileageComputeDistance(fromAddress, SAA_COMPANY_ADDRESS);
+    await _saaClient.from("mileage_logs").upsert(
+      {
+        technician_id: technicianId,
+        job_id: lastJob.id,
+        log_date: dateStr,
+        leg_order: 999,
+        leg_type: "return_to_shop",
+        from_address: fromAddress,
+        to_address: SAA_COMPANY_ADDRESS,
+        miles,
+        source: "auto",
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "job_id,technician_id,leg_type" }
+    );
+  } catch (e) {
+    // Best-effort: a return leg that fails to compute (bad address, the
+    // free routing service briefly down) just stays as it was until the
+    // next successful sync -- never let it block whatever save triggered it.
+  }
+}
+
+/** technicianId scopes the delete to just that technician's leg for the
+ *  job -- pass it (Round 25) so clearing technician 2/3's own Miles
+ *  Driven field can't accidentally wipe the primary technician's leg, or
+ *  vice versa. Omitting it deletes every leg on file for the job (all
+ *  technicians), same as the original one-row-per-job behavior.
+ *  legType (Round 35) defaults to 'trip' -- clearing a job's Miles Driven
+ *  field should only ever remove that job's own arrival leg, never an
+ *  unrelated return_to_shop leg that happens to share the same job_id
+ *  because this job is (or was) the day's last stop. After deleting, the
+ *  affected technician/date's return leg is resynced in case this job's
+ *  removal changes who the day's actual last stop is. */
+async function saaMileageDeleteForJob(jobId, technicianId, legType) {
+  const lt = legType || "trip";
+  let selQuery = _saaClient.from("mileage_logs").select("technician_id,log_date").eq("job_id", jobId).eq("leg_type", lt);
+  if (technicianId) selQuery = selQuery.eq("technician_id", technicianId);
+  const { data: affected } = await selQuery;
+
+  let query = _saaClient.from("mileage_logs").delete().eq("job_id", jobId).eq("leg_type", lt);
+  if (technicianId) query = query.eq("technician_id", technicianId);
+  const { error } = await query;
+  if (error) return { ok: false, error: error.message };
+
+  for (const row of affected || []) {
+    await saaMileageSyncReturnLeg(row.technician_id, row.log_date);
+  }
+  return { ok: true };
 }
 
 /** A standalone entry with no job behind it — a parts-house run, a trip

@@ -59,18 +59,29 @@ function _mpRenderTable() {
     return;
   }
   empty.hidden = true;
-  tbody.innerHTML = _mpEntries.map((e) => `
+  tbody.innerHTML = _mpEntries.map((e) => {
+    // Round 35 ("update miles to include to and from"): a return_to_shop
+    // row shares its job_id with that job's own arrival ("trip") leg --
+    // without a distinct label here the two rows would look like
+    // duplicates of the same trip instead of the outbound and return legs
+    // of one job.
+    const isReturn = e.leg_type === "return_to_shop";
+    const legCell = isReturn ? "Return" : (e.leg_order >= 99 ? "—" : e.leg_order);
+    const jobLabel = _mpJobLabel(e.job) || '<span class="muted">(none)</span>';
+    const jobCell = isReturn ? `${jobLabel} <span class="muted" style="font-size:.8em">(return to shop)</span>` : jobLabel;
+    return `
     <tr data-id="${e.id}">
       <td>${e.technician ? e.technician.name : "—"}</td>
       <td>${_mpFmtDate(e.log_date)}</td>
-      <td>${e.leg_order >= 99 ? "—" : e.leg_order}</td>
+      <td>${legCell}</td>
       <td>${e.from_address || "—"}</td>
       <td>${e.to_address || "—"}</td>
-      <td>${_mpJobLabel(e.job) || '<span class="muted">(none)</span>'}</td>
+      <td>${jobCell}</td>
       <td><input type="number" step="0.1" min="0" class="mp-miles-input" data-id="${e.id}" value="${e.miles != null ? e.miles : ""}" style="width:80px"></td>
       <td>${e.source === "manual" ? "Manual" : "Auto"}</td>
       <td><button type="button" class="jb-photo-del mp-del-btn" data-id="${e.id}" title="Delete entry" style="position:static">&times;</button></td>
-    </tr>`).join("");
+    </tr>`;
+  }).join("");
 
   tbody.querySelectorAll(".mp-miles-input").forEach((input) => {
     input.addEventListener("change", async () => {
