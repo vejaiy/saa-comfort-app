@@ -116,6 +116,20 @@ textarea { resize: vertical; }
 
 /* ---------- employee dashboard ---------- */
 .emp-shell { background: var(--bg); min-height: 100vh; }
+/* Round 38 (2026-09-18), per Vijayan's annotated screenshot: the employee
+   app was capped at the public marketing site's --maxw (1120px) and
+   centered, leaving large empty margins on wide desktop screens -- most
+   visible on the Jobs list, whose table then had to horizontal-scroll
+   inside a narrow strip instead of using the room it actually had. The
+   public marketing site (index/about/services/etc.) keeps --maxw so its
+   prose and hero sections stay a comfortable reading width -- only
+   .emp-shell's own .container (the header bar and every employee page's
+   <main>) now stretches to the full viewport, with the same 20px side
+   padding .container already had everywhere. Every employee page's
+   .jobs-table-wrap/.worksheet-wrap/etc. already had overflow-x:auto, so
+   this only gives them more room before that scroll ever has to kick in
+   -- nothing about the table/card/grid markup itself changed. */
+.emp-shell .container { max-width: none; }
 .emp-header { background: var(--navy); color: #fff; padding: 18px 0; }
 .emp-header .container { display: flex; align-items: center; justify-content: space-between; }
 /* Dashboard embeds calendar.html?embed=1 in an iframe — that copy of the
