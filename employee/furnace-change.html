@@ -61,6 +61,7 @@
   <h1>Furnace Change</h1>
 </div>
 <div class="note-box blue">Starter worksheet — the original workbook had no furnace pricing sheet, so these line items and tiers are a reasonable default. Edit assets/js/pricing-data.js (FURNACE_MATERIALS / FURNACE_TIERS) to match your real supplier costs.</div>
+<div style="margin:10px 0"><button type="button" class="btn btn-ghost btn-sm" id="ws-download-btn">&#11015;&#65039; Download (Excel)</button></div>
 <div id="ws-table"></div>
 
 </main>
@@ -70,6 +71,54 @@
   renderLineItemTable(document.getElementById('ws-table'), FURNACE_MATERIALS, {
     linkedOptions: FURNACE_TIERS,
     linkedKind: 'tier'
+  });
+
+  // Round 40 (2026-09-18): Download button. These worksheet tables are
+  // rendered with renderLineItemTable() *without* opts.editableText, which
+  // means qty/price/included edits the tech makes only ever get written to
+  // the DOM inputs -- renderLineItemTable's own recalc() only writes back
+  // into the underlying FURNACE_MATERIALS array when editableText is on (see
+  // worksheet.js). So to export exactly what's on screen (not stale
+  // defaults), this reads the live <table> DOM directly rather than the
+  // JS data array -- same end result as the Tool List / Jobs / BOM /
+  // Invoices / Payments downloads, just sourced differently.
+  function _wsCsvField(v) {
+    const s = String(v == null ? "" : v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+  document.getElementById('ws-download-btn').addEventListener('click', () => {
+    const mountEl = document.getElementById('ws-table');
+    const header = ["Category", "Item", "Unit", "Qty", "Unit $", "Ext.", "Included"];
+    const lines = [header.map(_wsCsvField).join(",")];
+    mountEl.querySelectorAll("tbody tr[data-row]").forEach((tr) => {
+      const catInput = tr.querySelector(".cat-input");
+      const category = catInput ? catInput.value : (tr.children[0].textContent || "").trim();
+      const itemInput = tr.querySelector(".item-input");
+      let item;
+      if (itemInput) {
+        item = itemInput.value;
+      } else {
+        const clone = tr.querySelector(".item-name").cloneNode(true);
+        const spec = clone.querySelector(".spec");
+        if (spec) spec.remove();
+        item = clone.textContent.trim();
+      }
+      const unit = (tr.children[2].textContent || "").trim();
+      const qty = tr.querySelector(".qty").value;
+      const price = tr.querySelector(".price").value;
+      const ext = tr.querySelector(".ext").textContent.trim();
+      const included = tr.querySelector(".row-toggle").checked ? "Yes" : "No";
+      lines.push([category, item, unit, qty, price, ext, included].map(_wsCsvField).join(","));
+    });
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `SAA-furnace-change-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   });
 </script>
 </body>
