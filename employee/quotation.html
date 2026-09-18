@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quotation | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260919a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260920a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260919a"></script>
-<script src="../assets/js/supabase-config.js?v=20260919a"></script>
-<script src="../assets/js/auth.js?v=20260919a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260920a"></script>
+<script src="../assets/js/supabase-config.js?v=20260920a"></script>
+<script src="../assets/js/auth.js?v=20260920a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -273,12 +273,12 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260919a"></script>
-<script src="../assets/js/worksheet.js?v=20260919a"></script>
-<script src="../assets/js/labor-widget.js?v=20260919a"></script>
-<script src="../assets/js/plenum-widget.js?v=20260919a"></script>
-<script src="../assets/js/print-quote.js?v=20260919a"></script>
-<script src="../assets/js/quotes-db.js?v=20260919a"></script>
+<script src="../assets/js/pricing-data.js?v=20260920a"></script>
+<script src="../assets/js/worksheet.js?v=20260920a"></script>
+<script src="../assets/js/labor-widget.js?v=20260920a"></script>
+<script src="../assets/js/plenum-widget.js?v=20260920a"></script>
+<script src="../assets/js/print-quote.js?v=20260920a"></script>
+<script src="../assets/js/quotes-db.js?v=20260920a"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
   saaAttachPhoneMask(document.getElementById('q-phone'));
@@ -308,9 +308,35 @@
   document.getElementById('zone-note').textContent = currentZone().note;
 
   // ---- Equipment detail worksheets ----
-  const condenserDetail = renderLineItemTable(document.getElementById('detail-condenser'), CONDENSER_MATERIALS, { linkedOptions: CONDENSER_TONNAGE, linkedKind: 'tonnage' });
-  const coilDetail = renderLineItemTable(document.getElementById('detail-coil'), COIL_MATERIALS, { linkedOptions: COIL_TONNAGE, linkedKind: 'tonnage' });
-  const furnaceDetail = renderLineItemTable(document.getElementById('detail-furnace'), FURNACE_MATERIALS, { linkedOptions: FURNACE_TIERS, linkedKind: 'tier' });
+  // Round 41 (2026-09-18), per Vijayan's reference spreadsheet: same
+  // Configuration picker (Single Stage/Variable Speed, Upflow/Horizontal)
+  // and includedFirst column order as the standalone Condenser/Coil/
+  // Furnace Change worksheets (gen_worksheets_simple.py) -- keeps the
+  // quotation's equipment pricing, and the Bill of Material derived from
+  // it (saaDeriveBomItemsFromFormState in worksheet.js, which reads each
+  // row's Included checkbox straight out of the saved form_state), in
+  // sync with whichever configuration was picked here.
+  const condenserDetail = renderLineItemTable(document.getElementById('detail-condenser'), CONDENSER_MATERIALS, {
+    linkedOptions: CONDENSER_TONNAGE, linkedKind: 'tonnage', includedFirst: true,
+    configOptions: [
+      { key: 'singleStage', label: 'Single Stage', field: 'includedSingleStage' },
+      { key: 'variableSpeed', label: 'Variable Speed', field: 'includedVariableSpeed' },
+    ],
+  });
+  const coilDetail = renderLineItemTable(document.getElementById('detail-coil'), COIL_MATERIALS, {
+    linkedOptions: COIL_TONNAGE, linkedKind: 'tonnage', includedFirst: true,
+    configOptions: [
+      { key: 'upflow', label: 'Upflow', field: 'includedUpflow' },
+      { key: 'horizontal', label: 'Horizontal', field: 'includedHorizontal' },
+    ],
+  });
+  const furnaceDetail = renderLineItemTable(document.getElementById('detail-furnace'), FURNACE_MATERIALS, {
+    linkedOptions: FURNACE_TIERS, linkedKind: 'tier', includedFirst: true,
+    configOptions: [
+      { key: 'upflow', label: 'Upflow', field: 'includedUpflow' },
+      { key: 'horizontal', label: 'Horizontal', field: 'includedHorizontal' },
+    ],
+  });
 
   // Keep the coil worksheet's tonnage (and price) matched to whatever
   // tonnage was picked for the condenser — pick the condenser size once

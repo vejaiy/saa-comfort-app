@@ -23,9 +23,27 @@ function fmtMoney(n) {
  *     ("Buy") after Included, for marking a part as needing to be
  *     purchased/ordered vs. already on the truck. Purely informational —
  *     doesn't affect Ext./totals, just captured in the row's form state.
+ *   configOptions: [{ key, label, field }]  // Round 41 (2026-09-18):
+ *     renders a "Configuration" picker (e.g. Upflow/Horizontal, Single
+ *     Stage/Variable Speed). Each row can carry one boolean field per
+ *     config (e.g. row.includedUpflow / row.includedHorizontal); picking
+ *     a configuration resets every row's Included checkbox to that
+ *     config's Yes/No value (rows without that field keep using their
+ *     plain `included` default, unaffected). The tech can still toggle
+ *     any row by hand afterward — same as switching tonnage doesn't lock
+ *     the price field. Falls back to `row.included` when absent.
+ *   configSelected: string  // currently-selected config key; defaults to
+ *     configOptions[0].key and is kept on `opts` so it survives an
+ *     internal re-render (add/remove row) or an external one.
+ *   includedFirst: bool (default false) — Round 41: reorders the table's
+ *     columns to Included, Item, Category, Unit, Qty, Unit $, Ext. (used
+ *     by the standalone Condenser/Coil/Furnace Change worksheets and the
+ *     Quotation page's matching detail sections, per Vijayan's reference
+ *     spreadsheet). Every other caller (Repair, Drainpan, ...) keeps the
+ *     original Category, Item, Unit, Qty, Unit $, Ext., Included order.
  *   onTotals: fn(totals) -> totals = { byGroup: {G:{total}}, total }
  * }
- * returns { el, getTotals(), setLinkedValue(value) }
+ * returns { el, getTotals(), setLinkedValue(value), getConfigValue(), setConfigValue(value) }
  *
  * Turning a row's Included toggle ON (from off) defaults its Qty to 1 if
  * the field is currently blank/0 — so a template row with no quantity
@@ -38,6 +56,12 @@ function renderLineItemTable(mountEl, rows, opts) {
   const groups = [...new Set(rows.map(r => r.group || "MATERIALS"))];
   const showGroups = opts.showGroupSubtotals !== false && groups.length > 1;
   const linkedIdx = rows.findIndex(r => r.tonnageLinked || r.tierLinked);
+  const includedFirst = !!opts.includedFirst;
+  const configOptions = opts.configOptions || null;
+  if (configOptions && configOptions.length && !opts.configSelected) {
+    opts.configSelected = configOptions[0].key;
+  }
+  const activeConfig = configOptions ? (configOptions.find(c => c.key === opts.configSelected) || configOptions[0]) : null;
 
   let linkedPicker = "";
   if (linkedIdx > -1 && opts.linkedOptions) {
@@ -51,10 +75,19 @@ function renderLineItemTable(mountEl, rows, opts) {
       <select id="${mountEl.id}-linked">${optHtml}</select></div>`;
   }
 
+  let configPicker = "";
+  if (configOptions && configOptions.length) {
+    const optHtml = configOptions.map((c) =>
+      `<option value="${c.key}"${c.key === opts.configSelected ? " selected" : ""}>${c.label}</option>`
+    ).join("");
+    configPicker = `<div class="field" style="max-width:420px"><label>Configuration</label>
+      <select id="${mountEl.id}-config">${optHtml}</select></div>`;
+  }
+
   const rowsHtml = rows.map((r, i) => {
     const group = r.group || "MATERIALS";
     const isLinked = (r.tonnageLinked || r.tierLinked) ? " data-linked-row" : "";
-    const included = r.included !== false;
+    const included = (activeConfig && r[activeConfig.field] !== undefined) ? (r[activeConfig.field] !== false) : (r.included !== false);
     const catCell = opts.editableText
       ? `<input type="text" class="cat-input" value="${r.category || ""}" style="width:100px">`
       : (showGroups ? `<span class="badge" style="margin-right:6px">${r.category || ""}</span>` : (r.category || ""));
@@ -64,14 +97,17 @@ function renderLineItemTable(mountEl, rows, opts) {
     const buyCell = opts.showBuyColumn
       ? `<td class="toggle-cell"><label class="switch sm"><input type="checkbox" class="row-buy" name="${mountEl.id}__buy__${i}" aria-label="Needs to be bought/ordered"${r.buy ? " checked" : ""}><span class="slider"></span></label></td>`
       : "";
+    const includedCell = `<td class="toggle-cell"><label class="switch sm"><input type="checkbox" class="row-toggle" name="${mountEl.id}__included__${i}" aria-label="Include this line item"${included ? " checked" : ""}><span class="slider"></span></label></td>`;
+    const catTd = `<td>${catCell}</td>`;
+    const itemTd = `<td class="item-name">${itemCell}</td>`;
+    const leadCells = includedFirst ? `${includedCell}${itemTd}${catTd}` : `${catTd}${itemTd}`;
     return `<tr data-row data-group="${group}" data-idx="${i}"${isLinked}${included ? "" : " class=\"row-off\""}>
-      <td>${catCell}</td>
-      <td class="item-name">${itemCell}</td>
+      ${leadCells}
       <td>${r.unit || ""}</td>
       <td><input type="number" step="any" class="qty" name="${mountEl.id}__qty__${i}" value="${r.qty}" aria-label="Quantity"></td>
       <td class="num"><input type="number" step="any" class="price" name="${mountEl.id}__price__${i}" value="${r.price}" aria-label="Unit cost"></td>
       <td class="num ext">${fmtMoney(included ? r.qty * r.price : 0)}</td>
-      <td class="toggle-cell"><label class="switch sm"><input type="checkbox" class="row-toggle" name="${mountEl.id}__included__${i}" aria-label="Include this line item"${included ? " checked" : ""}><span class="slider"></span></label></td>${buyCell}
+      ${includedFirst ? "" : includedCell}${buyCell}
     </tr>`;
   }).join("");
 
@@ -91,19 +127,29 @@ function renderLineItemTable(mountEl, rows, opts) {
     ? `<div style="display:flex;gap:8px;flex-wrap:wrap">${addRowBtn}${removeRowBtn}</div>`
     : "";
 
+  const headCells = includedFirst
+    ? `<th>Included</th><th>Item</th><th>Category</th>`
+    : `<th>Category</th><th>Item</th>`;
+  const tfootColspan = includedFirst ? 6 : 5;
+  // includedFirst puts the Included toggle in column 1 (inside the
+  // colspan), so there's no trailing empty cell to align under it the way
+  // the legacy layout needs one after the Ext./data-total cell.
+  const tfootTrailingCell = includedFirst ? "" : "<td></td>";
+
   mountEl.innerHTML = `
     ${linkedPicker}
+    ${configPicker}
     <div class="worksheet-wrap">
       <table class="worksheet">
         <thead><tr>
-          <th>Category</th><th>Item</th><th>Unit</th><th>Qty</th>
-          <th class="num">Unit $</th><th class="num">Ext.</th><th>Included</th>${opts.showBuyColumn ? "<th>Buy</th>" : ""}
+          ${headCells}<th>Unit</th><th>Qty</th>
+          <th class="num">Unit $</th><th class="num">Ext.</th>${includedFirst ? "" : "<th>Included</th>"}${opts.showBuyColumn ? "<th>Buy</th>" : ""}
         </tr></thead>
         <tbody>${rowsHtml}</tbody>
         <tfoot><tr>
-          <td colspan="5">Subtotal</td>
+          <td colspan="${tfootColspan}">Subtotal</td>
           <td class="num" data-total="total">$0.00</td>
-          <td></td>${opts.showBuyColumn ? "<td></td>" : ""}
+          ${tfootTrailingCell}${opts.showBuyColumn ? "<td></td>" : ""}
         </tr></tfoot>
       </table>
     </div>
@@ -190,6 +236,36 @@ function renderLineItemTable(mountEl, rows, opts) {
     });
   }
 
+  // Round 41 (2026-09-18): switching Configuration resets every row's
+  // Included checkbox to that configuration's Yes/No default (rows
+  // without a value for the newly-selected config field are left alone).
+  // Deliberately does NOT rebuild the table's HTML — only flips the
+  // checkboxes that need to change (dispatching a real "change" event so
+  // the default-qty-to-1 behavior above still applies) — so any qty/price
+  // edits the tech has already made on screen survive a configuration
+  // switch. This mirrors how the tonnage/tier picker above only ever
+  // touches the one linked row's price, never the rest of the table.
+  const configSelect = mountEl.querySelector(`#${mountEl.id}-config`);
+  if (configSelect && configOptions) {
+    configSelect.addEventListener("change", () => {
+      opts.configSelected = configSelect.value;
+      const cfg = configOptions.find(c => c.key === configSelect.value);
+      if (!cfg) return;
+      mountEl.querySelectorAll("tbody tr[data-row]").forEach((tr) => {
+        const idx = parseInt(tr.dataset.idx, 10);
+        const row = rows[idx];
+        if (!row || row[cfg.field] === undefined) return;
+        const toggle = tr.querySelector(".row-toggle");
+        const want = row[cfg.field] !== false;
+        if (toggle.checked !== want) {
+          toggle.checked = want;
+          toggle.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      });
+      recalc();
+    });
+  }
+
   recalc();
   return {
     el: mountEl,
@@ -199,6 +275,12 @@ function renderLineItemTable(mountEl, rows, opts) {
       if (!linkedSelect) return;
       linkedSelect.value = String(val);
       linkedSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    },
+    getConfigValue: () => (configSelect ? configSelect.value : null),
+    setConfigValue: (val) => {
+      if (!configSelect) return;
+      configSelect.value = String(val);
+      configSelect.dispatchEvent(new Event("change", { bubbles: true }));
     },
   };
 }

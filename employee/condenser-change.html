@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Condenser Change | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260919a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260920a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260919a"></script>
-<script src="../assets/js/supabase-config.js?v=20260919a"></script>
-<script src="../assets/js/auth.js?v=20260919a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260920a"></script>
+<script src="../assets/js/supabase-config.js?v=20260920a"></script>
+<script src="../assets/js/auth.js?v=20260920a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -65,12 +65,22 @@
 <div id="ws-table"></div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260919a"></script>
-<script src="../assets/js/worksheet.js?v=20260919a"></script>
+<script src="../assets/js/pricing-data.js?v=20260920a"></script>
+<script src="../assets/js/worksheet.js?v=20260920a"></script>
 <script>
-  renderLineItemTable(document.getElementById('ws-table'), CONDENSER_MATERIALS, {
+  // Round 41 (2026-09-18), per Vijayan's reference spreadsheet: added a
+  // Configuration picker -- see the configOptions doc comment on
+  // renderLineItemTable in worksheet.js. includedFirst reorders the table
+  // to Included, Item, Category, Unit, Qty, Unit $, Ext. to match that
+  // spreadsheet's column order.
+  const wsTable = renderLineItemTable(document.getElementById('ws-table'), CONDENSER_MATERIALS, {
     linkedOptions: CONDENSER_TONNAGE,
-    linkedKind: 'tonnage'
+    linkedKind: 'tonnage',
+    configOptions: [
+    { key: 'singleStage', label: 'Single Stage', field: 'includedSingleStage' },
+    { key: 'variableSpeed', label: 'Variable Speed', field: 'includedVariableSpeed' },
+  ],
+    includedFirst: true
   });
 
   // Round 40 (2026-09-18): Download button. These worksheet tables are
@@ -82,17 +92,20 @@
   // defaults), this reads the live <table> DOM directly rather than the
   // JS data array -- same end result as the Tool List / Jobs / BOM /
   // Invoices / Payments downloads, just sourced differently.
+  // Round 41 (2026-09-18): column order matches the table's own
+  // includedFirst layout (Included, Item, Category, Unit, Qty, Unit $,
+  // Ext.), and the filename includes the currently-selected Configuration
+  // so an exported file is traceable to which parts list it came from.
   function _wsCsvField(v) {
     const s = String(v == null ? "" : v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }
   document.getElementById('ws-download-btn').addEventListener('click', () => {
     const mountEl = document.getElementById('ws-table');
-    const header = ["Category", "Item", "Unit", "Qty", "Unit $", "Ext.", "Included"];
+    const header = ["Included", "Item", "Category", "Unit", "Qty", "Unit $", "Ext."];
     const lines = [header.map(_wsCsvField).join(",")];
     mountEl.querySelectorAll("tbody tr[data-row]").forEach((tr) => {
-      const catInput = tr.querySelector(".cat-input");
-      const category = catInput ? catInput.value : (tr.children[0].textContent || "").trim();
+      const included = tr.querySelector(".row-toggle").checked ? "Yes" : "No";
       const itemInput = tr.querySelector(".item-input");
       let item;
       if (itemInput) {
@@ -103,18 +116,19 @@
         if (spec) spec.remove();
         item = clone.textContent.trim();
       }
-      const unit = (tr.children[2].textContent || "").trim();
+      const catInput = tr.querySelector(".cat-input");
+      const category = catInput ? catInput.value : (tr.children[2].textContent || "").trim();
+      const unit = (tr.children[3].textContent || "").trim();
       const qty = tr.querySelector(".qty").value;
       const price = tr.querySelector(".price").value;
       const ext = tr.querySelector(".ext").textContent.trim();
-      const included = tr.querySelector(".row-toggle").checked ? "Yes" : "No";
-      lines.push([category, item, unit, qty, price, ext, included].map(_wsCsvField).join(","));
+      lines.push([included, item, category, unit, qty, price, ext].map(_wsCsvField).join(","));
     });
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `SAA-condenser-change-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `SAA-condenser-change-${wsTable.getConfigValue() || "config"}-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
