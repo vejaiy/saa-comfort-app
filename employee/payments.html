@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Payments | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260918a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260919a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260918a"></script>
-<script src="../assets/js/supabase-config.js?v=20260918a"></script>
-<script src="../assets/js/auth.js?v=20260918a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260919a"></script>
+<script src="../assets/js/supabase-config.js?v=20260919a"></script>
+<script src="../assets/js/auth.js?v=20260919a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -66,6 +66,7 @@
   <span class="muted" style="align-self:center">to</span>
   <input type="date" id="pay-date-to" title="To date">
   <button type="button" class="btn btn-ghost btn-sm" id="pay-clear-btn">Clear Filters</button>
+  <button type="button" class="btn btn-ghost btn-sm" id="pay-download-btn">⬇️ Download (Excel)</button>
 </div>
 
 <div class="card" style="margin-top:16px">
@@ -85,10 +86,10 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260918a"></script>
-<script src="../assets/js/worksheet.js?v=20260918a"></script>
-<script src="../assets/js/jobs-db.js?v=20260918a"></script>
-<script src="../assets/js/payments-db.js?v=20260918a"></script>
+<script src="../assets/js/pricing-data.js?v=20260919a"></script>
+<script src="../assets/js/worksheet.js?v=20260919a"></script>
+<script src="../assets/js/jobs-db.js?v=20260919a"></script>
+<script src="../assets/js/payments-db.js?v=20260919a"></script>
 <script>
   function _payEsc(s) {
     return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -110,8 +111,14 @@
     };
   }
 
+  // Round 39 (2026-09-19): cache the last-rendered (i.e. currently
+  // filtered) rows so the Download button exports exactly what's on
+  // screen, not the whole unfiltered table.
+  let _payLastRows = [];
+
   async function renderPayments() {
     const rows = await saaPaymentsFetchAll(_payFilters());
+    _payLastRows = rows;
     const tbody = document.getElementById("pay-tbody");
     document.getElementById("pay-empty").hidden = rows.length > 0;
     const total = rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
@@ -152,6 +159,38 @@
     document.getElementById("pay-date-from").value = "";
     document.getElementById("pay-date-to").value = "";
     renderPayments();
+  });
+
+  // Same CSV-via-Blob approach as the Tool List / Mileage / Jobs / Invoices
+  // pages -- opens straight into Excel, no extra library needed.
+  function _payCsvField(v) {
+    const s = String(v == null ? "" : v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+  document.getElementById("pay-download-btn").addEventListener("click", () => {
+    const header = ["Date", "Customer", "Job", "Invoice #", "Amount", "Method", "Reference #", "Notes"];
+    const lines = [header.map(_payCsvField).join(",")];
+    _payLastRows.forEach((r) => {
+      lines.push([
+        r.payment_date,
+        r.customer ? [r.customer.first_name, r.customer.last_name].filter(Boolean).join(" ") : "",
+        r.job ? (r.job.job_number || saaJobTypeLabel(r.job.job_type)) : "",
+        r.invoice ? r.invoice.invoice_number : "",
+        fmtMoney(r.amount),
+        r.method,
+        r.reference_number,
+        r.notes,
+      ].map(_payCsvField).join(","));
+    });
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `SAA-payments-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   });
 
   renderPayments();

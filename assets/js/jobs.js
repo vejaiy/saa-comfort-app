@@ -357,6 +357,50 @@ async function jbLoadAll() {
   jbRenderTable();
 }
 
+// Round 39 (2026-09-19), per Vijayan: "Add download button in Jobs ... to
+// download the file in excel format and save in computer." Same CSV-via-
+// Blob approach already used on the Tool List (_tlDownloadCsv in
+// tools-page.js) and Mileage (_mpDownloadTaxCsv in mileage-page.js) pages
+// -- opens straight into Excel, no extra library needed. Exports exactly
+// what's on screen right now (respects the active column filters/search/
+// sort), not the whole unfiltered table, matching the Tool List's same
+// filtered-export behavior.
+function _jbCsvField(v) {
+  const s = String(v == null ? "" : v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function jbDownloadCsv() {
+  const rows = jbApplyFilters();
+  const header = ["Job #", "Date Received", "Scheduled", "Customer", "Phone", "Service Address", "Job Type", "Priority", "Technician", "Status", "Payment", "Quote $"];
+  const lines = [header.map(_jbCsvField).join(",")];
+  rows.forEach((j) => {
+    const amt = _jbQuoteAmount(j);
+    lines.push([
+      _jbJobNum(j),
+      _jbFormatDate(j.created_at),
+      _jbFormatDate(j.scheduled_date),
+      _jbCustName(j.customer),
+      j.customer && j.customer.phone ? saaFormatPhone(j.customer.phone) : "",
+      [j.job_address, j.job_city].filter(Boolean).join(", "),
+      saaJobTypeLabel(j.job_type),
+      _jbPriorityLabel[j.priority] || j.priority || "",
+      _jbTechDisplayNames(j),
+      _jbStatusLabel[j.status] || j.status || "",
+      _jbPaymentLabel[j.paymentStatus] || "",
+      amt != null ? fmtMoney(amt) : "",
+    ].map(_jbCsvField).join(","));
+  });
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `SAA-jobs-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 /* ============================== New Job popup ============================== */
 
 function jbRenderCustResults(results, query) {
@@ -1789,6 +1833,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       _jbSort = Object.assign({}, _JB_DEFAULT_SORT);
       jbRenderTable();
     });
+
+    const jbDownloadBtn = document.getElementById("jb-download-btn");
+    if (jbDownloadBtn) jbDownloadBtn.addEventListener("click", jbDownloadCsv);
 
     document.getElementById("jb-new-btn").addEventListener("click", jbOpenNewJobModal);
     document.getElementById("jbn-cancel-btn").addEventListener("click", () => { document.getElementById("jb-new-modal").hidden = true; });

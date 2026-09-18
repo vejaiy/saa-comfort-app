@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bill of Material | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260918a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260919a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260918a"></script>
-<script src="../assets/js/supabase-config.js?v=20260918a"></script>
-<script src="../assets/js/auth.js?v=20260918a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260919a"></script>
+<script src="../assets/js/supabase-config.js?v=20260919a"></script>
+<script src="../assets/js/auth.js?v=20260919a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -106,6 +106,7 @@
     <div class="field" style="max-width:320px"><label>Supplier / Order From</label><input type="text" id="bom-supplier" placeholder="e.g. Ferguson, distributor name"></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
       <button type="button" class="btn btn-ghost btn-sm" id="bom-print-btn">🖨️ Print Bill of Material</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="bom-download-btn">⬇️ Download (Excel)</button>
       <button type="button" class="btn btn-navy btn-sm" id="bom-order-btn">📦 Create Order</button>
     </div>
     <div class="muted" id="bom-order-status" style="font-size:.85rem;margin-top:8px"></div>
@@ -113,11 +114,11 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260918a"></script>
-<script src="../assets/js/worksheet.js?v=20260918a"></script>
-<script src="../assets/js/jobs-db.js?v=20260918a"></script>
-<script src="../assets/js/bom-db.js?v=20260918a"></script>
-<script src="../assets/js/print-bom.js?v=20260918a"></script>
+<script src="../assets/js/pricing-data.js?v=20260919a"></script>
+<script src="../assets/js/worksheet.js?v=20260919a"></script>
+<script src="../assets/js/jobs-db.js?v=20260919a"></script>
+<script src="../assets/js/bom-db.js?v=20260919a"></script>
+<script src="../assets/js/print-bom.js?v=20260919a"></script>
 <script>
   let _bomJob = null;
 
@@ -285,6 +286,44 @@
       jobTitle: _bomJob.title || saaJobTypeLabel(_bomJob.job_type),
       items: saaBomCombinedItems(_bomJob),
     });
+  });
+
+  // Round 39 (2026-09-19), per Vijayan: "Add download button ... to
+  // download the file in excel format and save in computer." Same CSV-via-
+  // Blob approach as the Tool List / Mileage pages -- opens straight into
+  // Excel. Exports exactly the itemized list currently on screen for this
+  // job, in the same section order the table/print view shows.
+  function _bomCsvField(v) {
+    const s = String(v == null ? "" : v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+  document.getElementById("bom-download-btn").addEventListener("click", () => {
+    if (!_bomJob) return;
+    const items = saaBomCombinedItems(_bomJob);
+    const bySection = {};
+    items.forEach((it) => {
+      const sec = it.section || "Other";
+      (bySection[sec] = bySection[sec] || []).push(it);
+    });
+    const order = BOM_SECTION_ORDER.concat(Object.keys(bySection).filter((s) => !BOM_SECTION_ORDER.includes(s)));
+    const header = ["Section", "Description", "Unit", "Qty"];
+    const lines = [header.map(_bomCsvField).join(",")];
+    order.forEach((sec) => {
+      const list = bySection[sec];
+      if (!list || !list.length) return;
+      list.forEach((it) => {
+        lines.push([sec, it.description, it.unit || "ea", it.qty].map(_bomCsvField).join(","));
+      });
+    });
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `SAA-bom-${_bomJobNum(_bomJob)}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   });
 
   document.getElementById("bom-order-btn").addEventListener("click", async () => {

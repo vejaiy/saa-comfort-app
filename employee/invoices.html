@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Invoices | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260918a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260919a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260918a"></script>
-<script src="../assets/js/supabase-config.js?v=20260918a"></script>
-<script src="../assets/js/auth.js?v=20260918a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260919a"></script>
+<script src="../assets/js/supabase-config.js?v=20260919a"></script>
+<script src="../assets/js/auth.js?v=20260919a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -65,6 +65,7 @@
   <select id="inv-pay-filter"><option value="">All Payment Status</option><option value="unpaid">Unpaid</option><option value="partial">Partially Paid</option><option value="paid">Paid</option></select>
   <input type="text" id="inv-search" placeholder="Invoice #, job #, customer, or phone&hellip;" style="min-width:240px">
   <button type="button" class="btn btn-ghost btn-sm" id="inv-clear-btn">Clear Filters</button>
+  <button type="button" class="btn btn-ghost btn-sm" id="inv-download-btn">⬇️ Download (Excel)</button>
 </div>
 
 <div class="card" style="margin-top:16px">
@@ -84,10 +85,10 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260918a"></script>
-<script src="../assets/js/worksheet.js?v=20260918a"></script>
-<script src="../assets/js/jobs-db.js?v=20260918a"></script>
-<script src="../assets/js/invoices-db.js?v=20260918a"></script>
+<script src="../assets/js/pricing-data.js?v=20260919a"></script>
+<script src="../assets/js/worksheet.js?v=20260919a"></script>
+<script src="../assets/js/jobs-db.js?v=20260919a"></script>
+<script src="../assets/js/invoices-db.js?v=20260919a"></script>
 <script>
   // Same document-status labels the Job Card's own Invoice Status select
   // uses (_jbInvoiceLabel in jobs.js) -- kept as a local copy here rather
@@ -115,8 +116,15 @@
     };
   }
 
+  // Round 39 (2026-09-19): cache the last-rendered (i.e. currently
+  // filtered) rows so the Download button exports exactly what's on
+  // screen, not the whole unfiltered table -- same idea as the Tool
+  // List's _tlLastInventoryRows.
+  let _invLastRows = [];
+
   async function renderInvoices() {
     const rows = await saaInvoicesFetchAll(_invFilters());
+    _invLastRows = rows;
     const tbody = document.getElementById("inv-tbody");
     document.getElementById("inv-empty").hidden = rows.length > 0;
     const totalDue = rows.reduce((sum, r) => sum + (Number(r.totalDue) || 0), 0);
@@ -160,6 +168,41 @@
     document.getElementById("inv-pay-filter").value = "";
     document.getElementById("inv-search").value = "";
     renderInvoices();
+  });
+
+  // Same CSV-via-Blob approach as the Tool List / Mileage / Jobs pages --
+  // opens straight into Excel, no extra library needed.
+  function _invCsvField(v) {
+    const s = String(v == null ? "" : v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+  document.getElementById("inv-download-btn").addEventListener("click", () => {
+    const header = ["Invoice #", "Date", "Customer", "Job", "Amount", "Total Due", "Paid", "Balance", "Status", "Payment"];
+    const lines = [header.map(_invCsvField).join(",")];
+    _invLastRows.forEach((r) => {
+      const balance = (Number(r.totalDue) || 0) - (Number(r.amountPaid) || 0);
+      lines.push([
+        r.invoice_number,
+        r.issue_date || (r.created_at || "").slice(0, 10),
+        r.customer ? [r.customer.first_name, r.customer.last_name].filter(Boolean).join(" ") : "",
+        r.job ? (r.job.job_number || saaJobTypeLabel(r.job.job_type)) : "",
+        fmtMoney(r.amount_total),
+        fmtMoney(r.totalDue),
+        fmtMoney(r.amountPaid),
+        fmtMoney(balance),
+        _invStatusLabel[r.status] || r.status || "",
+        _invPayLabel[r.paymentStatus] || r.paymentStatus || "",
+      ].map(_invCsvField).join(","));
+    });
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `SAA-invoices-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   });
 
   renderInvoices();
