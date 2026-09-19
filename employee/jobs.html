@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jobs | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260921c">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260921d">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260921c"></script>
-<script src="../assets/js/supabase-config.js?v=20260921c"></script>
-<script src="../assets/js/auth.js?v=20260921c"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260921d"></script>
+<script src="../assets/js/supabase-config.js?v=20260921d"></script>
+<script src="../assets/js/auth.js?v=20260921d"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -536,6 +536,25 @@
       <div class="field"><label>Technician</label><select id="jbe-tech"></select></div>
       <div class="field"><label>Technician 2 <span class="muted" style="font-weight:400">(optional)</span></label><select id="jbe-tech2"></select></div>
     </div>
+    <!-- Round 42 Task 120, per Vijayan: "include all fields and logic in
+         event cards similar to job cards." -- Technician 3, Priority,
+         Completed Date/Time, and Service Address/City/State/ZIP mirror the
+         Job Card's own "Job Info" section (jbd-tech3/jbd-priority/
+         jbd-completed*/jbd-address/city/state/zip) field-for-field. -->
+    <div class="field-row">
+      <div class="field"><label>Technician 3 <span class="muted" style="font-weight:400">(optional)</span></label><select id="jbe-tech3"></select></div>
+      <div class="field"><label>Priority</label><select id="jbe-priority"></select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Completed Date</label><input type="date" id="jbe-completed-date"></div>
+      <div class="field"><label>Completed Time <span class="muted" id="jbe-completed-time-note" style="font-weight:400;font-size:.78rem"></span></label><input type="time" id="jbe-completed-time"></div>
+    </div>
+    <div class="field"><label>Service Address</label><input type="text" id="jbe-address"></div>
+    <div class="field-row field-row-3">
+      <div class="field"><label>City</label><input type="text" id="jbe-city"></div>
+      <div class="field"><label>State</label><input type="text" id="jbe-state" maxlength="2" style="text-transform:uppercase"></div>
+      <div class="field"><label>ZIP</label><input type="text" id="jbe-zip"></div>
+    </div>
     <div class="field"><label>Reason for Visit</label><input type="text" id="jbe-reason"></div>
     <div class="field"><label>Description</label><textarea id="jbe-description" rows="2"></textarea></div>
     <div class="field"><label>Technician Notes</label><textarea id="jbe-tech-notes" rows="2"></textarea></div>
@@ -579,17 +598,17 @@
 <div id="jb-toast" class="cal-toast" hidden></div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260921c"></script>
-<script src="../assets/js/worksheet.js?v=20260921c"></script>
-<script src="../assets/js/systems-db.js?v=20260921c"></script>
-<script src="../assets/js/events-db.js?v=20260921c"></script>
-<script src="../assets/js/jobs-db.js?v=20260921c"></script>
-<script src="../assets/js/job-photos-db.js?v=20260921c"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260921c"></script>
-<script src="../assets/js/camera-capture.js?v=20260921c"></script>
-<script src="../assets/js/print-invoice.js?v=20260921c"></script>
-<script src="../assets/js/maps-config.js?v=20260921c"></script>
-<script src="../assets/js/mileage-db.js?v=20260921c"></script>
-<script src="../assets/js/jobs.js?v=20260921c"></script>
+<script src="../assets/js/pricing-data.js?v=20260921d"></script>
+<script src="../assets/js/worksheet.js?v=20260921d"></script>
+<script src="../assets/js/systems-db.js?v=20260921d"></script>
+<script src="../assets/js/events-db.js?v=20260921d"></script>
+<script src="../assets/js/jobs-db.js?v=20260921d"></script>
+<script src="../assets/js/job-photos-db.js?v=20260921d"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260921d"></script>
+<script src="../assets/js/camera-capture.js?v=20260921d"></script>
+<script src="../assets/js/print-invoice.js?v=20260921d"></script>
+<script src="../assets/js/maps-config.js?v=20260921d"></script>
+<script src="../assets/js/mileage-db.js?v=20260921d"></script>
+<script src="../assets/js/jobs.js?v=20260921d"></script>
 </body>
 </html>

@@ -60,14 +60,11 @@ const SAA_CAL_FOLLOWUP_TYPES = [
 // change.
 const SAA_CAL_APPTTYPE_TO_EVENTTYPE = SAA_JOBTYPE_TO_EVENTTYPE;
 
-// Rough default durations for the Existing Job tab's Event Type picker,
-// which draws from SAA_EVENT_TYPE_OPTIONS (events-db.js) rather than
-// appointment_types, so it doesn't have that table's own duration column.
-const SAA_CAL_EVENTTYPE_DURATION = {
-  service_call: 60, diagnostic: 60, repair: 90, maintenance: 60,
-  estimate_visit: 45, installation: 480, follow_up: 15,
-  warranty_visit: 60, inspection: 45, customer_callback: 15, other: 60,
-};
+// Round 42 Task 120: this map moved to events-db.js as
+// SAA_EVENT_TYPE_DURATION, shared with jobs.js's Event modal (Job Card
+// field-parity) — kept as a same-named alias here so nothing else in this
+// file needs to change.
+const SAA_CAL_EVENTTYPE_DURATION = SAA_EVENT_TYPE_DURATION;
 
 let saaCalCurrentDate = "";
 let saaCalViewMode = "day"; // "day" | "week" | "month"

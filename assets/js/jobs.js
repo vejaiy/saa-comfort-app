@@ -25,6 +25,7 @@ let _jbSystem = null; // Round 42 (2026-09-19): the open job's System row (syste
 let _jbEvents = []; // Round 42: the open job's full Event History, newest first (events-db.js)
 let _jbEventModalMode = null; // "create" | "edit" -- which flow jb-event-modal is currently in
 let _jbEventModalTarget = null; // the Event object being edited, or null in "create" mode
+let _jbEventCompletedAtOpen = { date: "", time: "" }; // Round 42 Task 120: change-detection so Save doesn't re-stamp an unedited (possibly estimated) Completed Time -- same idea as job._jbCompletedTimeAtOpen
 
 function _jbToast(msg, isError) {
   const el = document.getElementById("jb-toast");
@@ -1659,7 +1660,7 @@ function _jbEventTechOptionsHtml(selectedId) {
  *  null to create a new one (used by both "+ Schedule Follow-Up" and
  *  "+ Schedule New Event" -- the only difference between them is the
  *  Event Type the form starts pre-set to). */
-function jbOpenEventModal(event, defaultType) {
+async function jbOpenEventModal(event, defaultType) {
   _jbEventModalMode = event ? "edit" : "create";
   _jbEventModalTarget = event || null;
 
@@ -1669,11 +1670,37 @@ function jbOpenEventModal(event, defaultType) {
   document.getElementById("jbe-status").innerHTML = _jbOptionsHtml(SAA_EVENT_STATUS_OPTIONS, event ? event.event_status : "scheduled");
   document.getElementById("jbe-tech").innerHTML = _jbEventTechOptionsHtml(event ? event.assigned_technician_id : (_jbCurrentJob ? _jbCurrentJob.assigned_technician_id : ""));
   document.getElementById("jbe-tech2").innerHTML = _jbEventTechOptionsHtml(event ? event.assigned_technician_id_2 : "");
+  // Round 42 Task 120, per Vijayan: "include all fields and logic in event
+  // cards similar to job cards." -- Technician 3 (same optional-slot
+  // pattern as Technician 2, no job default) and Priority (defaults from
+  // the parent Job's own Priority on a brand-new Event, same as
+  // Technician above already does).
+  document.getElementById("jbe-tech3").innerHTML = _jbEventTechOptionsHtml(event ? event.assigned_technician_id_3 : "");
+  document.getElementById("jbe-priority").innerHTML = _jbOptionsHtml(SAA_JOBS_PRIORITY_OPTIONS, event ? event.priority : (_jbCurrentJob ? _jbCurrentJob.priority : "normal"));
 
   const start = event && event.scheduled_start ? new Date(event.scheduled_start) : null;
   const pad = (n) => String(n).padStart(2, "0");
   document.getElementById("jbe-date").value = start ? `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}` : "";
   document.getElementById("jbe-time").value = start ? `${pad(start.getHours())}:${pad(start.getMinutes())}` : "";
+
+  // Completed Date/Time (Job Card parity): confirmed value from
+  // completed_at when set, else an estimate from Scheduled Time + this
+  // Event Type's usual duration -- see saaEventsGetCompletedTime.
+  const completedInfo = await saaEventsGetCompletedTime(event || {});
+  document.getElementById("jbe-completed-date").value = completedInfo.date;
+  document.getElementById("jbe-completed-time").value = completedInfo.time;
+  document.getElementById("jbe-completed-time-note").textContent = completedInfo.isEstimate ? "(estimated from schedule — confirm or edit)" : "";
+  _jbEventCompletedAtOpen = { date: completedInfo.date, time: completedInfo.time };
+
+  // Service Address/City/State/ZIP -- an Event's own value once set,
+  // falling back to the parent Job's Service Address (both for an old
+  // Event that predates these columns and for a brand-new one), same
+  // fallback-from-Job pattern as Technician/Priority above.
+  const jobFallback = _jbCurrentJob || {};
+  document.getElementById("jbe-address").value = (event && event.service_address) || jobFallback.job_address || "";
+  document.getElementById("jbe-city").value = (event && event.service_city) || jobFallback.job_city || "";
+  document.getElementById("jbe-state").value = (event && event.service_state) || jobFallback.job_state || "TX";
+  document.getElementById("jbe-zip").value = (event && event.service_zip) || jobFallback.job_zip || "";
 
   document.getElementById("jbe-reason").value = (event && event.reason) || "";
   document.getElementById("jbe-description").value = (event && event.description) || "";
@@ -1706,6 +1733,12 @@ async function jbSaveEventModal() {
   const eventStatus = document.getElementById("jbe-status").value;
   const technicianId = document.getElementById("jbe-tech").value || null;
   const technicianId2 = document.getElementById("jbe-tech2").value || null;
+  const technicianId3 = document.getElementById("jbe-tech3").value || null;
+  const priority = document.getElementById("jbe-priority").value;
+  const serviceAddress = document.getElementById("jbe-address").value.trim() || null;
+  const serviceCity = document.getElementById("jbe-city").value.trim() || null;
+  const serviceState = document.getElementById("jbe-state").value.trim().toUpperCase() || null;
+  const serviceZip = document.getElementById("jbe-zip").value.trim() || null;
   const reason = document.getElementById("jbe-reason").value.trim() || null;
   const description = document.getElementById("jbe-description").value.trim() || null;
   // Work-performed / notes / signature fields the modal also exposes --
@@ -1730,18 +1763,44 @@ async function jbSaveEventModal() {
       scheduled_end: null,
       assigned_technician_id: technicianId,
       assigned_technician_id_2: technicianId2,
+      assigned_technician_id_3: technicianId3,
+      priority,
+      service_address: serviceAddress,
+      service_city: serviceCity,
+      service_state: serviceState,
+      service_zip: serviceZip,
       reason,
       description,
     }));
   } else {
     res = await saaEventsCreateForJob(_jbCurrentJob.id, {
       eventType, eventStatus, scheduledStart, scheduledEnd: null,
-      technicianId, technicianId2, reason, description,
+      technicianId, technicianId2, technicianId3, priority,
+      serviceAddress, serviceCity, serviceState, serviceZip,
+      reason, description,
     });
     if (res.ok && Object.values(detailFields).some((v) => v !== null)) {
       // Rare on a freshly-scheduled event, but nothing the office typed
       // into the detail fields before saving should be lost.
       await saaEventsUpdate(res.eventId, detailFields);
+    }
+  }
+
+  // Completed Date/Time (Job Card parity, Round 42 Task 120): saaEventsUpdate
+  // above only auto-stamps completed_at when event_status just CHANGED to
+  // Completed. This covers the tech directly editing the Completed Date/Time
+  // fields (correcting an auto-set or estimated value) -- only writes when
+  // BOTH fields are present and at least one actually changed from what was
+  // loaded, so an untouched (possibly estimated) value never overwrites a
+  // precise auto-set timestamp on every ordinary Save.
+  const eventIdForCompleted = res.ok ? (_jbEventModalTarget ? _jbEventModalTarget.id : res.eventId) : null;
+  if (res.ok && eventIdForCompleted) {
+    const completedDateVal = document.getElementById("jbe-completed-date").value;
+    const completedTimeVal = document.getElementById("jbe-completed-time").value;
+    const changed = completedDateVal !== _jbEventCompletedAtOpen.date || completedTimeVal !== _jbEventCompletedAtOpen.time;
+    if (eventStatus === "completed" && completedDateVal && completedTimeVal && changed) {
+      const ctRes = await saaEventsSetCompletedTime(eventIdForCompleted, completedDateVal, completedTimeVal);
+      if (!ctRes.ok) _jbToast(ctRes.error, true);
     }
   }
 
@@ -2252,6 +2311,33 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("jb-event-close-btn").addEventListener("click", jbCloseEventModal);
   document.getElementById("jb-event-modal").addEventListener("click", (e) => {
     if (e.target.id === "jb-event-modal") jbCloseEventModal(); // clicked the backdrop, not the card
+  });
+
+  // Round 42 Task 120: same duplicate-technician guard as the Job Card's
+  // own jbd-tech/jbd-tech2/jbd-tech3 wiring above -- one technician can't
+  // hold two slots on the same Event any more than on the same Job.
+  document.getElementById("jbe-tech").addEventListener("change", (e) => {
+    const val = e.target.value;
+    if (val) {
+      const others = [document.getElementById("jbe-tech2").value, document.getElementById("jbe-tech3").value];
+      if (others.includes(val)) {
+        _jbToast("That technician is already assigned to this event in another slot.", true);
+        e.target.value = "";
+      }
+    }
+  });
+  [2, 3].forEach((n) => {
+    document.getElementById(`jbe-tech${n}`).addEventListener("change", (e) => {
+      const val = e.target.value;
+      if (val) {
+        const others = [document.getElementById("jbe-tech").value, document.getElementById("jbe-tech2").value, document.getElementById("jbe-tech3").value]
+          .filter((v, i) => v && i !== (n - 1));
+        if (others.includes(val)) {
+          _jbToast("That technician is already assigned to this event in another slot.", true);
+          e.target.value = "";
+        }
+      }
+    });
   });
 
   if (_jbIsFullPage) {

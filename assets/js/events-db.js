@@ -84,6 +84,20 @@ const SAA_JOBTYPE_TO_EVENTTYPE = {
 function saaEventTypeLabel(key) { return SAA_EVENT_TYPE_LABELS[key] || key || "—"; }
 function saaEventStatusLabel(key) { return SAA_EVENT_STATUS_LABELS[key] || key || "—"; }
 
+// Rough default durations per Event Type — moved here from calendar.js's
+// own SAA_CAL_EVENTTYPE_DURATION (Task 120) so jobs.js's Event modal (Job
+// Card field-parity, per Vijayan: "include all fields and logic in event
+// cards similar to job cards") can estimate a Completed Time the same way
+// saaJobsGetCompletedTime does for the Job Card, without duplicating the
+// map a third time. calendar.js keeps its own same-named constant as an
+// alias to this one — see the comment there — so nothing else in that
+// file needed to change.
+const SAA_EVENT_TYPE_DURATION = {
+  service_call: 60, diagnostic: 60, repair: 90, maintenance: 60,
+  estimate_visit: 45, installation: 480, follow_up: 15,
+  warranty_visit: 60, inspection: 45, customer_callback: 15, other: 60,
+};
+
 /** Sequential, human-readable Event number ("EVT-2026-0001"), same
  *  count-based scheme as _saaJobsNextJobNumber/_saaJobsNextInvoiceNumber
  *  in jobs-db.js — no customer-name suffix (unlike Job/Invoice/Quote
@@ -269,12 +283,80 @@ async function saaEventsCreateForJob(jobId, fields) {
         assigned_technician_id_3: fields.technicianId3 || null,
         reason: fields.reason || null,
         description: fields.description || null,
+        // Round 42 Task 120 (Job Card field-parity): Priority reuses the
+        // same 4-value vocabulary as jobs.priority (SAA_JOBS_PRIORITY_OPTIONS
+        // in jobs-db.js) — the Event modal always sends an explicit value
+        // (defaulted from the parent Job at modal-open time, same pattern
+        // as its Technician field), so this fallback only matters for any
+        // other future caller that omits it.
+        priority: fields.priority || "normal",
+        service_address: fields.serviceAddress || null,
+        service_city: fields.serviceCity || null,
+        service_state: fields.serviceState || null,
+        service_zip: fields.serviceZip || null,
       })
       .select("id")
       .single();
     if (eErr) throw eErr;
     await _saaEventsSyncJobFromCurrentEvent(job.id);
     return { ok: true, eventId: event.id, eventNumber };
+  } catch (e) {
+    return { ok: false, error: _saaEventsFriendlyDbError(e) };
+  }
+}
+
+/** Round 42 Task 120 (Job Card field-parity) — best-available "completed
+ *  time" for an Event, same idea as saaJobsGetCompletedTime in jobs-db.js
+ *  but simplified for events' single completed_at timestamptz column
+ *  (Jobs split this across completed_date + status_history.completed;
+ *  Events never had two columns to split, so there's nothing to merge):
+ *   1) completed_at, when set — shown as the confirmed local date+time.
+ *   2) otherwise, for any Event with a Scheduled Date/Time, an ESTIMATE of
+ *      when the visit should wrap up: scheduled_start plus that Event
+ *      Type's usual duration (SAA_EVENT_TYPE_DURATION above) — flagged so
+ *      the UI can label it "(estimated)" until confirmed/edited or the
+ *      Event is actually marked Completed.
+ *  Returns { date: "YYYY-MM-DD"|"", time: "HH:MM"|"", isEstimate: bool }. */
+async function saaEventsGetCompletedTime(event) {
+  const pad = (n) => String(n).padStart(2, "0");
+  if (event && event.completed_at) {
+    const d = new Date(event.completed_at);
+    if (!isNaN(d.getTime())) {
+      return {
+        date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+        time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+        isEstimate: false,
+      };
+    }
+  }
+  if (event && event.scheduled_start) {
+    const start = new Date(event.scheduled_start);
+    if (!isNaN(start.getTime())) {
+      const duration = SAA_EVENT_TYPE_DURATION[event.event_type] || 60;
+      const end = new Date(start.getTime() + duration * 60000);
+      return {
+        date: `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`,
+        time: `${pad(end.getHours())}:${pad(end.getMinutes())}`,
+        isEstimate: true,
+      };
+    }
+  }
+  return { date: "", time: "", isEstimate: false };
+}
+
+/** Manually set/override an Event's recorded completed date+time (mirrors
+ *  saaJobsSetCompletedTime's "allow provision to update ... if required"),
+ *  writing straight into completed_at as a single timestamp built from the
+ *  given date+time — simpler than the Job version since there's only one
+ *  column here, not a status_history sub-object to merge into.
+ *  Returns { ok: true } | { ok: false, error }. */
+async function saaEventsSetCompletedTime(eventId, dateStr, hhmm) {
+  try {
+    if (!dateStr || !hhmm) return { ok: false, error: "Both a completed date and time are required." };
+    const iso = new Date(`${dateStr}T${hhmm}:00`).toISOString();
+    const { error } = await _saaClient.from("events").update({ completed_at: iso, updated_at: new Date().toISOString() }).eq("id", eventId);
+    if (error) throw error;
+    return { ok: true };
   } catch (e) {
     return { ok: false, error: _saaEventsFriendlyDbError(e) };
   }
