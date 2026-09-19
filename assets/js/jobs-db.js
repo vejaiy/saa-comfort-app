@@ -513,15 +513,27 @@ async function saaJobsSearchQuotes(query) {
     .slice(0, 10);
 }
 
-/** Creates a job directly from the Jobs List "+ New Job" form. If a
- *  technician and scheduled date (and, usually, time) are set, the job's
- *  appointment is placed directly on that slot on the Dispatch Calendar
- *  grid; otherwise it's created with no start time, which is exactly
- *  what puts a job in the calendar's Unscheduled Jobs queue — no extra
- *  plumbing needed, it falls out of the existing schema. When the job is
- *  being created from a saved quote (payload.linkedQuoteId), the two
- *  rows are linked both ways: the new job's linked_quote_id points at
- *  the quote, and the quote's job_id points back at the new job. */
+/** DEPRECATED as of Round 42 Task 118 — no longer called (jobs.js's
+ *  jbSaveNewJob now calls saaSystemsCreateWithJob + saaEventsCreateForJob
+ *  instead, same as the Calendar's own New Job flow). Left in place
+ *  rather than deleted, same "old code stays, just unused" convention as
+ *  the appointments/follow_ups tables it wrote to. Do not wire this back
+ *  up: it predates Systems/Events entirely, so a job created through it
+ *  gets no System (empty System section on the Job Card) and no Event
+ *  (empty Event History, AND invisible on the Dispatch Calendar, which
+ *  reads from `events` now, not `jobs`/`appointments`) — that's the exact
+ *  bug fixed by switching jbSaveNewJob away from this function.
+ *
+ *  Original doc: creates a job directly from the Jobs List "+ New Job"
+ *  form. If a technician and scheduled date (and, usually, time) are
+ *  set, the job's appointment is placed directly on that slot on the
+ *  Dispatch Calendar grid; otherwise it's created with no start time,
+ *  which is exactly what puts a job in the calendar's Unscheduled Jobs
+ *  queue — no extra plumbing needed, it falls out of the existing
+ *  schema. When the job is being created from a saved quote
+ *  (payload.linkedQuoteId), the two rows are linked both ways: the new
+ *  job's linked_quote_id points at the quote, and the quote's job_id
+ *  points back at the new job. */
 async function saaJobsCreateJob(payload) {
   try {
     let customerId = payload.customerId || null;
@@ -1018,7 +1030,10 @@ async function saaBomSaveItems(jobId, items) {
       }))
       .filter((it) => it.description);
     if (!clean.length) return { ok: true, items: [] };
-    const rows = clean.map((it, i) => Object.assign({ job_id: jobId, sort_order: i }, it));
+    // Round 42 Task 118: auto-attaches every line item to the Job's
+    // current Event (see saaEventsGetDefaultEventId in events-db.js).
+    const eventId = typeof saaEventsGetDefaultEventId === "function" ? await saaEventsGetDefaultEventId(jobId) : null;
+    const rows = clean.map((it, i) => Object.assign({ job_id: jobId, event_id: eventId, sort_order: i }, it));
     const { data, error: insErr } = await _saaClient
       .from("job_materials")
       .insert(rows)
@@ -1114,11 +1129,17 @@ async function saaJobsGetOrCreateInvoice(job) {
     const amount = Number(job.approved_amount || job.quoted_amount || 0);
     const firstNameForNumber = job.customer ? job.customer.first_name : await _saaCustomerFirstName(job.customer_id);
     const invoiceNumber = await _saaJobsNextInvoiceNumber(firstNameForNumber);
+    // Round 42 Task 118: auto-attaches to the Job's current Event (see
+    // saaEventsGetDefaultEventId's own comment in events-db.js for the
+    // "auto-pick, no new UI" rule) -- guarded since not every page that
+    // creates an invoice also loads events-db.js.
+    const eventId = typeof saaEventsGetDefaultEventId === "function" ? await saaEventsGetDefaultEventId(job.id) : null;
     const { data: created, error: createErr } = await _saaClient
       .from("invoices")
       .insert({
         invoice_number: invoiceNumber,
         job_id: job.id,
+        event_id: eventId,
         quote_id: job.linked_quote_id || null,
         customer_id: job.customer_id,
         amount_total: amount,
@@ -1197,8 +1218,14 @@ async function saaJobsFetchPayments(invoiceId) {
 async function saaJobsRecordPayment(payload) {
   try {
     if (!(payload.amount >= 0)) return { ok: false, error: "Enter a payment amount of $0 or more." };
+    // Round 42 Task 118: a payment attaches to the SAME Event as the
+    // invoice it's paying (not re-picked independently) -- that's the one
+    // unambiguous choice for a payment, and keeps a payment from ever
+    // landing on a different Event than its own invoice.
+    const { data: payInvoice } = await _saaClient.from("invoices").select("event_id").eq("id", payload.invoiceId).maybeSingle();
     const { error: payErr } = await _saaClient.from("payments").insert({
       invoice_id: payload.invoiceId,
+      event_id: payInvoice ? payInvoice.event_id : null,
       customer_id: payload.customerId,
       amount: payload.amount,
       payment_date: payload.paymentDate || new Date().toISOString().slice(0, 10),

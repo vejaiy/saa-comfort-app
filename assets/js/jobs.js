@@ -558,6 +558,19 @@ function jbRenderPriorityRow(mountId, selected, onPick) {
   });
 }
 
+/** Round 42 Task 118: this used to call saaJobsCreateJob directly, which
+ *  predates Systems/Events entirely — it never created a System (so the
+ *  Job Card's System section came up permanently empty) and never
+ *  created an Event (so the Job Card's Event History was empty, AND the
+ *  job never showed up on the Dispatch Calendar at all, since the
+ *  Calendar reads from `events`, not `jobs`/the old `appointments`
+ *  table). Now mirrors the Calendar's own "+ Schedule" New Job tab:
+ *  saaSystemsCreateWithJob creates a fresh System (name "System",
+ *  fillable later from the Job Card — this form has no System picker of
+ *  its own) together with the Job, then saaEventsCreateForJob gives it
+ *  its first Event, mapped from the picked Job Type via
+ *  SAA_JOBTYPE_TO_EVENTTYPE (events-db.js) — same mapping the Calendar
+ *  uses, so a job created either way ends up with an equivalent Event. */
 async function jbSaveNewJob() {
   const statusEl = document.getElementById("jbn-status");
   if (!_jbSelectedCust) { statusEl.textContent = "Select or add a customer first."; return; }
@@ -568,38 +581,75 @@ async function jbSaveNewJob() {
     statusEl.textContent = "The same technician can't be picked in more than one Technician slot.";
     return;
   }
-  const payload = {
-    jobType: document.getElementById("jbn-type").value,
-    title: document.getElementById("jbn-title").value.trim(),
-    jobAddress: document.getElementById("jbn-address").value.trim(),
-    jobCity: document.getElementById("jbn-city").value.trim(),
-    jobState: document.getElementById("jbn-state").value.trim().toUpperCase() || "TX",
-    jobZip: document.getElementById("jbn-zip").value.trim(),
-    technicianId: document.getElementById("jbn-tech").value || null,
-    technicianId2: document.getElementById("jbn-tech2").value || null,
-    technicianId3: document.getElementById("jbn-tech3").value || null,
-    scheduledDate: document.getElementById("jbn-date").value || null,
-    scheduledTime: document.getElementById("jbn-time").value || null,
-    priority: _jbNewPriority,
-    notes: document.getElementById("jbn-notes").value.trim(),
-    linkedQuoteId: _jbConvertingQuote ? _jbConvertingQuote.id : null,
-    quotedAmount: _jbConvertingQuote ? _jbConvertingQuote.total || 0 : null,
-  };
-  if (_jbSelectedCust.isNew) {
-    const c = _jbSelectedCust.customer;
-    payload.newCustomer = { firstName: c.first_name, lastName: c.last_name, phone: c.phone, address: c.billing_address, city: c.billing_city, zip: c.billing_zip };
-  } else {
-    payload.customerId = _jbSelectedCust.id;
-    const dup = await saaJobsFindDuplicateJobs({ customerId: _jbSelectedCust.id, phone: _jbSelectedCust.customer && _jbSelectedCust.customer.phone, jobType: payload.jobType });
-    if (dup.ok && dup.jobs.length) {
-      const nums = dup.jobs.map((j) => j.job_number || "unnumbered").join(", ");
-      const proceed = await saaConfirm(`This customer already has an open ${saaJobTypeLabel(payload.jobType)} job (${nums}). Create another job anyway?`, { title: "Possible duplicate job", okLabel: "Create Anyway" });
-      if (!proceed) { statusEl.textContent = "Not created."; return; }
+  const jobType = document.getElementById("jbn-type").value;
+  const jobAddress = document.getElementById("jbn-address").value.trim();
+  const jobCity = document.getElementById("jbn-city").value.trim();
+  const jobState = document.getElementById("jbn-state").value.trim().toUpperCase() || "TX";
+  const jobZip = document.getElementById("jbn-zip").value.trim();
+  const technicianId = document.getElementById("jbn-tech").value || null;
+  const technicianId2 = document.getElementById("jbn-tech2").value || null;
+  const technicianId3 = document.getElementById("jbn-tech3").value || null;
+  const scheduledDate = document.getElementById("jbn-date").value || null;
+  const scheduledTime = document.getElementById("jbn-time").value || null;
+  const title = document.getElementById("jbn-title").value.trim();
+
+  let customerId;
+  try {
+    if (_jbSelectedCust.isNew) {
+      const c = _jbSelectedCust.customer;
+      customerId = await saaJobsFindOrCreateCustomer({ firstName: c.first_name, lastName: c.last_name, phone: c.phone, address: c.billing_address, city: c.billing_city, zip: c.billing_zip });
+    } else {
+      customerId = _jbSelectedCust.id;
+      const dup = await saaJobsFindDuplicateJobs({ customerId: _jbSelectedCust.id, phone: _jbSelectedCust.customer && _jbSelectedCust.customer.phone, jobType });
+      if (dup.ok && dup.jobs.length) {
+        const nums = dup.jobs.map((j) => j.job_number || "unnumbered").join(", ");
+        const proceed = await saaConfirm(`This customer already has an open ${saaJobTypeLabel(jobType)} job (${nums}). Create another job anyway?`, { title: "Possible duplicate job", okLabel: "Create Anyway" });
+        if (!proceed) { statusEl.textContent = "Not created."; return; }
+      }
     }
+  } catch (e) {
+    statusEl.textContent = "Error: " + ((e && e.message) || String(e));
+    return;
   }
+
+  let status = "new";
+  if (technicianId && scheduledDate) status = "scheduled";
+  else if (technicianId) status = "assigned";
+
   statusEl.textContent = "Saving…";
-  const res = await saaJobsCreateJob(payload);
-  if (!res.ok) { statusEl.textContent = res.error; return; }
+  const sysRes = await saaSystemsCreateWithJob(
+    customerId,
+    {},
+    {
+      jobType, status, title, jobAddress, jobCity, jobState, jobZip,
+      priority: _jbNewPriority,
+      technicianId, technicianId2, technicianId3,
+      scheduledDate, scheduledTime,
+      notes: document.getElementById("jbn-notes").value.trim(),
+      linkedQuoteId: _jbConvertingQuote ? _jbConvertingQuote.id : null,
+      quotedAmount: _jbConvertingQuote ? _jbConvertingQuote.total || 0 : null,
+    }
+  );
+  if (!sysRes.ok) { statusEl.textContent = sysRes.error; return; }
+
+  let startDatetime = null, endDatetime = null;
+  if (technicianId && scheduledDate) {
+    const time = scheduledTime || "09:00";
+    const durations = await saaJobsFetchAppointmentTypes();
+    const duration = durations[jobType] || 60;
+    startDatetime = _saaJobsTimeStr(scheduledDate, time);
+    endDatetime = _saaJobsTimeStr(scheduledDate, _saaJobsAddMinutes(time, duration));
+  }
+  const evRes = await saaEventsCreateForJob(sysRes.jobId, {
+    eventType: SAA_JOBTYPE_TO_EVENTTYPE[jobType] || "service_call",
+    eventStatus: "scheduled",
+    scheduledStart: startDatetime,
+    scheduledEnd: endDatetime,
+    technicianId, technicianId2, technicianId3,
+    reason: title || null,
+  });
+  if (!evRes.ok) { statusEl.textContent = "Job created, but its first Event couldn't be scheduled: " + evRes.error; return; }
+
   document.getElementById("jb-new-modal").hidden = true;
   await jbLoadAll();
   _jbToast("Job created.");

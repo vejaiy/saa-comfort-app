@@ -454,6 +454,13 @@ async function saaMileageRecalcForJob(job, force, technicianId) {
 
     const ctx = await saaMileageLegContext(job, techId);
     const miles = await saaMileageComputeDistance(ctx.fromAddress, toAddress);
+    // Round 42 Task 118: stamps this leg with the Job's current Event for
+    // traceability (event_id lives alongside job_id now, same as
+    // invoices/payments/BOM/photos) — leg-chaining itself (from/to/order)
+    // stays keyed on job_id/technician_id/date, unchanged; only pages that
+    // also load events-db.js can resolve this (the standalone Mileage page
+    // doesn't), hence the guard.
+    const eventId = typeof saaEventsGetDefaultEventId === "function" ? await saaEventsGetDefaultEventId(job.id) : null;
 
     const { data, error } = await _saaClient
       .from("mileage_logs")
@@ -461,6 +468,7 @@ async function saaMileageRecalcForJob(job, force, technicianId) {
         {
           technician_id: techId,
           job_id: job.id,
+          event_id: eventId,
           log_date: job.scheduled_date,
           leg_order: ctx.legOrder,
           leg_type: "trip",
@@ -519,12 +527,14 @@ async function saaMileageSetManualForJob(job, miles, technicianId) {
     const toAddress = saaMileageJobAddress(job) || "(no address on file)";
     if (!job.scheduled_date) throw new Error("This job needs a Scheduled Date before mileage can be logged.");
     const ctx = await saaMileageLegContext(job, techId);
+    const eventId = typeof saaEventsGetDefaultEventId === "function" ? await saaEventsGetDefaultEventId(job.id) : null;
     const { data, error } = await _saaClient
       .from("mileage_logs")
       .upsert(
         {
           technician_id: techId,
           job_id: job.id,
+          event_id: eventId,
           log_date: job.scheduled_date,
           leg_order: ctx.legOrder,
           leg_type: "trip",

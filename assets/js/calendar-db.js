@@ -1,8 +1,18 @@
 /* ============================================================
    SAA Comfort Air LLC — Dispatch Calendar data layer
-   Talks to: technicians, appointment_types, jobs, customers,
-   equipment, appointments, follow_ups (see database/README.md).
+   Talks to: technicians, appointment_types, jobs, systems, events,
+   customers, equipment (see database/README.md).
    Requires auth.js to have already created the shared _saaClient.
+
+   Round 42 (2026-09-19), Task 117: the Calendar now schedules/
+   displays/drags EVENTS, not the old `appointments` table — see
+   events-db.js for saaEventsFetchForCalendarRange (day/week/month +
+   unscheduled queue, replacing this file's old saaCalFetchDayData/
+   RangeData/Unscheduled), saaEventsUpdateAssignment (drag-and-drop,
+   replacing saaCalUpdateAppointmentSchedule), and saaEventsUpdate
+   (status changes, replacing saaCalUpdateAppointmentStatus). The
+   `appointments` table itself is left alone/deprecated, same as
+   Phase 1's other tables — nothing here writes to it anymore.
 
    Design note: rather than relying on supabase-js nested-select
    joins (harder to unit-test and to mock), every function here
@@ -27,97 +37,6 @@ async function saaCalFetchAppointmentTypes() {
     .order("sort_order");
   if (error) throw error;
   return data || [];
-}
-
-function _saaCalDayBounds(dateStr) {
-  const start = `${dateStr}T00:00:00`;
-  const next = new Date(`${dateStr}T00:00:00`);
-  next.setDate(next.getDate() + 1);
-  const y = next.getFullYear(), m = String(next.getMonth() + 1).padStart(2, "0"), d = String(next.getDate()).padStart(2, "0");
-  return { start, end: `${y}-${m}-${d}T00:00:00` };
-}
-
-/** Attaches job + customer + technician to a flat list of appointment
- *  rows — shared by the day/week/month/unscheduled fetchers below so
- *  the join-in-JS logic lives in exactly one place. */
-async function _saaCalHydrateAppts(rawAppts, technicians) {
-  const jobIds = [...new Set((rawAppts || []).map((a) => a.job_id).filter(Boolean))];
-  const { data: jobs, error: e4 } = jobIds.length
-    ? await _saaClient.from("jobs").select("*").in("id", jobIds)
-    : { data: [], error: null };
-  if (e4) throw e4;
-
-  const custIds = [...new Set((jobs || []).map((j) => j.customer_id).filter(Boolean))];
-  const { data: customers, error: e5 } = custIds.length
-    ? await _saaClient.from("customers").select("id,first_name,last_name,phone,billing_address").in("id", custIds)
-    : { data: [], error: null };
-  if (e5) throw e5;
-
-  const jobsById = Object.fromEntries((jobs || []).map((j) => [j.id, j]));
-  const custById = Object.fromEntries((customers || []).map((c) => [c.id, c]));
-  const techById = Object.fromEntries((technicians || []).map((t) => [t.id, t]));
-
-  return (rawAppts || []).map((a) => {
-    const job = jobsById[a.job_id] || {};
-    const customer = custById[job.customer_id] || {};
-    return Object.assign({}, a, { job, customer, technician: techById[a.technician_id] || null });
-  });
-}
-
-/**
- * Loads everything the day-dispatch view needs for one calendar date:
- * active technicians, that day's scheduled appointments, and the
- * unscheduled-jobs queue (appointments with no start_datetime yet),
- * each appointment hydrated with its job + customer + technician.
- */
-async function saaCalFetchDayData(dateStr) {
-  const { start, end } = _saaCalDayBounds(dateStr);
-
-  const [{ data: scheduled, error: e1 }, { data: unscheduled, error: e2 }, technicians] = await Promise.all([
-    _saaClient.from("appointments").select("*").gte("start_datetime", start).lt("start_datetime", end),
-    _saaClient.from("appointments").select("*").is("start_datetime", null),
-    saaCalFetchTechnicians(),
-  ]);
-  if (e1) throw e1;
-  if (e2) throw e2;
-
-  const hydrated = await _saaCalHydrateAppts([].concat(scheduled || [], unscheduled || []), technicians);
-  const schedIds = new Set((scheduled || []).map((a) => a.id));
-  return {
-    technicians: technicians || [],
-    scheduled: hydrated.filter((a) => schedIds.has(a.id)),
-    unscheduled: hydrated.filter((a) => !schedIds.has(a.id)),
-  };
-}
-
-/**
- * Loads scheduled appointments for an arbitrary date range
- * [startDateStr, endDateStrExclusive) — backs the Week and Month views,
- * which show many days at once instead of one day's technician tracks.
- * Doesn't include the Unscheduled queue (those have no date to place them
- * in a range) — see saaCalFetchUnscheduled for that.
- */
-async function saaCalFetchRangeData(startDateStr, endDateStrExclusive) {
-  const start = `${startDateStr}T00:00:00`;
-  const end = `${endDateStrExclusive}T00:00:00`;
-  const [{ data: scheduled, error: e1 }, technicians] = await Promise.all([
-    _saaClient.from("appointments").select("*").gte("start_datetime", start).lt("start_datetime", end),
-    saaCalFetchTechnicians(),
-  ]);
-  if (e1) throw e1;
-  return { technicians: technicians || [], scheduled: await _saaCalHydrateAppts(scheduled || [], technicians) };
-}
-
-/** Just the Unscheduled Jobs queue, hydrated — used by Week/Month views
- *  (which fetch scheduled appointments a different way than Day view's
- *  saaCalFetchDayData) so the queue still shows regardless of view. */
-async function saaCalFetchUnscheduled() {
-  const [{ data: unscheduled, error: e2 }, technicians] = await Promise.all([
-    _saaClient.from("appointments").select("*").is("start_datetime", null),
-    saaCalFetchTechnicians(),
-  ]);
-  if (e2) throw e2;
-  return await _saaCalHydrateAppts(unscheduled || [], technicians);
 }
 
 /**
@@ -277,27 +196,10 @@ async function saaCalMergeCustomers(fromId, toId) {
   }
 }
 
-/**
- * New Service popup save: creates the job and its first appointment
- * together. technicianId/startDatetime/endDatetime may be null (the
- * job lands in the Unscheduled queue). Pass either `customerId` (an
- * existing customer picked from search) or `newCustomer: {firstName,
- * lastName, phone, address}` (search found nobody, so find-or-create one).
- */
-/** Pulls the plain date and HH:MM back out of one of our naive
- *  "<date>T<HH>:<MM>:00" timestamp strings (see saaCalTimeStr in
- *  calendar.js) so they can also be written onto jobs.scheduled_date /
- *  jobs.scheduled_time — that's what makes a job scheduled from the
- *  calendar show its correct Scheduled Date/Time on the Jobs List too. */
-function _saaCalSplitDatetime(dtStr) {
-  const m = String(dtStr || "").match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
-  return m ? { date: m[1], time: m[2] } : { date: null, time: null };
-}
-
 /** Same sequential job-number scheme as jobs-db.js's _saaJobsNextJobNumber
  *  (duplicated for the same reason every other cross-file helper here is —
- *  calendar.html doesn't load jobs-db.js) — a job created from the New
- *  Service popup gets a real J-2026-0001-style number too, not just one
+ *  calendar.html doesn't load jobs-db.js) — a job created from the "+
+ *  Schedule" popup gets a real J-2026-0001-style number too, not just one
  *  created from the Jobs List. */
 async function _saaCalNextJobNumber(firstName) {
   const year = new Date().getFullYear();
@@ -310,7 +212,18 @@ async function _saaCalNextJobNumber(firstName) {
   return saaAppendNameSuffix(base, firstName);
 }
 
-async function saaCalCreateJobWithAppointment(payload) {
+/**
+ * "+ Schedule" popup save, New Job tab: resolves/creates the Customer,
+ * then either attaches a brand-new Job to an EXISTING System
+ * (payload.systemId set — no new System row) or creates a new System AND
+ * its Job together via saaSystemsCreateWithJob (systems-db.js), then
+ * creates that Job's first Event via saaEventsCreateForJob (events-db.js).
+ * technicianId/startDatetime/endDatetime may be null (the Event lands in
+ * the Unscheduled queue). Pass either `customerId` (an existing customer
+ * picked from search) or `newCustomer: {firstName, lastName, phone,
+ * address, city, zip}` (search found nobody, so find-or-create one).
+ */
+async function saaCalScheduleNewJob(payload) {
   try {
     let customerId = payload.customerId || null;
     if (!customerId && payload.newCustomer) {
@@ -322,191 +235,74 @@ async function saaCalCreateJobWithAppointment(payload) {
     }
     if (!customerId) return { ok: false, error: "Select or add a customer first." };
 
-    let status = "new";
-    if (payload.technicianId && payload.startDatetime) status = "scheduled";
-    else if (payload.technicianId) status = "assigned";
-
-    const { date: schedDate, time: schedTime } = _saaCalSplitDatetime(payload.startDatetime);
-    // jobs-db.js is loaded on every page calendar-db.js is (see gen_calendar.py),
-    // so its _saaCustomerFirstName lookup helper is reused here rather than
-    // duplicated, unlike _saaCalNextJobNumber above.
     const firstNameForNumber = (payload.newCustomer && payload.newCustomer.firstName) || (await _saaCustomerFirstName(customerId));
-    const jobNumber = await _saaCalNextJobNumber(firstNameForNumber);
+    let jobId, systemId;
 
-    const { data: job, error: jErr } = await _saaClient
-      .from("jobs")
-      .insert({
-        job_number: jobNumber,
-        customer_id: customerId,
-        job_type: payload.appointmentTypeKey,
-        status,
-        title: payload.title || "",
-        priority: payload.priority || "normal",
-        job_address: payload.jobAddress || null,
-        // Round 7: the New Service popup only ever collects one freeform
-        // Address field, but the Job Card shows City/State/ZIP as
-        // separate fields -- without these, City/ZIP always came up
-        // blank on a calendar-created job even when the office had typed
-        // a full address, since there was nowhere for that to land.
-        job_city: payload.jobCity || null,
-        job_state: "TX",
-        job_zip: payload.jobZip || null,
-        assigned_technician_id: payload.technicianId || null,
-        scheduled_date: schedDate,
-        scheduled_time: schedTime,
-        notes: payload.notes || null,
-      })
-      .select("id")
-      .single();
-    if (jErr) throw jErr;
-
-    const { data: appt, error: aErr } = await _saaClient
-      .from("appointments")
-      .insert({
-        job_id: job.id,
-        technician_id: payload.technicianId || null,
-        start_datetime: payload.startDatetime || null,
-        end_datetime: payload.endDatetime || null,
-        status: "scheduled",
-      })
-      .select("id")
-      .single();
-    if (aErr) throw aErr;
-
-    // Round 11 follow-up (2026-09-13): "save miles for every job" -- see
-    // the matching comment in jobs-db.js's saaJobsCreateJob. Fire-and-forget.
-    if (typeof saaMileageEnsureForJob === "function") {
-      saaMileageEnsureForJob({
-        id: job.id,
-        assigned_technician_id: payload.technicianId || null,
-        scheduled_date: schedDate,
-        scheduled_time: schedTime,
-        job_address: payload.jobAddress || null,
-        job_city: payload.jobCity || null,
-        job_state: "TX",
-        job_zip: payload.jobZip || null,
-      });
-    }
-
-    return { ok: true, jobId: job.id, appointmentId: appt.id };
-  } catch (e) {
-    return { ok: false, error: (e && e.message) || String(e) };
-  }
-}
-
-/** Drag-and-drop reschedule: change technician, time, or both in one call. */
-async function saaCalUpdateAppointmentSchedule({ appointmentId, jobId, technicianId, startDatetime, endDatetime }) {
-  try {
-    const { error: aErr } = await _saaClient
-      .from("appointments")
-      .update({
-        technician_id: technicianId || null,
-        start_datetime: startDatetime || null,
-        end_datetime: endDatetime || null,
-      })
-      .eq("id", appointmentId);
-    if (aErr) throw aErr;
-
-    if (jobId) {
-      const { date: schedDate, time: schedTime } = _saaCalSplitDatetime(startDatetime);
-      const { error: jErr } = await _saaClient
+    if (payload.systemId) {
+      // Existing System picked -- a new Job attaches to it directly (no
+      // second System row for the same physical equipment).
+      const jobNumber = await _saaCalNextJobNumber(firstNameForNumber);
+      const { data: job, error: jErr } = await _saaClient
         .from("jobs")
-        .update({ assigned_technician_id: technicianId || null, status: "scheduled", scheduled_date: schedDate, scheduled_time: schedTime })
-        .eq("id", jobId);
-      if (jErr) throw jErr;
-
-      // Round 11 follow-up (2026-09-13): a drag-and-drop reschedule changes
-      // which day/technician/leg-order a job's mileage belongs under, so
-      // its auto leg (never a manually-set one -- saaMileageRecalcForJob's
-      // own guard handles that) is refreshed to match right away rather
-      // than being left pointing at the old day. Needs the job's address,
-      // which isn't part of this payload, so it's re-fetched fresh.
-      if (typeof saaMileageEnsureForJob === "function") {
-        const { data: freshJob } = await _saaClient
-          .from("jobs")
-          .select("id,assigned_technician_id,scheduled_date,scheduled_time,job_address,job_city,job_state,job_zip")
-          .eq("id", jobId)
-          .maybeSingle();
-        if (freshJob) saaMileageEnsureForJob(freshJob);
-      }
-    }
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: (e && e.message) || String(e) };
-  }
-}
-
-// appointments.status (appointments_status_check) allows finer-grained
-// values than jobs.status (jobs_status_check) does — the Dispatch Calendar
-// drawer's dropdown offers en_route/on_site/waiting_parts/no_show, none of
-// which jobs.status accepts, so writing the raw appointment status straight
-// into jobs.status throws a check-constraint violation (Round 13 bugfix).
-// This maps each appointment status down to the closest valid job status;
-// status_history below still records the exact appointment-level status
-// (not the mapped one) so technician-timing reporting keeps its detail.
-const SAA_CAL_JOB_STATUS_FROM_APPT_STATUS = {
-  scheduled: "scheduled",
-  en_route: "in_progress",
-  on_site: "in_progress",
-  waiting_parts: "in_progress",
-  completed: "completed",
-  cancelled: "cancelled",
-  no_show: "scheduled",
-};
-
-/** Status change from the Job Details drawer (drives the appointment card color). */
-async function saaCalUpdateAppointmentStatus({ appointmentId, jobId, status }) {
-  try {
-    const { error: aErr } = await _saaClient.from("appointments").update({ status }).eq("id", appointmentId);
-    if (aErr) throw aErr;
-
-    if (jobId) {
-      // Round 6: keep the job's own status (and its per-status timestamp
-      // history, for technician-timing reporting) in sync with EVERY
-      // calendar status change, not just Completed/Cancelled — the Jobs
-      // page reads jobs.status directly, so a status set only here would
-      // otherwise drift from what the calendar shows. Fetch-then-merge
-      // because a jsonb merge isn't expressible through the query builder's
-      // .update() — keep this in sync with saaJobsUpdateJob's copy of the
-      // same logic in jobs-db.js.
-      const jobStatus = SAA_CAL_JOB_STATUS_FROM_APPT_STATUS[status] || status;
-      const { data: current, error: curErr } = await _saaClient
-        .from("jobs")
-        .select("status,status_history")
-        .eq("id", jobId)
+        .insert({
+          job_number: jobNumber,
+          customer_id: customerId,
+          system_id: payload.systemId,
+          job_type: payload.jobType,
+          status: "new",
+          title: payload.title || "",
+          priority: payload.priority || "normal",
+          job_address: payload.jobAddress || null,
+          job_city: payload.jobCity || null,
+          job_state: "TX",
+          job_zip: payload.jobZip || null,
+        })
+        .select("id")
         .single();
-      if (curErr) throw curErr;
-      const patch = { status: jobStatus };
-      if (jobStatus === "completed") patch.completed_date = new Date().toISOString().slice(0, 10);
-      if (jobStatus === "cancelled") patch.completed_date = null;
-      if (current && status !== current.status) {
-        patch.status_history = Object.assign({}, current.status_history || {}, { [status]: new Date().toISOString() });
-      }
-      const { error: jErr } = await _saaClient.from("jobs").update(patch).eq("id", jobId);
       if (jErr) throw jErr;
+      jobId = job.id;
+      systemId = payload.systemId;
+    } else {
+      // New System (an office-typed name, or just "System" as a
+      // placeholder to fill in later from the Job Card) -- created
+      // together with its one permanent Job, per spec.
+      const sysRes = await saaSystemsCreateWithJob(
+        customerId,
+        { systemName: payload.systemName || "System", systemType: payload.systemType || null, manufacturer: payload.manufacturer || null, tonnage: payload.tonnage || null },
+        {
+          jobType: payload.jobType, title: payload.title || "", priority: payload.priority || "normal",
+          jobAddress: payload.jobAddress || null, jobCity: payload.jobCity || null, jobZip: payload.jobZip || null,
+          customerFirstName: firstNameForNumber,
+        }
+      );
+      if (!sysRes.ok) return sysRes;
+      jobId = sysRes.jobId;
+      systemId = sysRes.systemId;
     }
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: _saaCalFriendlyDbError(e) };
-  }
-}
 
-/** Turns a raw Postgres/PostgREST error into something an office user can
- *  act on, instead of leaking constraint/column internals verbatim (Round
- *  13: "clearly say what is causing the error"). Falls back to the raw
- *  message for anything not specifically recognized. */
-function _saaCalFriendlyDbError(e) {
-  const raw = (e && e.message) || String(e);
-  if (/violates check constraint "jobs_status_check"/.test(raw)) {
-    return "That status isn't valid for a job record. Please try again — if this keeps happening, let the office know.";
+    const evRes = await saaEventsCreateForJob(jobId, {
+      eventType: payload.eventType || "service_call",
+      eventStatus: "scheduled",
+      scheduledStart: payload.startDatetime || null,
+      scheduledEnd: payload.endDatetime || null,
+      technicianId: payload.technicianId || null,
+      reason: payload.title || null,
+    });
+    if (!evRes.ok) return evRes;
+
+    // Round 42 Task 118: saaEventsCreateForJob (above) now handles both
+    // the Job-row schedule/technician sync AND the mileage recalculation
+    // itself via _saaEventsSyncJobFromCurrentEvent — this used to be done
+    // here as an in-memory-only saaMileageEnsureForJob call (Task 117),
+    // which computed a mileage number but never actually wrote
+    // scheduled_date/scheduled_time/assigned_technician_id onto the Job
+    // row itself, so a Calendar-created job's own Jobs-List "Scheduled"/
+    // "Technician" columns stayed blank even though mileage looked right.
+
+    return { ok: true, jobId, systemId, eventId: evRes.eventId };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
   }
-  if (/violates check constraint/.test(raw)) {
-    return "That value isn't allowed for this field: " + raw.replace(/^.*constraint "/, "").replace(/".*$/, "").replace(/_/g, " ") + ".";
-  }
-  if (/violates foreign key constraint/.test(raw)) {
-    return "That record is linked to other data and can't be changed that way.";
-  }
-  return raw;
 }
 
 /** Most recent equipment row on file for a customer (Job Details drawer). */
@@ -519,23 +315,4 @@ async function saaCalFetchLatestEquipment(customerId) {
     .limit(1);
   if (error) throw error;
   return (data && data[0]) || null;
-}
-
-/** The "extremely easy" post-job follow-up scheduling flow. */
-async function saaCalCreateFollowUp(payload) {
-  try {
-    const { error } = await _saaClient.from("follow_ups").insert({
-      job_id: payload.jobId,
-      appointment_id: payload.appointmentId || null,
-      follow_up_type: payload.followUpType,
-      due_date: payload.dueDate || null,
-      due_time: payload.dueTime || null,
-      assigned_to: payload.assignedTo || "Office",
-      notes: payload.notes || null,
-    });
-    if (error) throw error;
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: (e && e.message) || String(e) };
-  }
 }

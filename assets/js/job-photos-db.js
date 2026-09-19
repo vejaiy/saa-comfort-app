@@ -36,10 +36,15 @@ async function saaPhotosUpload(jobId, blob, inspectionItemIndex, photoType) {
       .upload(path, blob, { contentType: blob.type || "image/jpeg" });
     if (upErr) throw upErr;
 
+    // Round 42 Task 118: auto-attaches to the Job's current Event (see
+    // saaEventsGetDefaultEventId in events-db.js) -- guarded since this
+    // file is also loaded on pages without events-db.js.
+    const eventId = typeof saaEventsGetDefaultEventId === "function" ? await saaEventsGetDefaultEventId(jobId) : null;
     const { data: row, error: insErr } = await _saaClient
       .from("job_photos")
       .insert({
         job_id: jobId,
+        event_id: eventId,
         storage_path: path,
         inspection_item_index: inspectionItemIndex == null ? null : inspectionItemIndex,
         photo_type: photoType || (inspectionItemIndex == null ? "general" : "inspection"),

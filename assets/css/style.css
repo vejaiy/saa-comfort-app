@@ -313,7 +313,7 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .cal-unscheduled h3 { font-size: .82rem; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); margin-bottom: 8px; }
 .cal-unscheduled .cal-unscheduled-row { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 2px; }
 .cal-unscheduled-empty { color: var(--muted); font-size: .88rem; padding: 4px 0; }
-.cal-unassigned-card { flex: 0 0 auto; width: 190px; background: #fbfcfd; border: 1px solid var(--line); border-left: 4px solid var(--st-scheduled); border-radius: 8px; padding: 8px 10px; cursor: grab; }
+.cal-unassigned-card { flex: 0 0 auto; width: 190px; background: #fbfcfd; border: 1px solid var(--line); border-left: 4px solid var(--evt-scheduled); border-radius: 8px; padding: 8px 10px; cursor: grab; }
 .cal-unassigned-card.priority-emergency { border-left-color: var(--st-cancelled); }
 .cal-unassigned-card.priority-high { border-left-color: var(--st-waiting_parts); }
 .cal-unassigned-card:active { cursor: grabbing; }
@@ -339,13 +339,18 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .appt-card .appt-title { font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .appt-card .appt-sub { opacity: .92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .7rem; }
 .appt-card.dragging { opacity: .35; }
-.appt-card.st-scheduled { background: var(--st-scheduled); color: #3a2c00; }
-.appt-card.st-en_route { background: var(--st-en_route); }
-.appt-card.st-on_site { background: var(--st-on_site); }
-.appt-card.st-waiting_parts { background: var(--st-waiting_parts); }
-.appt-card.st-completed { background: var(--st-completed); }
-.appt-card.st-cancelled { background: var(--st-cancelled); }
-.appt-card.st-no_show { background: var(--st-no_show); }
+/* Round 42 (2026-09-19) Task 117: the Calendar now colors cards by
+   events.event_status, not the old appointments.status -- reuses the
+   --evt-* variables the Job Card's Event History already defined
+   (events_event_status_check's 8 values) rather than a second palette. */
+.appt-card.st-scheduled { background: var(--evt-scheduled); color: #3a2c00; }
+.appt-card.st-confirmed { background: var(--evt-confirmed); }
+.appt-card.st-en_route { background: var(--evt-en_route); }
+.appt-card.st-in_progress { background: var(--evt-in_progress); }
+.appt-card.st-completed { background: var(--evt-completed); }
+.appt-card.st-cancelled { background: var(--evt-cancelled); }
+.appt-card.st-rescheduled { background: var(--evt-rescheduled); }
+.appt-card.st-no_show { background: var(--evt-no_show); }
 
 /* Right-edge handle that lets a dispatcher drag an appointment's end time
    without moving its start time — a thin strip the width of the card so
@@ -380,13 +385,14 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .cal-week-appt .t { font-weight: 800; display: block; }
 .cal-week-appt .n { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-week-appt .tech { display: block; opacity: .85; font-size: .7rem; }
-.cal-week-appt.st-scheduled { background: var(--st-scheduled); color: #3a2c00; }
-.cal-week-appt.st-en_route { background: var(--st-en_route); }
-.cal-week-appt.st-on_site { background: var(--st-on_site); }
-.cal-week-appt.st-waiting_parts { background: var(--st-waiting_parts); }
-.cal-week-appt.st-completed { background: var(--st-completed); }
-.cal-week-appt.st-cancelled { background: var(--st-cancelled); }
-.cal-week-appt.st-no_show { background: var(--st-no_show); }
+.cal-week-appt.st-scheduled { background: var(--evt-scheduled); color: #3a2c00; }
+.cal-week-appt.st-confirmed { background: var(--evt-confirmed); }
+.cal-week-appt.st-en_route { background: var(--evt-en_route); }
+.cal-week-appt.st-in_progress { background: var(--evt-in_progress); }
+.cal-week-appt.st-completed { background: var(--evt-completed); }
+.cal-week-appt.st-cancelled { background: var(--evt-cancelled); }
+.cal-week-appt.st-rescheduled { background: var(--evt-rescheduled); }
+.cal-week-appt.st-no_show { background: var(--evt-no_show); }
 .cal-week-empty { color: var(--muted); font-size: .78rem; padding: 4px 2px; }
 
 /* ---- Month view: traditional calendar grid ---- */
@@ -398,13 +404,14 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .cal-month-daynum { font-size: .8rem; font-weight: 800; color: var(--navy); }
 .cal-month-chips { display: flex; flex-direction: column; gap: 3px; }
 .cal-month-chip { border-radius: 4px; padding: 2px 5px; font-size: .68rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
-.cal-month-chip.st-scheduled { background: var(--st-scheduled); color: #3a2c00; }
-.cal-month-chip.st-en_route { background: var(--st-en_route); }
-.cal-month-chip.st-on_site { background: var(--st-on_site); }
-.cal-month-chip.st-waiting_parts { background: var(--st-waiting_parts); }
-.cal-month-chip.st-completed { background: var(--st-completed); }
-.cal-month-chip.st-cancelled { background: var(--st-cancelled); }
-.cal-month-chip.st-no_show { background: var(--st-no_show); }
+.cal-month-chip.st-scheduled { background: var(--evt-scheduled); color: #3a2c00; }
+.cal-month-chip.st-confirmed { background: var(--evt-confirmed); }
+.cal-month-chip.st-en_route { background: var(--evt-en_route); }
+.cal-month-chip.st-in_progress { background: var(--evt-in_progress); }
+.cal-month-chip.st-completed { background: var(--evt-completed); }
+.cal-month-chip.st-cancelled { background: var(--evt-cancelled); }
+.cal-month-chip.st-rescheduled { background: var(--evt-rescheduled); }
+.cal-month-chip.st-no_show { background: var(--evt-no_show); }
 .cal-month-more { font-size: .68rem; color: var(--muted); padding: 1px 3px; }
 
 /* ---- New Service popup (compact, not a giant form) ---- */

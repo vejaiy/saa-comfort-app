@@ -118,9 +118,12 @@ async function saaBomAddItem(jobDetail, { description, unit, qty }) {
     qty = Number(qty) || 1;
     unit = (unit || "ea").trim() || "ea";
     const existing = jobDetail.manualItems || [];
+    // Round 42 Task 118: auto-attaches to the Job's current Event (see
+    // saaEventsGetDefaultEventId in events-db.js, now loaded on this page).
+    const eventId = typeof saaEventsGetDefaultEventId === "function" ? await saaEventsGetDefaultEventId(jobDetail.id) : null;
     const { data, error } = await _saaClient
       .from("job_materials")
-      .insert({ job_id: jobDetail.id, description, qty, unit, sort_order: existing.length })
+      .insert({ job_id: jobDetail.id, event_id: eventId, description, qty, unit, sort_order: existing.length })
       .select("*")
       .single();
     if (error) throw error;

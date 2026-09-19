@@ -95,11 +95,18 @@ async function saaSystemsFetchByCustomerWithJobs(customerId) {
  *  call — per the spec, a System is never created without a Job, and a
  *  Job is never created without picking (or just having created) a
  *  System first. This is the "+ Add New System" step of the New Job /
- *  +Schedule flow. jobFields lets the caller set job_type/title/etc. on
- *  the new Job at the same time (usually the type of the very first
- *  Event being scheduled against it); the Job itself still needs its
- *  own sequential job_number, generated the same way saaJobsCreateJob
- *  does. Returns { ok:true, systemId, jobId } | { ok:false, error }. */
+ *  +Schedule flow, AND (Round 42 Task 118) the Jobs List's own "+ New
+ *  Job" button (jbSaveNewJob in jobs.js) — that flow used to call the
+ *  older saaJobsCreateJob directly, which never created a System or an
+ *  Event at all, so a job made that way had an empty System section, an
+ *  empty Event History, and — since the Calendar reads from `events`,
+ *  not `jobs`/`appointments` — was invisible on the Dispatch Calendar
+ *  entirely, forever. jobFields accepts the full set of fields either
+ *  caller needs on the new Job (job_type/title/address/priority/
+ *  technician assignment/schedule/notes/linked quote); the Job itself
+ *  still needs its own sequential job_number, generated the same way
+ *  saaJobsCreateJob does. Returns { ok:true, systemId, jobId } |
+ *  { ok:false, error }. */
 async function saaSystemsCreateWithJob(customerId, systemFields, jobFields) {
   try {
     if (!customerId) return { ok: false, error: "A customer is required before a System can be created." };
@@ -146,6 +153,20 @@ async function saaSystemsCreateWithJob(customerId, systemFields, jobFields) {
         job_city: (jobFields && jobFields.jobCity) || null,
         job_state: (jobFields && jobFields.jobState) || "TX",
         job_zip: (jobFields && jobFields.jobZip) || null,
+        priority: (jobFields && jobFields.priority) || "normal",
+        // These four are the legacy per-job schedule/technician columns
+        // (see _saaEventsSyncJobFromCurrentEvent in events-db.js) —
+        // accepted here so a caller building its own Event right after
+        // (see saaEventsCreateForJob) has them already in sync from the
+        // start, same as the Calendar's own New Job flow.
+        assigned_technician_id: (jobFields && jobFields.technicianId) || null,
+        assigned_technician_id_2: (jobFields && jobFields.technicianId2) || null,
+        assigned_technician_id_3: (jobFields && jobFields.technicianId3) || null,
+        scheduled_date: (jobFields && jobFields.scheduledDate) || null,
+        scheduled_time: (jobFields && jobFields.scheduledTime) || null,
+        notes: (jobFields && jobFields.notes) || null,
+        linked_quote_id: (jobFields && jobFields.linkedQuoteId) || null,
+        quoted_amount: (jobFields && jobFields.quotedAmount) || null,
       })
       .select("id")
       .single();

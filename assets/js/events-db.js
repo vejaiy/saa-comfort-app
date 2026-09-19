@@ -14,15 +14,18 @@
    - Per Vijayan's "move financials to Event level" decision (see
      claude/round42-jobs-events-systems-phase1-schema.md), invoices,
      payments, job_materials (BOM), job_photos, and mileage_logs all
-     carry an event_id now, alongside their existing job_id (kept in
-     sync with the Event's own Job — see saaEventsReassignJob below).
-     The actual write-path changes for those five areas are Round 42
-     Task 118, not here.
+     carry an event_id now, alongside their existing job_id. Task 118
+     (done — see saaEventsGetDefaultEventId below) auto-attaches every
+     new one of those five to a Job's "current" Event (per Vijayan's
+     "auto-pick, no new UI" answer) — jobs-db.js/bom-db.js/
+     job-photos-db.js are the actual write sites that call it.
    - The old `appointments` table is left alone/deprecated — this file
-     supersedes it for all NEW scheduling. saaJobsSyncAppointmentSchedule
-     / saaCalUpdateAppointmentSchedule in jobs-db.js/calendar-db.js still
-     exist and still work for now, but Task 117 will point the Dispatch
-     Calendar at events instead.
+     (plus calendar.js/calendar-db.js as of Task 117) supersedes it for
+     all scheduling now. jobs-db.js's saaJobsSyncAppointmentSchedule
+     (the Job Card's OWN direct Technician/Scheduled Date/Time fields,
+     separate from any Event) still exists and still works as its own
+     manual path — see _saaEventsSyncJobFromCurrentEvent's comment below
+     for how that interacts with the Calendar's Event-driven scheduling.
    - "New Events always sort to the top" (spec) means ORDER BY
      scheduled_start DESC at read time — Events are never physically
      reordered, and every fetcher below already sorts that way.
@@ -54,6 +57,29 @@ const SAA_EVENT_STATUS_LABELS = {
   no_show: "No Show",
 };
 const SAA_EVENT_STATUS_OPTIONS = Object.entries(SAA_EVENT_STATUS_LABELS);
+
+// A Job's own job_type still picks from appointment_types (unchanged since
+// before Round 42 — see SAA_JOBS_TYPE_OPTIONS_CURATED in jobs-db.js) so the
+// Jobs List's own type filter/icons keep working exactly as before. This
+// maps that same pick onto the best-fit Event Type (SAA_EVENT_TYPE_OPTIONS
+// above) for a new Job's first Event, since the two vocabularies are close
+// but not identical. Shared by both the Calendar's "+ Schedule" New Job tab
+// (calendar.js) and the Jobs List's own "+ New Job" button (jobs.js) —
+// moved here in Task 118 so both stay in sync from one definition instead
+// of two copies drifting apart.
+const SAA_JOBTYPE_TO_EVENTTYPE = {
+  service_call: "service_call",
+  repair: "repair",
+  diagnostic: "diagnostic",
+  tune_up: "maintenance",
+  estimate: "estimate_visit",
+  manual_j: "other",
+  installation: "installation",
+  follow_up: "follow_up",
+  return_visit: "follow_up",
+  emergency: "service_call",
+  inspection: "inspection",
+};
 
 function saaEventTypeLabel(key) { return SAA_EVENT_TYPE_LABELS[key] || key || "—"; }
 function saaEventStatusLabel(key) { return SAA_EVENT_STATUS_LABELS[key] || key || "—"; }
@@ -116,6 +142,88 @@ async function saaEventsFetchCurrentForJob(jobId) {
   return open || all[0];
 }
 
+/* ============================== Round 42 Task 118: event-level financial data ==============================
+ * Per Vijayan's "auto-pick, no new UI" answer: invoices/payments/BOM/
+ * photos/mileage attach to a Job's "current" Event automatically — a
+ * single-Event Job (still the common case) is unambiguous, and a
+ * multi-Event Job attaches to whichever Event saaEventsFetchCurrentForJob
+ * already treats as current (its most recently scheduled still-open
+ * Event, or its single most recent Event if every Event is closed out —
+ * same definition the Job Detail page's own "current event" concept
+ * uses, so there's exactly one notion of "the current event" across the
+ * app, not two competing ones). No dropdown, no extra step for the
+ * office — if the guess is ever wrong for a multi-Event job, the record
+ * can be re-pointed by hand later (Phase 2 territory, not this pass). */
+
+/** Returns just the id, for callers (invoices/payments/BOM/photos) that
+ *  only need to stamp event_id onto a new row and don't need the rest of
+ *  the Event's fields. null when the Job has no Events at all (shouldn't
+ *  normally happen post-migration, but every System/Job is always
+ *  created with a first Event — see saaSystemsCreateWithJob /
+ *  saaCalScheduleNewJob — so this is just defensive). */
+async function saaEventsGetDefaultEventId(jobId) {
+  try {
+    const current = await saaEventsFetchCurrentForJob(jobId);
+    return current ? current.id : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Keeps a Job's own (legacy, pre-Round-42) `assigned_technician_id[_2/_3]`
+ *  / `scheduled_date` / `scheduled_time` columns in sync with whichever
+ *  Event is now "current" for it, and re-runs mileage for whichever
+ *  technician slot(s) that Event has assigned.
+ *
+ *  Why this exists: those Job columns are what the Jobs List's own
+ *  Scheduled/Technician columns display, and what mileage-db.js has
+ *  always read from (mileage was never actually wired to `appointments`
+ *  or `events` directly — see saaMileageRecalcForJob) — before Round 42,
+ *  the Calendar's own drag-and-drop wrote straight through to these same
+ *  Job columns (the old saaCalUpdateAppointmentSchedule, removed in Task
+ *  117). Task 117 deliberately stopped a drag from touching the Job row
+ *  at all (per spec: an Event's reassignment only ever changes that
+ *  Event), which was correct for Customer/System/history, but as a side
+ *  effect silently orphaned these particular columns — a job's Scheduled/
+ *  Technician columns on the Jobs List, and its mileage, simply stopped
+ *  updating on drag, and a brand-new Calendar-created job never got them
+ *  populated on its own row at all. This restores that sync, but as a
+ *  read-through from the Event (never the other way — an Event's own
+ *  fields are always the source of truth now), and keyed off whichever
+ *  Event is "current" (see saaEventsFetchCurrentForJob) so an edit to an
+ *  old, no-longer-current Event can't clobber a Job's live schedule.
+ *  Best-effort and silent, same philosophy as saaMileageEnsureForJob —
+ *  never blocks or throws back into the Calendar/Job Card action that
+ *  triggered it. */
+async function _saaEventsSyncJobFromCurrentEvent(jobId) {
+  try {
+    if (!jobId) return;
+    const current = await saaEventsFetchCurrentForJob(jobId);
+    if (!current) return;
+
+    const patch = {
+      assigned_technician_id: current.assigned_technician_id || null,
+      assigned_technician_id_2: current.assigned_technician_id_2 || null,
+      assigned_technician_id_3: current.assigned_technician_id_3 || null,
+      scheduled_date: current.scheduled_start ? String(current.scheduled_start).slice(0, 10) : null,
+      scheduled_time: current.scheduled_start ? String(current.scheduled_start).slice(11, 16) : null,
+      updated_at: new Date().toISOString(),
+    };
+    const { data: job, error } = await _saaClient.from("jobs").update(patch).eq("id", jobId).select("*").single();
+    if (error || !job) return;
+
+    if (typeof saaMileageEnsureForJob !== "function") return;
+    // One technician slot is by far the common case; Round 25's
+    // multi-technician support means an Event (like a Job before it) can
+    // have up to three, and each gets its own mileage_logs row/leg-chain.
+    if (job.assigned_technician_id) saaMileageEnsureForJob(job, job.assigned_technician_id);
+    if (job.assigned_technician_id_2) saaMileageEnsureForJob(job, job.assigned_technician_id_2);
+    if (job.assigned_technician_id_3) saaMileageEnsureForJob(job, job.assigned_technician_id_3);
+  } catch (e) {
+    // Best-effort — see function comment above.
+  }
+}
+
 async function saaEventsFetchById(eventId) {
   if (!eventId) return null;
   const [{ data: event, error }, technicians] = await Promise.all([
@@ -165,6 +273,7 @@ async function saaEventsCreateForJob(jobId, fields) {
       .select("id")
       .single();
     if (eErr) throw eErr;
+    await _saaEventsSyncJobFromCurrentEvent(job.id);
     return { ok: true, eventId: event.id, eventNumber };
   } catch (e) {
     return { ok: false, error: _saaEventsFriendlyDbError(e) };
@@ -176,8 +285,12 @@ async function saaEventsCreateForJob(jobId, fields) {
  *  performed, parts used, or a customer signature. Auto-stamps
  *  completed_at the first time event_status flips to Completed — same
  *  convention as saaJobsUpdateJob's completed_date auto-stamp. Never
- *  touches the Event's Job/System/Customer (see saaEventsReassignJob
- *  for that, which is a deliberate, separate action). */
+ *  moves this Event to a different Job/System/Customer (there's no
+ *  "reassign to another Job" action — an Event is fixed to the Job it
+ *  was created under). A status change that could shift which Event now
+ *  counts as this Job's "current" one does read-through to the Job row's
+ *  own schedule/technician columns — see _saaEventsSyncJobFromCurrentEvent
+ *  below and its call site here. */
 async function saaEventsUpdate(eventId, fields) {
   try {
     const patch = Object.assign({}, fields, { updated_at: new Date().toISOString() });
@@ -191,6 +304,17 @@ async function saaEventsUpdate(eventId, fields) {
     }
     const { error } = await _saaClient.from("events").update(patch).eq("id", eventId);
     if (error) throw error;
+    // A status change (e.g. marking the current Event Completed) can
+    // change which Event now counts as "current" for the Job — only
+    // worth the extra round-trip/mileage-recalc when event_status is
+    // actually part of this patch, not on every minor detail edit (work
+    // performed, notes, signature, etc. don't affect which Event is
+    // current, and mileage recalculation hits a rate-limited external
+    // geocoding service, so it's not free to run on every keystroke-save).
+    if (patch.event_status) {
+      const { data: ev } = await _saaClient.from("events").select("job_id").eq("id", eventId).maybeSingle();
+      if (ev && ev.job_id) await _saaEventsSyncJobFromCurrentEvent(ev.job_id);
+    }
     return { ok: true };
   } catch (e) {
     return { ok: false, error: _saaEventsFriendlyDbError(e) };
@@ -227,6 +351,8 @@ async function saaEventsReschedule(eventId, { scheduledStart, scheduledEnd, tech
     }
     const { error } = await _saaClient.from("events").update(patch).eq("id", eventId);
     if (error) throw error;
+    const { data: ev } = await _saaClient.from("events").select("job_id").eq("id", eventId).maybeSingle();
+    if (ev && ev.job_id) await _saaEventsSyncJobFromCurrentEvent(ev.job_id);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: _saaEventsFriendlyDbError(e) };
@@ -247,6 +373,15 @@ async function saaEventsUpdateAssignment({ eventId, technicianId, technicianId2,
     if (scheduledEnd !== undefined) patch.scheduled_end = scheduledEnd || null;
     const { error } = await _saaClient.from("events").update(patch).eq("id", eventId);
     if (error) throw error;
+    // Round 42 Task 118: this is a drag/resize/reassign of an EXISTING
+    // Event — restores the Job-level schedule/technician sync (and the
+    // mileage recalculation that rides on it) that Task 117 intentionally
+    // stopped doing directly against the Job row. See
+    // _saaEventsSyncJobFromCurrentEvent's own comment for why this is a
+    // read-through from the Event rather than the old appointment-era
+    // "the drag writes the Job row itself" behavior.
+    const { data: ev } = await _saaClient.from("events").select("job_id").eq("id", eventId).maybeSingle();
+    if (ev && ev.job_id) await _saaEventsSyncJobFromCurrentEvent(ev.job_id);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: _saaEventsFriendlyDbError(e) };
@@ -280,7 +415,7 @@ async function saaEventsFetchForCalendarRange(startDateStr, endDateStrExclusive)
 
   const jobIds = [...new Set(all.map((e) => e.job_id).filter(Boolean))];
   const { data: jobs, error: jErr } = jobIds.length
-    ? await _saaClient.from("jobs").select("id,job_number,job_type,job_address,job_city").in("id", jobIds)
+    ? await _saaClient.from("jobs").select("id,job_number,job_type,job_address,job_city,title,priority").in("id", jobIds)
     : { data: [], error: null };
   if (jErr) throw jErr;
   const custIds = [...new Set(all.map((e) => e.customer_id).filter(Boolean))];

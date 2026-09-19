@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260921a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260921c">
 <script>
 if (new URLSearchParams(location.search).get('embed') === '1') {
   document.documentElement.classList.add('saa-embed');
@@ -14,9 +14,9 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260921a"></script>
-<script src="../assets/js/supabase-config.js?v=20260921a"></script>
-<script src="../assets/js/auth.js?v=20260921a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260921c"></script>
+<script src="../assets/js/supabase-config.js?v=20260921c"></script>
+<script src="../assets/js/auth.js?v=20260921c"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -65,9 +65,9 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <div class="cal-page-head">
   <div>
     <h1 style="margin-bottom:4px">Dispatch Calendar</h1>
-    <p class="muted" style="margin:0">Who is doing what, where, and when. Drag an appointment to change its time, its technician, or both.</p>
+    <p class="muted" style="margin:0">Who is doing what, where, and when. Drag an event to change its time, its technician, or both.</p>
   </div>
-  <button type="button" class="btn btn-navy" id="cal-new-service-btn">+ New Service</button>
+  <button type="button" class="btn btn-navy" id="cal-new-service-btn">+ Schedule</button>
 </div>
 
 <div class="cal-datebar" style="margin-bottom:14px">
@@ -99,50 +99,95 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <div id="cal-altview-wrap" hidden></div>
 
 <div class="cal-legend">
-  <span><span class="dot" style="background:var(--st-scheduled)"></span>Scheduled</span>
-  <span><span class="dot" style="background:var(--st-en_route)"></span>En Route</span>
-  <span><span class="dot" style="background:var(--st-on_site)"></span>On Site</span>
-  <span><span class="dot" style="background:var(--st-waiting_parts)"></span>Waiting for Parts</span>
-  <span><span class="dot" style="background:var(--st-completed)"></span>Completed</span>
-  <span><span class="dot" style="background:var(--st-cancelled)"></span>Cancelled</span>
-  <span><span class="dot" style="background:var(--st-no_show)"></span>No Show</span>
+  <span><span class="dot" style="background:var(--evt-scheduled)"></span>Scheduled</span>
+  <span><span class="dot" style="background:var(--evt-confirmed)"></span>Confirmed</span>
+  <span><span class="dot" style="background:var(--evt-en_route)"></span>En Route</span>
+  <span><span class="dot" style="background:var(--evt-in_progress)"></span>In Progress</span>
+  <span><span class="dot" style="background:var(--evt-completed)"></span>Completed</span>
+  <span><span class="dot" style="background:var(--evt-cancelled)"></span>Cancelled</span>
+  <span><span class="dot" style="background:var(--evt-rescheduled)"></span>Rescheduled</span>
+  <span><span class="dot" style="background:var(--evt-no_show)"></span>No Show</span>
 </div>
 <p class="muted" style="font-size:.8rem;margin-top:10px">Day view shows technician tracks with full drag-and-drop; Week and Month are quick overviews — click any day in either to jump to its Day view.</p>
 
-<!-- ============ New Service popup ============ -->
+<!-- ============ "+ Schedule" popup (Round 42, 2026-09-19: New Job /
+     Existing Job tabs, per the Customer -> System -> Job -> Event model —
+     "New Job" creates a Job (and, if needed, its System) with a first
+     Event; "Existing Job" finds an already-open Job and adds a new Event
+     under it, which is how a repeat visit is supposed to happen now
+     instead of creating a whole new Job every time. ============ -->
 <div class="modal-overlay" id="cal-newsvc-modal" hidden>
   <div class="modal-card cal-newsvc-card">
-    <h3>New Service</h3>
-    <div class="field cal-cust-search-wrap">
-      <label>Customer</label>
-      <input type="text" id="ns-cust-search" placeholder="Type a name or phone&hellip; (e.g. Smith)" autocomplete="off">
-      <div class="cal-cust-results" id="ns-cust-results" hidden></div>
-    </div>
-    <div class="cal-selected-cust" id="ns-selected-cust" hidden></div>
+    <h3>Schedule Service</h3>
 
-    <div class="cal-newcust-form" id="ns-newcust-form" hidden>
-      <p class="muted" style="font-size:.8rem;margin:0 0 6px">New customer — not yet in the system:</p>
-      <div class="field-row">
-        <div class="field"><label>First name</label><input type="text" id="ns-newcust-first"></div>
-        <div class="field"><label>Last name</label><input type="text" id="ns-newcust-last"></div>
-      </div>
-      <div class="field-row">
-        <div class="field"><label>Phone</label><input type="tel" id="ns-newcust-phone" placeholder="713-555-1234"></div>
-        <div class="field"><label>Address</label><input type="text" id="ns-newcust-address" placeholder="123 Main St"></div>
-      </div>
-      <div class="field-row">
-        <div class="field"><label>City</label><input type="text" id="ns-newcust-city"></div>
-        <div class="field"><label>ZIP</label><input type="text" id="ns-newcust-zip"></div>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:2px">
-        <button type="button" class="btn btn-navy btn-sm" id="ns-newcust-use-btn">Use This Customer</button>
-        <button type="button" class="btn btn-ghost btn-sm" id="ns-newcust-cancel-btn">Back to Search</button>
-      </div>
+    <div class="cal-view-toggle" id="ns-tab-toggle" style="margin-bottom:12px">
+      <button type="button" class="cal-view-btn active" data-tab="new">New Job</button>
+      <button type="button" class="cal-view-btn" data-tab="existing">Existing Job</button>
     </div>
 
-    <div class="field" style="margin-top:10px">
-      <label>Service type</label>
-      <div class="cal-type-grid" id="ns-type-grid"></div>
+    <div id="ns-tab-new">
+      <div class="field cal-cust-search-wrap">
+        <label>Customer</label>
+        <input type="text" id="ns-cust-search" placeholder="Type a name or phone&hellip; (e.g. Smith)" autocomplete="off">
+        <div class="cal-cust-results" id="ns-cust-results" hidden></div>
+      </div>
+      <div class="cal-selected-cust" id="ns-selected-cust" hidden></div>
+
+      <div class="cal-newcust-form" id="ns-newcust-form" hidden>
+        <p class="muted" style="font-size:.8rem;margin:0 0 6px">New customer — not yet in the system:</p>
+        <div class="field-row">
+          <div class="field"><label>First name</label><input type="text" id="ns-newcust-first"></div>
+          <div class="field"><label>Last name</label><input type="text" id="ns-newcust-last"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Phone</label><input type="tel" id="ns-newcust-phone" placeholder="713-555-1234"></div>
+          <div class="field"><label>Address</label><input type="text" id="ns-newcust-address" placeholder="123 Main St"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>City</label><input type="text" id="ns-newcust-city"></div>
+          <div class="field"><label>ZIP</label><input type="text" id="ns-newcust-zip"></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:2px">
+          <button type="button" class="btn btn-navy btn-sm" id="ns-newcust-use-btn">Use This Customer</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="ns-newcust-cancel-btn">Back to Search</button>
+        </div>
+      </div>
+
+      <!-- Every Job needs a System (Customer -> System -> Job). Defaults
+           to "+ Add New System" -- picking one this customer already has
+           on file instead attaches this new Job directly to it, with a
+           duplicate-open-job warning below (spec: duplicate detection is
+           scoped to Customer+System, not job type). -->
+      <div class="field" id="ns-system-wrap" hidden>
+        <label>System</label>
+        <select id="ns-system-select"></select>
+        <div class="cal-newcust-form" id="ns-newsystem-fields" style="margin-top:8px">
+          <p class="muted" style="font-size:.8rem;margin:0 0 6px">New system — name/manufacturer optional, can be filled in later from the Job Card:</p>
+          <div class="field-row">
+            <div class="field"><label>System Name</label><input type="text" id="ns-sys-name" placeholder="e.g. Upstairs 3-Ton"></div>
+            <div class="field"><label>Manufacturer</label><input type="text" id="ns-sys-manufacturer"></div>
+          </div>
+        </div>
+        <div class="muted" id="ns-system-warning" style="font-size:.8rem;color:#b3261e;margin-top:6px"></div>
+      </div>
+
+      <div class="field" style="margin-top:10px">
+        <label>Service type</label>
+        <div class="cal-type-grid" id="ns-type-grid"></div>
+      </div>
+    </div>
+
+    <div id="ns-tab-existing" hidden>
+      <div class="field cal-cust-search-wrap">
+        <label>Search by customer, phone, job #, or system</label>
+        <input type="text" id="ns-job-search" placeholder="Type to search&hellip;" autocomplete="off">
+        <div class="cal-cust-results" id="ns-job-results" hidden></div>
+      </div>
+      <div class="cal-selected-cust" id="ns-selected-job" hidden></div>
+      <div class="field">
+        <label>Event type</label>
+        <select id="nsx-event-type"></select>
+      </div>
     </div>
 
     <div class="field">
@@ -155,7 +200,7 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
       <div class="field"><label>Time</label><input type="time" id="ns-time"></div>
     </div>
 
-    <div class="field">
+    <div class="field" id="ns-priority-wrap">
       <label>Priority</label>
       <div class="cal-priority-row" id="ns-priority-row"></div>
     </div>
@@ -220,11 +265,12 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
     <h4 style="margin-top:8px">Status</h4>
     <select id="drawer-status-select">
           <option value="scheduled">🟡 Scheduled</option>
-          <option value="en_route">🔵 En Route</option>
-          <option value="on_site">🟣 On Site</option>
-          <option value="waiting_parts">🟠 Waiting for Parts</option>
+          <option value="confirmed">🔵 Confirmed</option>
+          <option value="en_route">🚚 En Route</option>
+          <option value="in_progress">🟣 In Progress</option>
           <option value="completed">🟢 Completed</option>
           <option value="cancelled">🔴 Cancelled</option>
+          <option value="rescheduled">🟠 Rescheduled</option>
           <option value="no_show">⚫ No Show</option>
     </select>
   </div>
@@ -237,7 +283,7 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
   <div class="drawer-section">
     <div class="cal-drawer-actions">
       <button type="button" class="btn btn-ghost btn-sm" id="drawer-reschedule-btn">Reschedule / Assign</button>
-      <button type="button" class="btn btn-outline-danger btn-sm" id="drawer-cancel-btn" style="border-color:var(--danger);color:var(--danger)">Cancel Appointment</button>
+      <button type="button" class="btn btn-outline-danger btn-sm" id="drawer-cancel-btn" style="border-color:var(--danger);color:var(--danger)">Cancel Event</button>
     </div>
 
     <div class="cal-followup-box" id="cal-followup-box" hidden>
@@ -642,19 +688,19 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260921a"></script>
-<script src="../assets/js/worksheet.js?v=20260921a"></script>
-<script src="../assets/js/systems-db.js?v=20260921a"></script>
-<script src="../assets/js/events-db.js?v=20260921a"></script>
-<script src="../assets/js/calendar-db.js?v=20260921a"></script>
-<script src="../assets/js/jobs-db.js?v=20260921a"></script>
-<script src="../assets/js/job-photos-db.js?v=20260921a"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260921a"></script>
-<script src="../assets/js/camera-capture.js?v=20260921a"></script>
-<script src="../assets/js/print-invoice.js?v=20260921a"></script>
-<script src="../assets/js/maps-config.js?v=20260921a"></script>
-<script src="../assets/js/mileage-db.js?v=20260921a"></script>
-<script src="../assets/js/jobs.js?v=20260921a"></script>
-<script src="../assets/js/calendar.js?v=20260921a"></script>
+<script src="../assets/js/pricing-data.js?v=20260921c"></script>
+<script src="../assets/js/worksheet.js?v=20260921c"></script>
+<script src="../assets/js/systems-db.js?v=20260921c"></script>
+<script src="../assets/js/events-db.js?v=20260921c"></script>
+<script src="../assets/js/calendar-db.js?v=20260921c"></script>
+<script src="../assets/js/jobs-db.js?v=20260921c"></script>
+<script src="../assets/js/job-photos-db.js?v=20260921c"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260921c"></script>
+<script src="../assets/js/camera-capture.js?v=20260921c"></script>
+<script src="../assets/js/print-invoice.js?v=20260921c"></script>
+<script src="../assets/js/maps-config.js?v=20260921c"></script>
+<script src="../assets/js/mileage-db.js?v=20260921c"></script>
+<script src="../assets/js/jobs.js?v=20260921c"></script>
+<script src="../assets/js/calendar.js?v=20260921c"></script>
 </body>
 </html>
