@@ -627,3 +627,109 @@ function _saaEventsFriendlyDbError(e) {
   }
   return raw;
 }
+
+/** Round 42 Task 122: per-Event quote linking -- mirrors saaJobsLinkQuote
+ *  (jobs-db.js) but writes events.linked_quote_id instead of the Job's own
+ *  linked_quote_id, and stamps the two-way link on quotes.event_id (added
+ *  by the Round 42 Task 121 migration) rather than quotes.job_id. Per
+ *  Vijayan: "Per-Event quote linking" -- each Event gets its own linked
+ *  Quote, separate from (and in addition to) the Job's own Quote link. */
+async function saaEventsLinkQuote(eventId, quoteId) {
+  try {
+    const { data: quote, error: qErr } = await _saaClient
+      .from("quotes")
+      .select("total,material_cost,labor_cost,other_cost")
+      .eq("id", quoteId)
+      .single();
+    if (qErr) throw qErr;
+    const { error } = await _saaClient
+      .from("events")
+      .update({ linked_quote_id: quoteId, quoted_amount: quote.total || 0, updated_at: new Date().toISOString() })
+      .eq("id", eventId);
+    if (error) throw error;
+    // Keep the link two-way, same pattern as saaJobsLinkQuote's own quotes.job_id stamp.
+    await _saaClient.from("quotes").update({ event_id: eventId }).eq("id", quoteId);
+    // material_cost/labor_cost/other_cost are null on quotes saved before
+    // those columns existed -- callers should treat a null here as "no
+    // breakdown available" rather than a real $0 (same caveat as saaJobsLinkQuote).
+    return {
+      ok: true,
+      quotedAmount: quote.total || 0,
+      materialCost: quote.material_cost,
+      laborCost: quote.labor_cost,
+      otherCost: quote.other_cost,
+    };
+  } catch (e) {
+    return { ok: false, error: _saaEventsFriendlyDbError(e) };
+  }
+}
+
+/** The reverse of saaEventsLinkQuote -- clears the Event's link to a Quote
+ *  without touching its own Quoted Amount (a separately-editable field the
+ *  office may have already adjusted) and without deleting the quote
+ *  itself. Frees the quote's own event_id back to null (mirrors
+ *  saaJobsUnlinkQuote's cleanup of quotes.job_id) so it's available to
+ *  link to a different event, or this same one again, later. */
+async function saaEventsUnlinkQuote(eventId, quoteId) {
+  try {
+    const { error } = await _saaClient
+      .from("events")
+      .update({ linked_quote_id: null, updated_at: new Date().toISOString() })
+      .eq("id", eventId);
+    if (error) throw error;
+    if (quoteId) {
+      await _saaClient.from("quotes").update({ event_id: null }).eq("id", quoteId).eq("event_id", eventId);
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: _saaEventsFriendlyDbError(e) };
+  }
+}
+
+/** Fetches the Event's most recent invoice, or creates a Draft one if none
+ *  exists yet -- mirrors saaJobsGetOrCreateInvoice (jobs-db.js) but keyed
+ *  on event_id, so each Event gets its own Invoice/Payment history rather
+ *  than sharing the Job's. amount defaults to the Event's own Approved
+ *  Amount, falling back to its own Quoted Amount (both per-Event columns
+ *  as of the Round 42 Task 121 migration), so "Generate Invoice" on the
+ *  Event modal works with one click, same as the Job Card. Events already
+ *  carry their own customer_id (stamped at creation -- see
+ *  saaEventsCreateForJob above), so no join back to the parent Job is
+ *  needed here. Relies on jobs-db.js's _saaJobsNextInvoiceNumber /
+ *  _saaCustomerFirstName (plain global functions, script-order-independent
+ *  as long as this isn't called before jobs-db.js has finished loading --
+ *  true everywhere this is used, i.e. after the page's initial load). */
+async function saaEventsGetOrCreateInvoice(event) {
+  try {
+    const { data: existing, error: findErr } = await _saaClient
+      .from("invoices")
+      .select("*")
+      .eq("event_id", event.id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (findErr) throw findErr;
+    if (existing && existing.length) return { ok: true, invoice: existing[0], created: false };
+
+    const amount = Number(event.approved_amount || event.quoted_amount || 0);
+    const firstNameForNumber = event.customer ? event.customer.first_name : await _saaCustomerFirstName(event.customer_id);
+    const invoiceNumber = await _saaJobsNextInvoiceNumber(firstNameForNumber);
+    const { data: created, error: createErr } = await _saaClient
+      .from("invoices")
+      .insert({
+        invoice_number: invoiceNumber,
+        job_id: event.job_id || null,
+        event_id: event.id,
+        quote_id: event.linked_quote_id || null,
+        customer_id: event.customer_id,
+        amount_total: amount,
+        status: "draft",
+        due_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+      })
+      .select("*")
+      .single();
+    if (createErr) throw createErr;
+    return { ok: true, invoice: created, created: true };
+  } catch (e) {
+    return { ok: false, error: _saaEventsFriendlyDbError(e) };
+  }
+}

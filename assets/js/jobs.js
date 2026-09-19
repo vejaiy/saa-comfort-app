@@ -27,6 +27,29 @@ let _jbEventModalMode = null; // "create" | "edit" -- which flow jb-event-modal 
 let _jbEventModalTarget = null; // the Event object being edited, or null in "create" mode
 let _jbEventCompletedAtOpen = { date: "", time: "" }; // Round 42 Task 120: change-detection so Save doesn't re-stamp an unedited (possibly estimated) Completed Time -- same idea as job._jbCompletedTimeAtOpen
 
+/* Round 42 Task 121-124: per-Event full working controls (Quote/
+ * Financials/Mileage/Photos/Receipts/Invoice & Payment/Inspection/BOM),
+ * mirroring the Job Card's own "jb*"/"_jb*" state one level down, scoped to
+ * whichever ONE Event is open in jb-event-modal (_jbEventModalTarget above)
+ * rather than the whole Job. Per Vijayan: "event is once a full job ...
+ * all information and control for old job should be passed to that
+ * particular event." Mileage/Photos/Receipts/Invoice & Payment/Inspection/
+ * BOM all need a real event_id to attach to, so they render a "Save this
+ * Event first" placeholder in create mode and go fully live once the
+ * Event has been saved once (same as the Job Card's own sections are only
+ * ever shown after a Job already exists) -- Quote linking and Financials
+ * don't need that wait, since they're either plain columns flushed via the
+ * same create-then-follow-up-patch pattern jbSaveEventModal already uses
+ * for Notes/Signature (detailFields), or (Quote) deferred via
+ * _jbePendingQuote below and applied the moment the Event is created. */
+let _jbeCurrentInvoice = null; // the open Event's own current Invoice (invoices.event_id)
+let _jbeCurrentPayments = [];
+let _jbePhotos = []; // every job_photos row for the open EVENT (general + receipts + inspection-linked)
+let _jbeInspectionResults = []; // [{index, item, checked}] for the open Event's own separate checklist
+let _jbePendingQuote = null; // a quote picked before the Event has been saved yet (create mode) -- linked on Save
+let _jbeMileageAtOpen = { primary: "", 2: "", 3: "" }; // change-detection for the Event modal's Mileage fields, same idea as job._jbMileageMilesAtOpen
+let _jbInspModalTarget = "job"; // "job" | "event" -- which one the shared jb-inspection-modal is currently open for (see jbOpenInspectionModal/jbeOpenInspectionModal)
+
 function _jbToast(msg, isError) {
   const el = document.getElementById("jb-toast");
   el.textContent = msg;
@@ -724,6 +747,164 @@ function jbUpdateInvoiceQuoteFlag() {
   flag.textContent = `⚠️ Invoice ${diff > 0 ? "+" : "−"}${fmtMoney(Math.abs(diff))} vs ${basisLabel}`;
 }
 
+/* ============================== Round 42 Task 124: Event modal — Financials ==============================
+ * Direct mirror of jbComputeProfit/jbUpdateInvoiceQuoteFlag above, scoped
+ * to the Event modal's own jbe-* fields and _jbeCurrentInvoice instead of
+ * the Job Card's jbd-* fields / _jbCurrentInvoice -- see the per-Event state comment
+ * near the top of this file. Works in both create and edit mode (these are
+ * plain fields, not a separate DB row -- see jbSaveEventModal). */
+function jbeComputeProfit() {
+  const material = parseFloat(document.getElementById("jbe-cost-material").value) || 0;
+  const labor = parseFloat(document.getElementById("jbe-cost-labor").value) || 0;
+  const other = parseFloat(document.getElementById("jbe-cost-other").value) || 0;
+  const approved = parseFloat(document.getElementById("jbe-approved").value) || 0;
+  const quoted = parseFloat(document.getElementById("jbe-quoted").value) || 0;
+  const totalActual = material + labor + other;
+  const base = approved || quoted || 0;
+  const costsEntered = material > 0 || labor > 0;
+  if (!costsEntered) {
+    document.getElementById("jbe-profit-box").innerHTML = `
+      <div class="jb-profit-row"><span>Total Actual Cost</span><strong>${fmtMoney(totalActual)}</strong></div>
+      <div class="jb-profit-row"><span>Gross Profit</span><strong class="jb-pending">Pending actual costs</strong></div>
+      <div class="jb-profit-row"><span>Gross Margin %</span><strong class="jb-pending">&mdash;</strong></div>`;
+    jbeUpdateInvoiceQuoteFlag();
+    return;
+  }
+  const profit = base - totalActual;
+  const marginPct = base > 0 ? (profit / base) * 100 : 0;
+  document.getElementById("jbe-profit-box").innerHTML = `
+    <div class="jb-profit-row"><span>Total Actual Cost</span><strong>${fmtMoney(totalActual)}</strong></div>
+    <div class="jb-profit-row"><span>Gross Profit</span><strong class="${profit < 0 ? "jb-negative" : ""}">${fmtMoney(profit)}</strong></div>
+    <div class="jb-profit-row"><span>Gross Margin %</span><strong class="${marginPct < 0 ? "jb-negative" : ""}">${marginPct.toFixed(1)}%</strong></div>`;
+  jbeUpdateInvoiceQuoteFlag();
+}
+
+function jbeUpdateInvoiceQuoteFlag() {
+  const flag = document.getElementById("jbe-invoice-quote-flag");
+  const quotedEl = document.getElementById("jbe-quoted");
+  const approvedEl = document.getElementById("jbe-approved");
+  if (!flag || !quotedEl) return;
+  const approved = approvedEl ? parseFloat(approvedEl.value) || 0 : 0;
+  const quoted = approved || parseFloat(quotedEl.value) || 0;
+  if (!_jbeCurrentInvoice || !quoted) {
+    flag.hidden = true;
+    return;
+  }
+  const invoiceAmt = Number(_jbeCurrentInvoice.amount_total || 0);
+  const diff = invoiceAmt - quoted;
+  if (Math.abs(diff) < 0.01) {
+    flag.hidden = true;
+    return;
+  }
+  flag.hidden = false;
+  flag.className = "jb-badge jb-flag-mismatch";
+  const basisLabel = approved ? "Approved" : "Quote";
+  flag.textContent = `⚠️ Invoice ${diff > 0 ? "+" : "−"}${fmtMoney(Math.abs(diff))} vs ${basisLabel}`;
+}
+
+/* ============================== Round 42 Task 124: Event modal — Quote linking ==============================
+ * Per-Event quote linking (Vijayan: "Per-Event quote linking") -- direct
+ * mirror of jbRenderQuoteSection/jbSearchCustomerQuotes below, scoped to
+ * the open Event (saaEventsLinkQuote/saaEventsUnlinkQuote in events-db.js)
+ * instead of the Job. Unlike Mileage/Photos/Invoice/BOM further down, this
+ * works even in CREATE mode -- a quote picked before the Event has been
+ * saved yet is held in _jbePendingQuote and linked the moment
+ * jbSaveEventModal creates the row. */
+async function jbeRenderQuoteSection(event) {
+  const linkedBox = document.getElementById("jbe-quote-linked");
+  const searchWrap = document.getElementById("jbe-quote-search-wrap");
+  const linkedQuote = (event && event.linkedQuote) || _jbePendingQuote;
+  const linkedId = (event && event.linked_quote_id) || (_jbePendingQuote ? _jbePendingQuote.id : null);
+  if (linkedId && linkedQuote) {
+    linkedBox.hidden = false;
+    searchWrap.hidden = true;
+    linkedBox.innerHTML = `Linked to Quote <strong>${linkedQuote.quote_number || "—"}</strong> (${linkedQuote.quote_type || ""}) &mdash; ${fmtMoney(linkedQuote.total || 0)}
+      <button type="button" class="btn btn-ghost btn-sm" id="jbe-unlink-quote-btn" style="margin-left:8px">Change</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="jbe-remove-quote-btn" style="margin-left:4px">Remove Quotation</button>`;
+    document.getElementById("jbe-unlink-quote-btn").addEventListener("click", () => {
+      linkedBox.hidden = true;
+      searchWrap.hidden = false;
+    });
+    document.getElementById("jbe-remove-quote-btn").addEventListener("click", async () => {
+      const proceed = await saaConfirm(
+        `Remove the link to Quote ${linkedQuote.quote_number || "this quote"}? The quote itself won't be deleted, and Quoted Amount stays as-is -- only the connection between this event and that quote is cleared.`,
+        { title: "Remove Quotation", okLabel: "Remove Link" }
+      );
+      if (!proceed) return;
+      if (event && event.id) {
+        const res = await saaEventsUnlinkQuote(event.id, event.linked_quote_id);
+        if (!res.ok) { _jbToast(res.error, true); return; }
+        event.linked_quote_id = null;
+        event.linkedQuote = null;
+      }
+      _jbePendingQuote = null;
+      jbeRenderQuoteSection(event);
+      _jbToast("Quotation link removed.");
+    });
+  } else {
+    linkedBox.hidden = true;
+    searchWrap.hidden = false;
+  }
+}
+
+async function jbeSearchCustomerQuotes(query) {
+  const job = _jbCurrentJob;
+  if (!job) return;
+  const quotes = await saaJobsFetchCustomerQuotes(job.customer_id, job.customer && job.customer.phone);
+  const q = (query || "").toLowerCase();
+  const matches = q ? quotes.filter((qt) => (qt.quote_number || "").toLowerCase().includes(q) || (qt.quote_type || "").toLowerCase().includes(q)) : quotes;
+  const filtered = matches.slice(0, 5);
+  const box = document.getElementById("jbe-quote-results");
+  if (!filtered.length) {
+    box.innerHTML = `<div class="muted" style="padding:8px;font-size:.82rem">No saved quotes found for this customer.</div>`;
+    box.hidden = false;
+    return;
+  }
+  box.innerHTML = filtered.map((qt) => `
+    <div class="cal-cust-result" data-id="${qt.id}">
+      <strong>${qt.quote_number || "(no #)"}</strong> &middot; ${qt.quote_type || ""} &middot; ${fmtMoney(qt.total || 0)}
+    </div>`).join("");
+  box.hidden = false;
+  box.querySelectorAll(".cal-cust-result").forEach((el) => {
+    el.addEventListener("click", async () => {
+      const quote = filtered.find((f) => f.id === el.dataset.id);
+      const event = _jbEventModalTarget;
+      let res;
+      if (event && event.id) {
+        res = await saaEventsLinkQuote(event.id, el.dataset.id);
+      } else {
+        // Not saved yet -- defer the actual DB link until Save Event
+        // creates the row (see jbSaveEventModal's create branch), same
+        // idea as Notes/Signature/Financials only being written on Save
+        // for a brand-new Event.
+        res = { ok: true, quotedAmount: quote.total || 0, materialCost: quote.material_cost, laborCost: quote.labor_cost, otherCost: quote.other_cost };
+        _jbePendingQuote = quote;
+      }
+      if (!res.ok) { _jbToast(res.error, true); return; }
+      if (event) { event.linked_quote_id = el.dataset.id; event.linkedQuote = quote; }
+      document.getElementById("jbe-quoted").value = res.quotedAmount || 0;
+      const approvedEl = document.getElementById("jbe-approved");
+      if (!parseFloat(approvedEl.value)) approvedEl.value = res.quotedAmount || 0;
+      if (res.materialCost != null || res.laborCost != null || res.otherCost != null) {
+        document.getElementById("jbe-cost-material").value = res.materialCost || 0;
+        document.getElementById("jbe-cost-labor").value = res.laborCost || 0;
+        document.getElementById("jbe-cost-other").value = res.otherCost || 0;
+      }
+      jbeComputeProfit();
+      // Auto-populate Service Address the same as the Job Card's own
+      // quote-pick flow (jbSearchCustomerQuotes below), only when still blank.
+      const addrEl = document.getElementById("jbe-address");
+      if (!addrEl.value.trim()) addrEl.value = quote.job_address || (job.customer && job.customer.billing_address) || "";
+      const cityEl = document.getElementById("jbe-city");
+      if (!cityEl.value.trim() && job.customer && job.customer.billing_city) cityEl.value = job.customer.billing_city;
+      const zipEl = document.getElementById("jbe-zip");
+      if (!zipEl.value.trim() && job.customer && job.customer.billing_zip) zipEl.value = job.customer.billing_zip;
+      jbeRenderQuoteSection(event);
+      box.hidden = true;
+    });
+  });
+}
+
 async function jbRenderQuoteSection(job) {
   const linkedBox = document.getElementById("jbd-quote-linked");
   const searchWrap = document.getElementById("jbd-quote-search-wrap");
@@ -1074,6 +1255,173 @@ function jbRenderInvoiceBox(job, invoice, payments) {
   jbUpdateInvoiceQuoteFlag();
 }
 
+/* ============================== Round 42 Task 124: Event modal — Invoice & Payment ==============================
+ * Direct mirror of jbRenderInvoiceBox above, scoped to the open Event's OWN
+ * Invoice/Payment history (invoices.event_id / saaEventsGetOrCreateInvoice
+ * in events-db.js) instead of the Job's -- per Vijayan: "Events will have
+ * its own ... invoices, print invoice, record payment ... it will have its
+ * own working control." Needs a real event_id (an already-SAVED Event) --
+ * shows a "Save this Event first" placeholder otherwise, same as
+ * Mileage/Photos/BOM further down. */
+function jbeRenderInvoiceBox(event, invoice, payments) {
+  const box = document.getElementById("jbe-invoice-box");
+  if (!event || !event.id) {
+    box.innerHTML = `<span class="muted" style="font-size:.85rem">Save this Event first, then generate its Invoice.</span>`;
+    return;
+  }
+  if (!invoice) {
+    box.innerHTML = `<button type="button" class="btn btn-navy btn-sm" id="jbe-gen-invoice-btn">Generate Invoice</button>
+      <span class="jb-badge jb-invstatus-none" style="margin-left:8px">Not Invoiced</span>`;
+    document.getElementById("jbe-gen-invoice-btn").addEventListener("click", async () => {
+      const res = await saaEventsGetOrCreateInvoice(event);
+      if (res.ok) {
+        _jbeCurrentInvoice = res.invoice;
+        _jbeCurrentPayments = [];
+        jbeRenderInvoiceBox(event, res.invoice, []);
+        _jbToast("Invoice generated.");
+      } else {
+        _jbToast(res.error, true);
+      }
+    });
+    jbeUpdateInvoiceQuoteFlag();
+    return;
+  }
+  const paid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const paymentStatus = saaJobsPaymentStatus(invoice, paid, payments.length > 0);
+  const paymentsHtml = payments.length
+    ? payments.map((p) => `<div class="jb-payment-row">${_jbFormatDate(p.payment_date)} &middot; ${(p.method || "").replace(/^\w/, (c) => c.toUpperCase())} &middot; ${fmtMoney(Number(p.amount || 0))}</div>`).join("")
+    : `<div class="muted" style="font-size:.8rem">No payments recorded yet.</div>`;
+
+  const quoteBasis = Number(event.approved_amount || event.quoted_amount || 0);
+  const actualBasis = Number(event.actual_material_cost || 0) + Number(event.actual_labor_cost || 0) + Number(event.other_cost || 0);
+  const syncBtnHtml = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+      <button type="button" class="btn btn-ghost btn-sm" id="jbe-inv-sync-quote-btn"${quoteBasis > 0 ? "" : " disabled"}>Use Quoted Amount (${fmtMoney(quoteBasis)})</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="jbe-inv-sync-actual-btn"${actualBasis > 0 ? "" : " disabled"}>Use Actual Amount (${fmtMoney(actualBasis)})</button>
+    </div>`;
+
+  const discount = Number(invoice.discount || 0);
+  const otherCharges = Number(invoice.additional_charges || 0);
+
+  box.innerHTML = `
+    <div class="field-row">
+      <div class="field"><label>Invoice #</label><input type="text" value="${invoice.invoice_number || ""}" disabled></div>
+      <div class="field"><label>Invoice Status</label><select id="jbe-inv-status">${_jbOptionsHtml(SAA_INVOICE_STATUS_OPTIONS, invoice.status)}</select></div>
+    </div>
+    <div class="field"><label>Amount</label><input type="number" step="0.01" id="jbe-inv-amount" value="${invoice.amount_total || 0}"></div>
+    ${syncBtnHtml}
+    <div class="field-row" style="margin-top:8px">
+      <div class="field"><label>Discount</label><input type="number" step="0.01" id="jbe-inv-discount" value="${discount || ""}" placeholder="0.00"></div>
+      <div class="field"><label>Other Costs</label><input type="number" step="0.01" id="jbe-inv-other" value="${otherCharges || ""}" placeholder="0.00"></div>
+    </div>
+    <div class="jb-profit-row" id="jbe-inv-total-row" style="margin-top:4px"><span>Total</span><strong id="jbe-inv-total-display">${fmtMoney(saaJobsInvoiceTotalDue(invoice))}</strong></div>
+    <div style="display:flex;gap:8px;margin:10px 0 10px">
+      <button type="button" class="btn btn-ghost btn-sm" id="jbe-inv-save-btn">Update Invoice</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="jbe-inv-print-btn">Print Invoice</button>
+      <span class="jb-badge jb-pay-${paymentStatus}">${_jbPaymentLabel[paymentStatus]}</span>
+    </div>
+    <div class="jb-payments-list">${paymentsHtml}</div>
+    <div class="field-row" style="margin-top:8px">
+      <div class="field"><label>Payment Amount</label><input type="number" step="0.01" min="0" id="jbe-pay-amount" placeholder="0.00"></div>
+      <div class="field"><label>Date</label><input type="date" id="jbe-pay-date" value="${new Date().toISOString().slice(0, 10)}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Method</label><select id="jbe-pay-method">
+        <option value="cash">Cash</option><option value="check">Check</option><option value="card">Card</option>
+        <option value="ach">ACH</option><option value="financing">Financing</option><option value="other">Other</option>
+      </select></div>
+      <div class="field"><label>Reference #</label><input type="text" id="jbe-pay-ref"></div>
+    </div>
+    <button type="button" class="btn btn-navy btn-sm" id="jbe-pay-save-btn">Record Payment</button>
+    <p class="muted" style="font-size:.78rem;margin:4px 0 0">Enter 0 for a no-charge visit (e.g. a free follow-up check) &mdash; this confirms nothing is owed and marks it Paid.</p>
+  `;
+
+  function recalcInvoiceTotal() {
+    const amt = parseFloat(document.getElementById("jbe-inv-amount").value) || 0;
+    const disc = parseFloat(document.getElementById("jbe-inv-discount").value) || 0;
+    const other = parseFloat(document.getElementById("jbe-inv-other").value) || 0;
+    document.getElementById("jbe-inv-total-display").textContent = fmtMoney(amt - disc + other);
+  }
+  ["jbe-inv-amount", "jbe-inv-discount", "jbe-inv-other"].forEach((id) => {
+    document.getElementById(id).addEventListener("input", recalcInvoiceTotal);
+  });
+
+  document.getElementById("jbe-inv-save-btn").addEventListener("click", async () => {
+    const newAmount = parseFloat(document.getElementById("jbe-inv-amount").value) || 0;
+    const newDiscount = parseFloat(document.getElementById("jbe-inv-discount").value) || 0;
+    const newOther = parseFloat(document.getElementById("jbe-inv-other").value) || 0;
+    const res = await saaJobsUpdateInvoice(invoice.id, {
+      status: document.getElementById("jbe-inv-status").value,
+      amount_total: newAmount,
+      discount: newDiscount,
+      additional_charges: newOther,
+    });
+    if (res.ok) {
+      _jbToast("Invoice updated.");
+      invoice.status = document.getElementById("jbe-inv-status").value;
+      invoice.amount_total = newAmount;
+      invoice.discount = newDiscount;
+      invoice.additional_charges = newOther;
+      jbeRenderInvoiceBox(event, invoice, payments);
+    } else _jbToast(res.error, true);
+  });
+  if (quoteBasis > 0) {
+    document.getElementById("jbe-inv-sync-quote-btn").addEventListener("click", () => {
+      document.getElementById("jbe-inv-amount").value = quoteBasis;
+      jbeUpdateInvoiceQuoteFlag();
+      recalcInvoiceTotal();
+    });
+  }
+  if (actualBasis > 0) {
+    document.getElementById("jbe-inv-sync-actual-btn").addEventListener("click", () => {
+      document.getElementById("jbe-inv-amount").value = actualBasis;
+      jbeUpdateInvoiceQuoteFlag();
+      recalcInvoiceTotal();
+    });
+  }
+  document.getElementById("jbe-inv-print-btn").addEventListener("click", () => {
+    const job = _jbCurrentJob || {};
+    printFormalInvoice({
+      invoiceNumber: invoice.invoice_number,
+      issueDate: _jbFormatDate(invoice.issue_date),
+      dueDate: _jbFormatDate(invoice.due_date),
+      status: invoice.status,
+      customer: _jbCustName(job.customer),
+      phone: job.customer && job.customer.phone,
+      address: [event.service_address || job.job_address, event.service_city || job.job_city].filter(Boolean).join(", "),
+      jobTitle: saaEventTypeLabel(event.event_type),
+      description: event.description || event.reason || "",
+      amountTotal: invoice.amount_total,
+      discount: invoice.discount,
+      additionalCharges: invoice.additional_charges,
+      amountPaid: paid,
+      payments,
+    });
+  });
+  document.getElementById("jbe-pay-save-btn").addEventListener("click", async () => {
+    const amount = parseFloat(document.getElementById("jbe-pay-amount").value) || 0;
+    const res = await saaJobsRecordPayment({
+      invoiceId: invoice.id,
+      customerId: event.customer_id,
+      amount,
+      paymentDate: document.getElementById("jbe-pay-date").value,
+      method: document.getElementById("jbe-pay-method").value,
+      referenceNumber: document.getElementById("jbe-pay-ref").value.trim(),
+    });
+    if (res.ok) {
+      const freshPayments = await saaJobsFetchPayments(invoice.id);
+      _jbeCurrentPayments = freshPayments;
+      const freshInvoice = await _saaClient.from("invoices").select("*").eq("id", invoice.id).single();
+      _jbeCurrentInvoice = freshInvoice.data || invoice;
+      jbeRenderInvoiceBox(event, _jbeCurrentInvoice, freshPayments);
+      _jbToast("Payment recorded.");
+    } else {
+      _jbToast(res.error, true);
+    }
+  });
+  jbeUpdateInvoiceQuoteFlag();
+}
+
 /* ============================== Equipment (Condenser / Coil / Furnace) ============================== */
 
 function jbRenderEquipmentBlock(type, label) {
@@ -1286,7 +1634,109 @@ function jbAddReceipt() {
   }, "Add Receipt");
 }
 
+/* ============================== Round 42 Task 124: Event modal — Photos + Receipts ==============================
+ * Direct mirror of jbRenderPhotoGrid/jbAddPhotos/jbRenderReceiptGrid/
+ * jbAddReceipt above, scoped to the open Event's OWN photos (_jbePhotos,
+ * fetched via saaPhotosFetchForEvent) instead of the whole Job's. Needs a
+ * real event_id to attach a photo to (saaPhotosUpload's optional 5th
+ * eventId arg) -- shows a "Save this Event first" placeholder otherwise. */
+function jbeRenderPhotoGrid() {
+  const grid = document.getElementById("jbe-photos-grid");
+  if (!_jbEventModalTarget || !_jbEventModalTarget.id) {
+    grid.innerHTML = `<span class="jb-photo-empty">Save this Event first, then add photos.</span>`;
+    return;
+  }
+  const general = _jbePhotos.filter((p) => p.inspection_item_index == null && p.photo_type !== "receipt");
+  if (!general.length) {
+    grid.innerHTML = `<span class="jb-photo-empty">No photos yet.</span>`;
+    return;
+  }
+  grid.innerHTML = general.map((p) => `
+    <div class="jb-photo-thumb" data-id="${p.id}">
+      <img src="${p.url}" alt="Event photo">
+      <button type="button" class="jb-photo-del" data-id="${p.id}" title="Delete photo">&times;</button>
+    </div>`).join("");
+  grid.querySelectorAll(".jb-photo-del").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const photo = _jbePhotos.find((p) => p.id === btn.dataset.id);
+      if (!photo) return;
+      const res = await saaPhotosDelete(photo);
+      if (res.ok) {
+        _jbePhotos = _jbePhotos.filter((p) => p.id !== photo.id);
+        jbeRenderPhotoGrid();
+      } else {
+        _jbToast(res.error, true);
+      }
+    });
+  });
+}
+
+function jbeAddPhotos() {
+  const event = _jbEventModalTarget;
+  if (!event || !event.id) { _jbToast("Save this Event first, then add photos.", true); return; }
+  saaCamOpen(async (blobs) => {
+    for (const blob of blobs) {
+      const res = await saaPhotosUpload(event.job_id, blob, null, "general", event.id);
+      if (res.ok) _jbePhotos.push(res.photo);
+      else _jbToast(res.error, true);
+    }
+    jbeRenderPhotoGrid();
+    _jbToast(`${blobs.length} photo${blobs.length === 1 ? "" : "s"} added.`);
+  });
+}
+
+function jbeRenderReceiptGrid() {
+  const grid = document.getElementById("jbe-receipts-grid");
+  if (!_jbEventModalTarget || !_jbEventModalTarget.id) {
+    grid.innerHTML = `<span class="jb-photo-empty">Save this Event first, then add receipts.</span>`;
+    return;
+  }
+  const receipts = _jbePhotos.filter((p) => p.photo_type === "receipt");
+  if (!receipts.length) {
+    grid.innerHTML = `<span class="jb-photo-empty">No receipts yet.</span>`;
+    return;
+  }
+  grid.innerHTML = receipts.map((p) => `
+    <div class="jb-photo-thumb" data-id="${p.id}">
+      <img src="${p.url}" alt="Receipt">
+      <button type="button" class="jb-photo-del" data-id="${p.id}" title="Delete receipt">&times;</button>
+    </div>`).join("");
+  grid.querySelectorAll(".jb-photo-del").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const photo = _jbePhotos.find((p) => p.id === btn.dataset.id);
+      if (!photo) return;
+      const res = await saaPhotosDelete(photo);
+      if (res.ok) {
+        _jbePhotos = _jbePhotos.filter((p) => p.id !== photo.id);
+        jbeRenderReceiptGrid();
+      } else {
+        _jbToast(res.error, true);
+      }
+    });
+  });
+}
+
+function jbeAddReceipt() {
+  const event = _jbEventModalTarget;
+  if (!event || !event.id) { _jbToast("Save this Event first, then add receipts.", true); return; }
+  saaCamOpen(async (blobs) => {
+    for (const blob of blobs) {
+      const res = await saaPhotosUpload(event.job_id, blob, null, "receipt", event.id);
+      if (res.ok) _jbePhotos.push(res.photo);
+      else _jbToast(res.error, true);
+    }
+    jbeRenderReceiptGrid();
+    _jbToast(`${blobs.length} receipt${blobs.length === 1 ? "" : "s"} added.`);
+  }, "Add Receipt");
+}
+
 /* ============================== Inspection checklist ============================== */
+/* Round 42 Task 122-124, per Vijayan: "Checklist: give each Event its own
+ * separate checklist" -- rather than building a second copy of this modal,
+ * the ONE existing jb-inspection-modal/jb-insp-list is reused for both the
+ * Job Card's own checklist and whichever Event is open in jb-event-modal;
+ * _jbInspModalTarget (declared near the top of this file) says which one
+ * it's currently showing, and every function below branches on it. */
 
 function _jbInspCount() {
   const total = INSPECTION_ITEMS.length;
@@ -1303,12 +1753,37 @@ function jbRenderInspectionSummary() {
     : `${checked} / ${total} items checked · ${photos} photo${photos === 1 ? "" : "s"}`;
 }
 
+/* Event modal's own equivalent of _jbInspCount/jbRenderInspectionSummary
+ * above -- shows a "Save this Event first" placeholder until the Event has
+ * a real id, same as Mileage/Photos/Invoice/BOM further down. */
+function _jbeInspCount() {
+  const total = INSPECTION_ITEMS.length;
+  const checked = _jbeInspectionResults.filter((r) => r && r.checked).length;
+  const photos = _jbePhotos.filter((p) => p.inspection_item_index != null).length;
+  return { total, checked, photos };
+}
+
+function jbeRenderInspectionSummary() {
+  const el = document.getElementById("jbe-insp-summary");
+  if (!_jbEventModalTarget || !_jbEventModalTarget.id) {
+    el.textContent = "Save this Event first";
+    return;
+  }
+  const { total, checked, photos } = _jbeInspCount();
+  el.textContent = checked === 0 && photos === 0
+    ? "Not started"
+    : `${checked} / ${total} items checked · ${photos} photo${photos === 1 ? "" : "s"}`;
+}
+
 function jbRenderInspectionList() {
+  const isEvent = _jbInspModalTarget === "event";
+  const results = isEvent ? _jbeInspectionResults : _jbInspectionResults;
+  const photos = isEvent ? _jbePhotos : _jbPhotos;
   const list = document.getElementById("jb-insp-list");
   list.innerHTML = INSPECTION_ITEMS.map((item, i) => {
-    const result = _jbInspectionResults.find((r) => r && r.index === i);
+    const result = results.find((r) => r && r.index === i);
     const checked = !!(result && result.checked);
-    const photoCount = _jbPhotos.filter((p) => p.inspection_item_index === i).length;
+    const photoCount = photos.filter((p) => p.inspection_item_index === i).length;
     return `<li data-i="${i}" class="${checked ? "checked" : ""}">
       <input type="checkbox" id="insp-chk-${i}" ${checked ? "checked" : ""}>
       <label for="insp-chk-${i}">${item}</label>
@@ -1319,9 +1794,10 @@ function jbRenderInspectionList() {
   list.querySelectorAll('input[type="checkbox"]').forEach((box) => {
     box.addEventListener("change", () => {
       const i = parseInt(box.closest("li").dataset.i, 10);
-      const existing = _jbInspectionResults.find((r) => r && r.index === i);
+      const arr = isEvent ? _jbeInspectionResults : _jbInspectionResults;
+      const existing = arr.find((r) => r && r.index === i);
       if (existing) existing.checked = box.checked;
-      else _jbInspectionResults.push({ index: i, item: INSPECTION_ITEMS[i], checked: box.checked });
+      else arr.push({ index: i, item: INSPECTION_ITEMS[i], checked: box.checked });
       box.closest("li").classList.toggle("checked", box.checked);
     });
   });
@@ -1330,12 +1806,14 @@ function jbRenderInspectionList() {
       const i = parseInt(btn.dataset.i, 10);
       saaCamOpen(async (blobs) => {
         for (const blob of blobs) {
-          const res = await saaPhotosUpload(_jbCurrentJob.id, blob, i);
-          if (res.ok) _jbPhotos.push(res.photo);
+          const res = isEvent
+            ? await saaPhotosUpload(_jbEventModalTarget.job_id, blob, i, null, _jbEventModalTarget.id)
+            : await saaPhotosUpload(_jbCurrentJob.id, blob, i);
+          if (res.ok) { if (isEvent) _jbePhotos.push(res.photo); else _jbPhotos.push(res.photo); }
           else _jbToast(res.error, true);
         }
         jbRenderInspectionList();
-        jbRenderInspectionSummary();
+        if (isEvent) { jbeRenderInspectionSummary(); jbeRenderPhotoGrid(); } else { jbRenderInspectionSummary(); jbRenderPhotoGrid(); }
       });
     });
   });
@@ -1343,11 +1821,37 @@ function jbRenderInspectionList() {
 
 function jbOpenInspectionModal() {
   if (!_jbCurrentJob) return;
+  _jbInspModalTarget = "job";
+  jbRenderInspectionList();
+  document.getElementById("jb-inspection-modal").hidden = false;
+}
+
+/* Event modal's own "Open Inspection Checklist" -- needs a real event_id
+ * to tag any photos taken from it, so (like Mileage/Photos/Invoice/BOM
+ * further down) it's only reachable once the Event has been saved once. */
+function jbeOpenInspectionModal() {
+  const event = _jbEventModalTarget;
+  if (!event || !event.id) { _jbToast("Save this Event first, then open its checklist.", true); return; }
+  _jbInspModalTarget = "event";
   jbRenderInspectionList();
   document.getElementById("jb-inspection-modal").hidden = false;
 }
 
 async function jbSaveInspection() {
+  if (_jbInspModalTarget === "event") {
+    const event = _jbEventModalTarget;
+    if (!event || !event.id) return;
+    const res = await saaEventsUpdate(event.id, { inspection_results: _jbeInspectionResults });
+    if (res.ok) {
+      event.inspection_results = _jbeInspectionResults;
+      jbeRenderInspectionSummary();
+      document.getElementById("jb-inspection-modal").hidden = true;
+      _jbToast("Inspection saved.");
+    } else {
+      _jbToast(res.error, true);
+    }
+    return;
+  }
   if (!_jbCurrentJob) return;
   const res = await saaJobsUpdateJob(_jbCurrentJob.id, { inspection_results: _jbInspectionResults });
   if (res.ok) {
@@ -1377,6 +1881,25 @@ function jbWireBomLink(job) {
     const link = document.getElementById(id);
     if (link) link.href = href;
   });
+}
+
+/** Round 42 Task 122-124: the Event modal's own "Bill of Material" link --
+ *  same plain-link-to-the-dedicated-page pattern as jbWireBomLink above,
+ *  but pointed at bill-of-material.html?event=<id> (saaBomFetchEvent in
+ *  bom-db.js) so each Event gets its OWN Bill of Material, separate from
+ *  the parent Job's. Needs a real event_id, so it's disabled (via the
+ *  click-guard wired in DOMContentLoaded below) until the Event has been
+ *  saved once, same as Mileage/Photos/Invoice further down. */
+function jbeWireBomLink(event) {
+  const link = document.getElementById("jbe-bom-btn");
+  if (!link) return;
+  if (event && event.id) {
+    link.href = `bill-of-material.html?event=${encodeURIComponent(event.id)}`;
+    link.textContent = "🧰 Bill of Material";
+  } else {
+    link.removeAttribute("href");
+    link.textContent = "🧰 Bill of Material (save event first)";
+  }
 }
 
 /* ============================== Quotation quick link ============================== */
@@ -1546,6 +2069,149 @@ async function jbCalculateMileageSlot(n) {
   }
 }
 
+/* ============================== Round 42 Task 124: Event modal — Mileage ==============================
+ * Direct mirror of the primary/slot Mileage functions just above, scoped
+ * to the open Event's OWN mileage leg (mileage_logs.event_id, via the
+ * event-based saaMileage*ForEvent functions in mileage-db.js) instead of
+ * the Job's -- per Vijayan: "Mileage similar logic to job card." Needs a
+ * real event_id (mileage_logs.event_id has a NOT NULL-equivalent unique
+ * constraint pairing -- see the mileage-db.js rewrite notes), so this
+ * whole section shows a "Save this Event first" placeholder in create mode
+ * and goes fully live once the Event has been saved once. */
+
+/** Builds a plain object shaped like an Event row from the modal's LIVE
+ *  field values (not the possibly-stale _jbEventModalTarget), same idea as
+ *  the Job Card's own _jbMileageSnapshot -- so mileage can be calculated
+ *  off whatever's currently on screen (tech just picked, address just
+ *  edited) even before Save Event is clicked again. */
+function _jbeMileageEventSnapshot() {
+  const event = _jbEventModalTarget;
+  if (!event) return null;
+  const dateVal = document.getElementById("jbe-date").value;
+  const timeVal = document.getElementById("jbe-time").value || "09:00";
+  return Object.assign({}, event, {
+    assigned_technician_id: document.getElementById("jbe-tech").value || null,
+    scheduled_start: dateVal ? `${dateVal}T${timeVal}:00` : null,
+    service_address: document.getElementById("jbe-address").value.trim() || null,
+    service_city: document.getElementById("jbe-city").value.trim() || null,
+    service_state: document.getElementById("jbe-state").value.trim() || null,
+    service_zip: document.getElementById("jbe-zip").value.trim() || null,
+  });
+}
+
+async function jbeRenderMileageSection() {
+  const context = document.getElementById("jbe-mileage-context");
+  const milesEl = document.getElementById("jbe-mileage-miles");
+  const noteEl = document.getElementById("jbe-mileage-note");
+  const event = _jbEventModalTarget;
+  if (!event || !event.id) {
+    context.textContent = "Save this Event first, then calculate mileage.";
+    milesEl.value = "";
+    noteEl.textContent = "";
+    return;
+  }
+  const snap = _jbeMileageEventSnapshot();
+  const techId = snap.assigned_technician_id;
+  if (!techId || !snap.scheduled_start) {
+    context.textContent = "Assign a technician and a Scheduled Date to calculate this trip.";
+  } else {
+    const leg = await saaMileageEventLegContext(snap, techId, _jbCurrentJob);
+    const dest = saaMileageEventAddress(snap, _jbCurrentJob);
+    const legNote = leg.legOrder === 1
+      ? " (first stop of the day, from the shop)"
+      : ` (leg ${leg.legOrder} of the day — starts where this technician's previous job ended)`;
+    context.textContent = dest
+      ? `Trip: ${leg.fromAddress} → ${dest}${legNote}`
+      : `Trip starts at: ${leg.fromAddress}${legNote} (add a Service Address to complete the route)`;
+  }
+  const existing = await saaMileageFetchForEvent(event.id, techId);
+  milesEl.value = existing && existing.miles != null ? existing.miles : "";
+  _jbeMileageAtOpen.primary = milesEl.value;
+  noteEl.textContent = existing
+    ? (existing.source === "manual" ? "Entered manually." : "Auto-calculated from addresses.")
+    : "";
+}
+
+async function jbeCalculateMileage() {
+  const event = _jbEventModalTarget;
+  if (!event || !event.id) { _jbToast("Save this Event first, then calculate mileage.", true); return; }
+  const snap = _jbeMileageEventSnapshot();
+  const btn = document.getElementById("jbe-mileage-calc-btn");
+  btn.disabled = true;
+  btn.textContent = "Calculating…";
+  try {
+    let res = await saaMileageRecalcForEvent(snap, false, null, _jbCurrentJob);
+    if (!res.ok && res.manual) {
+      const ok = await saaConfirm("This trip's mileage was entered manually. Recalculate and overwrite it?", { title: "Overwrite manual entry", okLabel: "Recalculate", cancelLabel: "Cancel" });
+      if (!ok) return;
+      res = await saaMileageRecalcForEvent(snap, true, null, _jbCurrentJob);
+    }
+    if (res.ok) {
+      document.getElementById("jbe-mileage-miles").value = res.log.miles != null ? res.log.miles : "";
+      _jbeMileageAtOpen.primary = document.getElementById("jbe-mileage-miles").value;
+      document.getElementById("jbe-mileage-note").textContent = "Auto-calculated from addresses.";
+      _jbToast(`${res.log.miles} miles calculated.`);
+    } else {
+      _jbToast(res.error, true);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "📍 Calculate Miles";
+  }
+}
+
+function _jbeMileageSlotTechId(n) {
+  const sel = document.getElementById(`jbe-tech${n}`);
+  return (sel && sel.value) || null;
+}
+
+async function jbeRenderMileageSlot(n) {
+  const event = _jbEventModalTarget;
+  const techId = _jbeMileageSlotTechId(n);
+  const block = document.getElementById(`jbe-mileage${n}-block`);
+  const available = !!(techId && event && event.id);
+  block.hidden = !available;
+  if (!available) return;
+  const milesEl = document.getElementById(`jbe-mileage${n}-miles`);
+  const noteEl = document.getElementById(`jbe-mileage${n}-note`);
+  const existing = await saaMileageFetchForEvent(event.id, techId);
+  milesEl.value = existing && existing.miles != null ? existing.miles : "";
+  _jbeMileageAtOpen[n] = milesEl.value;
+  noteEl.textContent = existing
+    ? (existing.source === "manual" ? "Entered manually." : "Auto-calculated from addresses.")
+    : "";
+}
+
+async function jbeCalculateMileageSlot(n) {
+  const event = _jbEventModalTarget;
+  if (!event || !event.id) { _jbToast("Save this Event first, then calculate mileage.", true); return; }
+  const techId = _jbeMileageSlotTechId(n);
+  if (!techId) return;
+  const snap = _jbeMileageEventSnapshot();
+  const btn = document.getElementById(`jbe-mileage${n}-calc-btn`);
+  btn.disabled = true;
+  btn.textContent = "Calculating…";
+  try {
+    let res = await saaMileageRecalcForEvent(snap, false, techId, _jbCurrentJob);
+    if (!res.ok && res.manual) {
+      const ok = await saaConfirm("This trip's mileage was entered manually. Recalculate and overwrite it?", { title: "Overwrite manual entry", okLabel: "Recalculate", cancelLabel: "Cancel" });
+      if (!ok) return;
+      res = await saaMileageRecalcForEvent(snap, true, techId, _jbCurrentJob);
+    }
+    if (res.ok) {
+      document.getElementById(`jbe-mileage${n}-miles`).value = res.log.miles != null ? res.log.miles : "";
+      _jbeMileageAtOpen[n] = document.getElementById(`jbe-mileage${n}-miles`).value;
+      document.getElementById(`jbe-mileage${n}-note`).textContent = "Auto-calculated from addresses.";
+      _jbToast(`${res.log.miles} miles calculated.`);
+    } else {
+      _jbToast(res.error, true);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "📍 Calculate Miles";
+  }
+}
+
 /* ============================== Round 42 (2026-09-19): System + Event History ==============================
  * Customer -> System -> Job -> Event. The System section shows/edits the
  * one piece of HVAC equipment this Job is permanently attached to; the
@@ -1663,6 +2329,7 @@ function _jbEventTechOptionsHtml(selectedId) {
 async function jbOpenEventModal(event, defaultType) {
   _jbEventModalMode = event ? "edit" : "create";
   _jbEventModalTarget = event || null;
+  _jbePendingQuote = null; // scratch var from a previous create-mode session -- never carries across opens
 
   document.getElementById("jb-event-modal-title").textContent = event ? "Event" : "Schedule Event";
   document.getElementById("jb-event-modal-number").textContent = event ? event.event_number : "";
@@ -1712,12 +2379,88 @@ async function jbOpenEventModal(event, defaultType) {
   document.getElementById("jbe-sig-date").value = (event && event.customer_signature_date) || "";
   document.getElementById("jb-event-status-msg").textContent = "";
 
+  // Round 42 Task 121-124, per Vijayan: "event is once a full job ... all
+  // information and control for old job should be passed to that
+  // particular event." -- populate every new full-parity section
+  // (Quote/Financials/Mileage/Photos/Receipts/Invoice & Payment/
+  // Inspection/BOM link), same order the Job Card's own jbOpenDetail
+  // populates its jbd-* equivalents.
+  document.getElementById("jbe-quoted").value = (event && event.quoted_amount) || "";
+  document.getElementById("jbe-approved").value = (event && event.approved_amount) || "";
+  document.getElementById("jbe-cost-material").value = (event && event.actual_material_cost) || 0;
+  document.getElementById("jbe-cost-labor").value = (event && event.actual_labor_cost) || 0;
+  document.getElementById("jbe-cost-other").value = (event && event.other_cost) || 0;
+  jbeComputeProfit();
+
+  // The Event row itself (from saaEventsFetchForJob/saaEventsFetchById)
+  // doesn't carry a joined linkedQuote -- fetch it here on open, same as
+  // the Job Card's own job.linkedQuote is fetched by saaJobsFetchAll.
+  if (event) {
+    event.linkedQuote = event.linked_quote_id
+      ? (await _saaClient.from("quotes").select("*").eq("id", event.linked_quote_id).maybeSingle()).data || null
+      : null;
+  }
+  await jbeRenderQuoteSection(event);
+  document.getElementById("jbe-quote-search").value = "";
+  document.getElementById("jbe-quote-results").hidden = true;
+
+  await jbeRenderMileageSection();
+  await jbeRenderMileageSlot(2);
+  await jbeRenderMileageSlot(3);
+
+  _jbePhotos = (event && event.id) ? await saaPhotosFetchForEvent(event.id) : [];
+  jbeRenderPhotoGrid();
+  jbeRenderReceiptGrid();
+
+  if (event && event.id) {
+    const { data: invRows } = await _saaClient.from("invoices").select("*").eq("event_id", event.id).order("created_at", { ascending: false }).limit(1);
+    _jbeCurrentInvoice = (invRows && invRows.length) ? invRows[0] : null;
+    _jbeCurrentPayments = _jbeCurrentInvoice ? await saaJobsFetchPayments(_jbeCurrentInvoice.id) : [];
+  } else {
+    _jbeCurrentInvoice = null;
+    _jbeCurrentPayments = [];
+  }
+  jbeRenderInvoiceBox(event, _jbeCurrentInvoice, _jbeCurrentPayments);
+
+  _jbeInspectionResults = (event && Array.isArray(event.inspection_results)) ? event.inspection_results.slice() : [];
+  jbeRenderInspectionSummary();
+
+  jbeWireBomLink(event);
+
   document.getElementById("jb-event-modal").hidden = false;
 }
 
 function jbCloseEventModal() {
   document.getElementById("jb-event-modal").hidden = true;
   _jbEventModalTarget = null;
+  _jbePendingQuote = null;
+}
+
+/** Round 42 Task 121-124: soft-deletes the open Event (marks it Cancelled
+ *  via saaEventsUpdate, same status value SAA_EVENT_STATUS_OPTIONS already
+ *  offers) rather than removing its row outright -- Events are otherwise
+ *  treated as immutable history everywhere else in this app (Event
+ *  History list, Mileage leg-chaining day-order, etc.), so a hard delete
+ *  would leave holes in that chain. Flagged to Vijayan as the assumed
+ *  behavior since his multiSelect answer on Checklist/Delete Event only
+ *  picked the Checklist option. A brand-new, never-saved Event (no id yet)
+ *  has nothing to delete -- just closes the modal. */
+async function jbeDeleteCurrentEvent() {
+  const event = _jbEventModalTarget;
+  if (!event || !event.id) { jbCloseEventModal(); return; }
+  const ok = await saaConfirm(
+    `Delete event ${event.event_number || ""}? This marks it Cancelled in the Event History rather than erasing it -- its Mileage/Photos/Invoice records are kept. This can't easily be undone.`,
+    { title: "Delete Event", okLabel: "Delete Event", cancelLabel: "Cancel" }
+  );
+  if (!ok) return;
+  const res = await saaEventsUpdate(event.id, { event_status: "cancelled" });
+  if (res.ok) {
+    jbCloseEventModal();
+    if (_jbCurrentJob) await jbRenderEventTimeline(_jbCurrentJob);
+    _jbToast("Event deleted.");
+  } else {
+    document.getElementById("jb-event-status-msg").textContent = res.error;
+  }
 }
 
 async function jbSaveEventModal() {
@@ -1752,6 +2495,16 @@ async function jbSaveEventModal() {
     parts_used: document.getElementById("jbe-parts").value.trim() || null,
     customer_signature_name: document.getElementById("jbe-sig-name").value.trim() || null,
     customer_signature_date: document.getElementById("jbe-sig-date").value || null,
+    // Round 42 Task 121-124, per Vijayan: "Per-Event (separate costs per
+    // visit)" -- Financials are plain columns on the events row, folded in
+    // here alongside Notes/Signature since they're saved the exact same
+    // way either way: immediately on an edit-mode saaEventsUpdate, or as
+    // this same follow-up patch right after saaEventsCreateForJob below.
+    quoted_amount: parseFloat(document.getElementById("jbe-quoted").value) || null,
+    approved_amount: parseFloat(document.getElementById("jbe-approved").value) || null,
+    actual_material_cost: parseFloat(document.getElementById("jbe-cost-material").value) || 0,
+    actual_labor_cost: parseFloat(document.getElementById("jbe-cost-labor").value) || 0,
+    other_cost: parseFloat(document.getElementById("jbe-cost-other").value) || 0,
   };
 
   let res;
@@ -1779,10 +2532,20 @@ async function jbSaveEventModal() {
       serviceAddress, serviceCity, serviceState, serviceZip,
       reason, description,
     });
-    if (res.ok && Object.values(detailFields).some((v) => v !== null)) {
-      // Rare on a freshly-scheduled event, but nothing the office typed
-      // into the detail fields before saving should be lost.
+    if (res.ok) {
+      // Nothing typed into the detail fields (Notes/Signature/Financials)
+      // before saving a brand-new Event should be lost -- saaEventsCreateForJob's
+      // own insert doesn't take these, so they're always applied as a
+      // same-turn follow-up patch right after.
       await saaEventsUpdate(res.eventId, detailFields);
+      // Round 42 Task 124: a Quote picked from the search box before this
+      // Event had ever been saved (see jbeSearchCustomerQuotes) couldn't be
+      // linked until just now, once the row actually exists.
+      if (_jbePendingQuote) {
+        const linkRes = await saaEventsLinkQuote(res.eventId, _jbePendingQuote.id);
+        if (!linkRes.ok) _jbToast(linkRes.error, true);
+        _jbePendingQuote = null;
+      }
     }
   }
 
@@ -1801,6 +2564,56 @@ async function jbSaveEventModal() {
     if (eventStatus === "completed" && completedDateVal && completedTimeVal && changed) {
       const ctRes = await saaEventsSetCompletedTime(eventIdForCompleted, completedDateVal, completedTimeVal);
       if (!ctRes.ok) _jbToast(ctRes.error, true);
+    }
+  }
+
+  // Round 42 Task 124: Mileage -- only meaningful once the Event has a real
+  // id (the primary/slot Mileage sections are locked until then, so there's
+  // nothing typed here on a brand-new Event's first Save). Same "only
+  // touch the row if the office actually typed something new" guard as the
+  // Job Card's own jbSaveDetail, scoped to saaMileage*ForEvent instead of
+  // *ForJob.
+  const eventForMileage = _jbEventModalTarget;
+  if (res.ok && eventForMileage && eventForMileage.id) {
+    const mileageVal = document.getElementById("jbe-mileage-miles").value;
+    if (mileageVal !== (_jbeMileageAtOpen.primary || "")) {
+      const snap = _jbeMileageEventSnapshot();
+      if (mileageVal.trim() === "") {
+        await saaMileageDeleteForEvent(eventForMileage.id);
+        _jbeMileageAtOpen.primary = "";
+        document.getElementById("jbe-mileage-note").textContent = "";
+      } else {
+        const mRes = await saaMileageSetManualForEvent(snap, parseFloat(mileageVal));
+        if (mRes.ok) {
+          _jbeMileageAtOpen.primary = mileageVal;
+          document.getElementById("jbe-mileage-note").textContent = "Entered manually.";
+        } else {
+          _jbToast(mRes.error, true);
+        }
+      }
+    } else {
+      saaMileageEnsureForEvent(_jbeMileageEventSnapshot());
+    }
+    for (const n of [2, 3]) {
+      const techId = document.getElementById(`jbe-tech${n}`).value || null;
+      if (!techId) continue;
+      const milesEl = document.getElementById(`jbe-mileage${n}-miles`);
+      const milesVal = milesEl.value;
+      if (milesVal === (_jbeMileageAtOpen[n] || "")) continue;
+      const snap = _jbeMileageEventSnapshot();
+      if (milesVal.trim() === "") {
+        await saaMileageDeleteForEvent(eventForMileage.id, techId);
+        _jbeMileageAtOpen[n] = "";
+        document.getElementById(`jbe-mileage${n}-note`).textContent = "";
+      } else {
+        const mRes = await saaMileageSetManualForEvent(snap, parseFloat(milesVal), techId);
+        if (mRes.ok) {
+          _jbeMileageAtOpen[n] = milesVal;
+          document.getElementById(`jbe-mileage${n}-note`).textContent = "Entered manually.";
+        } else {
+          _jbToast(mRes.error, true);
+        }
+      }
     }
   }
 
@@ -2337,8 +3150,42 @@ document.addEventListener("DOMContentLoaded", async () => {
           e.target.value = "";
         }
       }
+      // Round 42 Task 124: same show/hide/load-that-slot's-own-mileage
+      // behavior as the Job Card's jbd-tech2/3 wiring above.
+      jbeRenderMileageSlot(n);
     });
   });
+
+  // Round 42 Task 122-124: full-parity Event modal sections (Quote/
+  // Financials/Mileage/Photos/Receipts/Invoice & Payment/Inspection/BOM).
+  document.getElementById("jbe-quote-search").addEventListener("input", (e) => jbeSearchCustomerQuotes(e.target.value));
+  document.getElementById("jbe-quote-search").addEventListener("focus", (e) => {
+    if (!e.target.value.trim()) jbeSearchCustomerQuotes("");
+  });
+  ["jbe-quoted", "jbe-approved", "jbe-cost-material", "jbe-cost-labor", "jbe-cost-other"].forEach((id) => {
+    document.getElementById(id).addEventListener("input", jbeComputeProfit);
+  });
+  document.getElementById("jbe-mileage-calc-btn").addEventListener("click", jbeCalculateMileage);
+  document.getElementById("jbe-mileage2-calc-btn").addEventListener("click", () => jbeCalculateMileageSlot(2));
+  document.getElementById("jbe-mileage3-calc-btn").addEventListener("click", () => jbeCalculateMileageSlot(3));
+  // Recompute the Event modal's own "Trip: ..." context line the moment
+  // technician/date/address fields change, same as the Job Card's own
+  // jbd-tech/jbd-scheduled/etc. wiring does for _jbUpdateMileageContext.
+  ["jbe-tech", "jbe-date", "jbe-address", "jbe-city", "jbe-state", "jbe-zip"].forEach((id) => {
+    document.getElementById(id).addEventListener("change", () => {
+      if (_jbEventModalTarget && _jbEventModalTarget.id) jbeRenderMileageSection();
+    });
+  });
+  document.getElementById("jbe-add-photos-btn").addEventListener("click", jbeAddPhotos);
+  document.getElementById("jbe-add-receipt-btn").addEventListener("click", jbeAddReceipt);
+  document.getElementById("jbe-open-inspection-btn").addEventListener("click", jbeOpenInspectionModal);
+  document.getElementById("jbe-bom-btn").addEventListener("click", (e) => {
+    if (!_jbEventModalTarget || !_jbEventModalTarget.id) {
+      e.preventDefault();
+      _jbToast("Save this Event first, then open its Bill of Material.", true);
+    }
+  });
+  document.getElementById("jb-event-delete-btn").addEventListener("click", jbeDeleteCurrentEvent);
 
   if (_jbIsFullPage) {
     // Legacy deep link, kept for any bookmarked/saved jobs.html?job=<id>

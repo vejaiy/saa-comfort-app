@@ -27,7 +27,13 @@ function _saaPhotoExt(mime) {
  *  inspectionItemIndex when not given, so the two existing call sites
  *  (plain job photos, per-inspection-item photos) don't need to change —
  *  only the new Receipt upload passes 'receipt' explicitly. */
-async function saaPhotosUpload(jobId, blob, inspectionItemIndex, photoType) {
+/** eventId (Round 42 Task 121, optional 5th arg) lets a caller that's
+ *  editing one SPECIFIC Event's own Photos/Receipts section (the Event
+ *  modal) stamp that exact event_id, rather than always re-deriving the
+ *  Job's "current" Event -- the Job Card's own Photos/Receipts sections
+ *  (and the per-Inspection-item camera button) keep working unchanged by
+ *  simply not passing one. */
+async function saaPhotosUpload(jobId, blob, inspectionItemIndex, photoType, eventId) {
   try {
     const ext = _saaPhotoExt(blob.type);
     const path = `${jobId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
@@ -38,13 +44,14 @@ async function saaPhotosUpload(jobId, blob, inspectionItemIndex, photoType) {
 
     // Round 42 Task 118: auto-attaches to the Job's current Event (see
     // saaEventsGetDefaultEventId in events-db.js) -- guarded since this
-    // file is also loaded on pages without events-db.js.
-    const eventId = typeof saaEventsGetDefaultEventId === "function" ? await saaEventsGetDefaultEventId(jobId) : null;
+    // file is also loaded on pages without events-db.js. Round 42 Task
+    // 121: an explicit eventId (above) always wins over the auto-pick.
+    const resolvedEventId = eventId || (typeof saaEventsGetDefaultEventId === "function" ? await saaEventsGetDefaultEventId(jobId) : null);
     const { data: row, error: insErr } = await _saaClient
       .from("job_photos")
       .insert({
         job_id: jobId,
-        event_id: eventId,
+        event_id: resolvedEventId,
         storage_path: path,
         inspection_item_index: inspectionItemIndex == null ? null : inspectionItemIndex,
         photo_type: photoType || (inspectionItemIndex == null ? "general" : "inspection"),
@@ -66,6 +73,21 @@ async function saaPhotosFetch(jobId) {
     .from("job_photos")
     .select("*")
     .eq("job_id", jobId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data || []).map((p) => Object.assign({}, p, {
+    url: _saaClient.storage.from(SAA_JOB_PHOTOS_BUCKET).getPublicUrl(p.storage_path).data.publicUrl,
+  }));
+}
+
+/** Round 42 Task 121: every photo/receipt saved against one SPECIFIC
+ *  Event (not a job's whole photo history) -- backs the Event modal's own
+ *  Photos/Receipts sections. */
+async function saaPhotosFetchForEvent(eventId) {
+  const { data, error } = await _saaClient
+    .from("job_photos")
+    .select("*")
+    .eq("event_id", eventId)
     .order("created_at", { ascending: true });
   if (error) throw error;
   return (data || []).map((p) => Object.assign({}, p, {

@@ -1046,25 +1046,33 @@ async function saaBomSaveItems(jobId, items) {
   }
 }
 
+/** Round 42 Task 122: BOM numbers are now a single global sequence shared
+ *  by both jobs.bom_number and events.bom_number (the Job Card's own BOM
+ *  section, and the new per-Event Bill of Material introduced this round)
+ *  -- counts across both tables so a job and an event can never mint the
+ *  same BOM-YYYY-#### number. */
 async function _saaBomNextNumber(firstName) {
   const year = new Date().getFullYear();
-  const { count, error } = await _saaClient
-    .from("jobs")
-    .select("id", { count: "exact", head: true })
-    .like("bom_number", `BOM-${year}-%`);
-  if (error) throw error;
-  const base = `BOM-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
+  const [{ count: jobCount, error: jErr }, { count: eventCount, error: eErr }] = await Promise.all([
+    _saaClient.from("jobs").select("id", { count: "exact", head: true }).like("bom_number", `BOM-${year}-%`),
+    _saaClient.from("events").select("id", { count: "exact", head: true }).like("bom_number", `BOM-${year}-%`),
+  ]);
+  if (jErr) throw jErr;
+  if (eErr) throw eErr;
+  const base = `BOM-${year}-${String((jobCount || 0) + (eventCount || 0) + 1).padStart(4, "0")}`;
   return saaAppendNameSuffix(base, firstName);
 }
 
+/** Same global-sequence treatment as _saaBomNextNumber, for Order numbers. */
 async function _saaBomNextOrderNumber(firstName) {
   const year = new Date().getFullYear();
-  const { count, error } = await _saaClient
-    .from("jobs")
-    .select("id", { count: "exact", head: true })
-    .like("bom_order_number", `PO-${year}-%`);
-  if (error) throw error;
-  const base = `PO-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
+  const [{ count: jobCount, error: jErr }, { count: eventCount, error: eErr }] = await Promise.all([
+    _saaClient.from("jobs").select("id", { count: "exact", head: true }).like("bom_order_number", `PO-${year}-%`),
+    _saaClient.from("events").select("id", { count: "exact", head: true }).like("bom_order_number", `PO-${year}-%`),
+  ]);
+  if (jErr) throw jErr;
+  if (eErr) throw eErr;
+  const base = `PO-${year}-${String((jobCount || 0) + (eventCount || 0) + 1).padStart(4, "0")}`;
   return saaAppendNameSuffix(base, firstName);
 }
 

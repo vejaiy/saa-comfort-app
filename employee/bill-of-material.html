@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bill of Material | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260921d">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260921e">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260921d"></script>
-<script src="../assets/js/supabase-config.js?v=20260921d"></script>
-<script src="../assets/js/auth.js?v=20260921d"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260921e"></script>
+<script src="../assets/js/supabase-config.js?v=20260921e"></script>
+<script src="../assets/js/auth.js?v=20260921e"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -114,12 +114,12 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260921d"></script>
-<script src="../assets/js/worksheet.js?v=20260921d"></script>
-<script src="../assets/js/events-db.js?v=20260921d"></script>
-<script src="../assets/js/jobs-db.js?v=20260921d"></script>
-<script src="../assets/js/bom-db.js?v=20260921d"></script>
-<script src="../assets/js/print-bom.js?v=20260921d"></script>
+<script src="../assets/js/pricing-data.js?v=20260921e"></script>
+<script src="../assets/js/worksheet.js?v=20260921e"></script>
+<script src="../assets/js/events-db.js?v=20260921e"></script>
+<script src="../assets/js/jobs-db.js?v=20260921e"></script>
+<script src="../assets/js/bom-db.js?v=20260921e"></script>
+<script src="../assets/js/print-bom.js?v=20260921e"></script>
 <script>
   let _bomJob = null;
 
@@ -132,6 +132,27 @@
   }
   function _bomEsc(s) {
     return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  // Round 42 Task 122: this page now shows either a Job's own Bill of
+  // Material (?job=, saaBomFetchJob -- unchanged) or one specific Event's
+  // OWN Bill of Material (?event=, saaBomFetchEvent -- new, per Vijayan:
+  // "it will have its own working control"). _bomJob holds whichever
+  // detail object loaded (job or event -- saaBomFetchEvent tags it
+  // isEvent:true); these three helpers pick the right label/number/address
+  // fields either way so renderBomJob/renderBomItems/print/order below
+  // don't need their own if/else.
+  function _bomEntityNum(d) {
+    if (d && d.isEvent) return d.event_number || ("EVT-" + (d.id || "").slice(0, 8).toUpperCase());
+    return _bomJobNum(d);
+  }
+  function _bomEntityTitle(d) {
+    if (d && d.isEvent) return saaEventTypeLabel(d.event_type);
+    return d.title || saaJobTypeLabel(d.job_type);
+  }
+  function _bomEntityAddress(d) {
+    if (d && d.isEvent) return [d.service_address, d.service_city, d.service_state, d.service_zip].filter(Boolean).join(", ");
+    return [d.job_address, d.job_city, d.job_state, d.job_zip].filter(Boolean).join(", ");
   }
 
   // Round 13: "categorize bill of material by condenser, coil and
@@ -175,10 +196,12 @@
   function renderBomJob() {
     const job = _bomJob;
     document.getElementById("bom-job-card").hidden = false;
-    document.getElementById("bom-job-title").textContent = job.title || saaJobTypeLabel(job.job_type);
-    document.getElementById("bom-job-num").textContent = _bomJobNum(job);
+    document.getElementById("bom-job-title").textContent = _bomEntityTitle(job);
+    document.getElementById("bom-job-num").textContent = job.isEvent && job.job
+      ? `${_bomEntityNum(job)} (Job ${job.job.job_number || _bomJobNum(job.job)})`
+      : _bomEntityNum(job);
     document.getElementById("bom-job-cust").textContent = _bomCustName(job.customer);
-    document.getElementById("bom-job-addr").textContent = [job.job_address, job.job_city, job.job_state, job.job_zip].filter(Boolean).join(", ");
+    document.getElementById("bom-job-addr").textContent = _bomEntityAddress(job);
     document.getElementById("bom-quote-line").textContent = job.linkedQuote
       ? `Linked to Quote ${job.linkedQuote.quote_number || "—"} (${job.linkedQuote.quote_type || ""})`
       : "No linked quotation — items below come only from what's added manually.";
@@ -196,6 +219,19 @@
     _bomJob = await saaBomFetchJob(job.id);
     document.getElementById("bom-status").textContent = "";
     document.getElementById("bom-search").value = `${_bomJobNum(_bomJob)} — ${_bomCustName(_bomJob.customer)}`;
+    document.getElementById("bom-search-results").hidden = true;
+    renderBomJob();
+  }
+
+  // Round 42 Task 122: loads one specific Event's own Bill of Material —
+  // reached only via the Event modal's own "Bill of Material" link
+  // (?event=<id>), not through the search box above (that box searches
+  // Jobs only, unchanged).
+  async function loadEvent(eventId) {
+    document.getElementById("bom-status").textContent = "Loading…";
+    _bomJob = await saaBomFetchEvent(eventId);
+    document.getElementById("bom-status").textContent = "";
+    document.getElementById("bom-search").value = `${_bomEntityNum(_bomJob)} — ${_bomCustName(_bomJob.customer)}`;
     document.getElementById("bom-search-results").hidden = true;
     renderBomJob();
   }
@@ -275,16 +311,16 @@
 
   document.getElementById("bom-print-btn").addEventListener("click", async () => {
     if (!_bomJob) return;
-    const numRes = await saaBomEnsureNumber(_bomJob);
+    const numRes = _bomJob.isEvent ? await saaBomEnsureNumberForEvent(_bomJob) : await saaBomEnsureNumber(_bomJob);
     if (!numRes.ok) { document.getElementById("bom-status").textContent = "Error: " + numRes.error; return; }
     renderBomJob();
     printBillOfMaterial({
       bomNumber: _bomJob.bom_number,
-      jobNumber: _bomJobNum(_bomJob),
+      jobNumber: _bomEntityNum(_bomJob),
       customer: _bomCustName(_bomJob.customer),
       phone: _bomJob.customer ? _bomJob.customer.phone : "",
-      address: [_bomJob.job_address, _bomJob.job_city, _bomJob.job_state, _bomJob.job_zip].filter(Boolean).join(", "),
-      jobTitle: _bomJob.title || saaJobTypeLabel(_bomJob.job_type),
+      address: _bomEntityAddress(_bomJob),
+      jobTitle: _bomEntityTitle(_bomJob),
       items: saaBomCombinedItems(_bomJob),
     });
   });
@@ -320,7 +356,7 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `SAA-bom-${_bomJobNum(_bomJob)}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `SAA-bom-${_bomEntityNum(_bomJob)}-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -330,26 +366,34 @@
   document.getElementById("bom-order-btn").addEventListener("click", async () => {
     if (!_bomJob) return;
     const supplier = document.getElementById("bom-supplier").value.trim();
-    const orderRes = await saaBomCreateOrder(_bomJob, supplier);
+    const orderRes = _bomJob.isEvent
+      ? await saaBomCreateOrderForEvent(_bomJob, supplier)
+      : await saaBomCreateOrder(_bomJob, supplier);
     if (!orderRes.ok) { document.getElementById("bom-status").textContent = "Error: " + orderRes.error; return; }
     renderBomJob();
     printBomOrderForm({
       orderNumber: _bomJob.bom_order_number,
       orderDate: _bomJob.bom_order_date,
-      jobNumber: _bomJobNum(_bomJob),
+      jobNumber: _bomEntityNum(_bomJob),
       quoteNumber: _bomJob.linkedQuote ? _bomJob.linkedQuote.quote_number : null,
       supplier: _bomJob.bom_supplier,
       customer: _bomCustName(_bomJob.customer),
       phone: _bomJob.customer ? _bomJob.customer.phone : "",
-      address: [_bomJob.job_address, _bomJob.job_city, _bomJob.job_state, _bomJob.job_zip].filter(Boolean).join(", "),
+      address: _bomEntityAddress(_bomJob),
       items: saaBomCombinedItems(_bomJob),
     });
   });
 
   // Deep link from a Job Card's "🧰 Bill of Material" quick action —
-  // ?job=<job number or id> auto-loads that job.
+  // ?job=<job number or id> auto-loads that job. Round 42 Task 122:
+  // ?event=<event id>, from the Event modal's own "Bill of Material" link,
+  // auto-loads that ONE Event's own Bill of Material instead — checked
+  // first since a page reached with ?event= never also carries ?job=.
   (async function initFromQueryString() {
-    const jobParam = new URLSearchParams(location.search).get("job");
+    const params = new URLSearchParams(location.search);
+    const eventParam = params.get("event");
+    if (eventParam) { loadEvent(eventParam); return; }
+    const jobParam = params.get("job");
     if (!jobParam) return;
     const results = await saaBomSearchJobs(jobParam);
     const match = results.find((j) => j.job_number === jobParam) || results[0];

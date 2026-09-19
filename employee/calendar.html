@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260921d">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260921e">
 <script>
 if (new URLSearchParams(location.search).get('embed') === '1') {
   document.documentElement.classList.add('saa-embed');
@@ -14,9 +14,9 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260921d"></script>
-<script src="../assets/js/supabase-config.js?v=20260921d"></script>
-<script src="../assets/js/auth.js?v=20260921d"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260921e"></script>
+<script src="../assets/js/supabase-config.js?v=20260921e"></script>
+<script src="../assets/js/auth.js?v=20260921e"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -614,19 +614,6 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
   </div>
 </div>
 
-<!-- ============ Inspection checklist modal ============ -->
-<div class="modal-overlay" id="jb-inspection-modal" hidden>
-  <div class="modal-card" style="max-width:620px">
-    <h3>Inspection Checklist</h3>
-    <p class="muted" style="font-size:.85rem;margin-bottom:4px">Check off each item as it's verified. Use the camera button to attach a photo to a specific item.</p>
-    <ul class="jb-insp-list" id="jb-insp-list"></ul>
-    <div class="modal-close-row">
-      <button type="button" class="btn btn-navy btn-sm" id="jb-insp-save-btn">Save Inspection</button>
-      <button type="button" class="btn btn-ghost btn-sm" id="jb-insp-close-btn">Close</button>
-    </div>
-  </div>
-</div>
-
 <!-- ============ Event detail / create modal (Round 42, 2026-09-19) ============ -->
 <div class="modal-overlay" id="jb-event-modal" hidden>
   <div class="modal-card" style="max-width:640px">
@@ -663,6 +650,97 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
       <div class="field"><label>State</label><input type="text" id="jbe-state" maxlength="2" style="text-transform:uppercase"></div>
       <div class="field"><label>ZIP</label><input type="text" id="jbe-zip"></div>
     </div>
+
+    <!-- Round 42 Task 121-123, per Vijayan: "event is once a full job...
+         all information and control for old job should be passed to that
+         particular event." -- the Event now gets its OWN full working
+         controls for Quote/Financials/Mileage/Photos/Receipts/Invoice &
+         Payment/Inspection Checklist/Bill of Material, mirroring the Job
+         Card's own sections (jbd-*) field-for-field but scoped to THIS one
+         Event (jbe-*) rather than shared from the Job. Per Vijayan's
+         answers: Financials are per-Event, Quote linking is per-Event, and
+         these sections have "their own working control" -- not a
+         read-only summary. -->
+    <div class="drawer-section">
+      <h4>Quote</h4>
+      <div id="jbe-quote-linked" hidden></div>
+      <div id="jbe-quote-search-wrap" class="cal-cust-search-wrap">
+        <input type="text" id="jbe-quote-search" placeholder="Search this customer's saved quotes&hellip;">
+        <div class="cal-cust-results" id="jbe-quote-results" hidden></div>
+      </div>
+    </div>
+
+    <div class="drawer-section">
+      <h4>Financials</h4>
+      <div class="field-row">
+        <div class="field"><label>Quoted Amount</label><input type="number" step="0.01" id="jbe-quoted"></div>
+        <div class="field"><label>Approved Amount</label><input type="number" step="0.01" id="jbe-approved"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Actual Material Cost</label><input type="number" step="0.01" id="jbe-cost-material"></div>
+        <div class="field"><label>Actual Labor Cost</label><input type="number" step="0.01" id="jbe-cost-labor"></div>
+      </div>
+      <div class="field"><label>Other Cost</label><input type="number" step="0.01" id="jbe-cost-other"></div>
+      <div class="jb-profit-box" id="jbe-profit-box"></div>
+    </div>
+
+    <div class="drawer-section">
+      <h4>Mileage</h4>
+      <div class="muted" id="jbe-mileage-context" style="font-size:.82rem;margin-bottom:8px">Assign a technician and a Scheduled Date to calculate this trip.</div>
+      <div class="field-row">
+        <div class="field"><label>Miles Driven</label><input type="number" step="0.1" min="0" id="jbe-mileage-miles" placeholder="0.0"></div>
+        <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbe-mileage-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Miles</button></div>
+      </div>
+      <div class="muted" id="jbe-mileage-note" style="font-size:.78rem"></div>
+
+      <div class="jbd-mileage-slot" id="jbe-mileage2-block" hidden style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)">
+        <div class="muted" style="font-size:.78rem;margin-bottom:6px">If Technician 2 drove separately:</div>
+        <div class="field-row">
+          <div class="field"><label>Miles Driven</label><input type="number" step="0.1" min="0" id="jbe-mileage2-miles" placeholder="0.0"></div>
+          <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbe-mileage2-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Miles</button></div>
+        </div>
+        <div class="muted" id="jbe-mileage2-note" style="font-size:.78rem"></div>
+      </div>
+      <div class="jbd-mileage-slot" id="jbe-mileage3-block" hidden style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)">
+        <div class="muted" style="font-size:.78rem;margin-bottom:6px">If Technician 3 drove separately:</div>
+        <div class="field-row">
+          <div class="field"><label>Miles Driven</label><input type="number" step="0.1" min="0" id="jbe-mileage3-miles" placeholder="0.0"></div>
+          <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbe-mileage3-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Miles</button></div>
+        </div>
+        <div class="muted" id="jbe-mileage3-note" style="font-size:.78rem"></div>
+      </div>
+    </div>
+
+    <div class="drawer-section">
+      <h4>Photos</h4>
+      <button type="button" class="btn btn-ghost btn-sm" id="jbe-add-photos-btn">📷 Add Photos</button>
+      <div class="jb-photo-grid" id="jbe-photos-grid"><span class="jb-photo-empty">No photos yet.</span></div>
+    </div>
+
+    <div class="drawer-section">
+      <h4>Receipts</h4>
+      <button type="button" class="btn btn-ghost btn-sm" id="jbe-add-receipt-btn">🧾 Add Receipt</button>
+      <div class="jb-photo-grid" id="jbe-receipts-grid"><span class="jb-photo-empty">No receipts yet.</span></div>
+    </div>
+
+    <div class="drawer-section">
+      <h4>Invoice &amp; Payment <span class="jb-badge" id="jbe-invoice-quote-flag" hidden></span></h4>
+      <div id="jbe-invoice-box"></div>
+    </div>
+
+    <div class="drawer-section">
+      <h4>Inspection</h4>
+      <div class="jb-insp-summary">
+        <span id="jbe-insp-summary" class="muted" style="font-size:.85rem">Not started</span>
+        <button type="button" class="btn btn-ghost btn-sm" id="jbe-open-inspection-btn">✅ Open Inspection Checklist</button>
+      </div>
+    </div>
+
+    <div class="drawer-section">
+      <h4>Bill of Material</h4>
+      <a class="btn btn-ghost btn-sm" id="jbe-bom-btn" href="#" target="_blank" rel="noopener">🧰 Bill of Material</a>
+    </div>
+
     <div class="field"><label>Reason for Visit</label><input type="text" id="jbe-reason"></div>
     <div class="field"><label>Description</label><textarea id="jbe-description" rows="2"></textarea></div>
     <div class="field"><label>Technician Notes</label><textarea id="jbe-tech-notes" rows="2"></textarea></div>
@@ -676,7 +754,32 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
     <div class="modal-close-row">
       <button type="button" class="btn btn-navy btn-sm" id="jb-event-save-btn">Save Event</button>
       <button type="button" class="btn btn-ghost btn-sm" id="jb-event-close-btn">Close</button>
+      <!-- Round 42 Task 121-124: soft-delete (marks the Event Cancelled --
+           see saaEventsDelete's own comment in events-db.js) rather than a
+           hard row delete, since Events are otherwise treated as immutable
+           history everywhere else in this app (Event History list, Mileage
+           leg-chaining, etc.) -- flagged to Vijayan as the assumed behavior
+           since his multiSelect answer on this didn't pick either option. -->
+      <button type="button" class="btn btn-outline btn-sm" id="jb-event-delete-btn" style="margin-left:auto;color:#b42318;border-color:#b42318">Delete Event</button>
       <span id="jb-event-status-msg" class="muted" style="font-size:.85rem"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Inspection checklist modal ============
+     Round 42 Task 122-124: moved to AFTER jb-event-modal in the DOM (it
+     used to sit between jb-detail-modal and jb-event-modal) so it always
+     paints on top of BOTH the Job Card and the Event modal, whichever one
+     is open underneath it -- .modal-overlay elements stack by DOM order,
+     and this one now needs to layer over either. ============ -->
+<div class="modal-overlay" id="jb-inspection-modal" hidden>
+  <div class="modal-card" style="max-width:620px">
+    <h3>Inspection Checklist</h3>
+    <p class="muted" style="font-size:.85rem;margin-bottom:4px">Check off each item as it's verified. Use the camera button to attach a photo to a specific item.</p>
+    <ul class="jb-insp-list" id="jb-insp-list"></ul>
+    <div class="modal-close-row">
+      <button type="button" class="btn btn-navy btn-sm" id="jb-insp-save-btn">Save Inspection</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="jb-insp-close-btn">Close</button>
     </div>
   </div>
 </div>
@@ -707,19 +810,19 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260921d"></script>
-<script src="../assets/js/worksheet.js?v=20260921d"></script>
-<script src="../assets/js/systems-db.js?v=20260921d"></script>
-<script src="../assets/js/events-db.js?v=20260921d"></script>
-<script src="../assets/js/calendar-db.js?v=20260921d"></script>
-<script src="../assets/js/jobs-db.js?v=20260921d"></script>
-<script src="../assets/js/job-photos-db.js?v=20260921d"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260921d"></script>
-<script src="../assets/js/camera-capture.js?v=20260921d"></script>
-<script src="../assets/js/print-invoice.js?v=20260921d"></script>
-<script src="../assets/js/maps-config.js?v=20260921d"></script>
-<script src="../assets/js/mileage-db.js?v=20260921d"></script>
-<script src="../assets/js/jobs.js?v=20260921d"></script>
-<script src="../assets/js/calendar.js?v=20260921d"></script>
+<script src="../assets/js/pricing-data.js?v=20260921e"></script>
+<script src="../assets/js/worksheet.js?v=20260921e"></script>
+<script src="../assets/js/systems-db.js?v=20260921e"></script>
+<script src="../assets/js/events-db.js?v=20260921e"></script>
+<script src="../assets/js/calendar-db.js?v=20260921e"></script>
+<script src="../assets/js/jobs-db.js?v=20260921e"></script>
+<script src="../assets/js/job-photos-db.js?v=20260921e"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260921e"></script>
+<script src="../assets/js/camera-capture.js?v=20260921e"></script>
+<script src="../assets/js/print-invoice.js?v=20260921e"></script>
+<script src="../assets/js/maps-config.js?v=20260921e"></script>
+<script src="../assets/js/mileage-db.js?v=20260921e"></script>
+<script src="../assets/js/jobs.js?v=20260921e"></script>
+<script src="../assets/js/calendar.js?v=20260921e"></script>
 </body>
 </html>

@@ -318,7 +318,21 @@ async function saaMileageComputeDistance(originAddress, destAddress) {
  *  one (primary) technician driving mileage, exactly like before this
  *  round. New technician-2/3 mileage call sites pass technicianId
  *  explicitly to reach their own leg. */
+/** Round 42 Task 121: now resolves the Job's "current" Event first and
+ *  fetches THAT Event's own leg -- a multi-Event job can have more than
+ *  one trip-leg row sharing the same job_id (one per visit) since the
+ *  real source of truth is event_id now, so a plain job_id lookup would
+ *  return whichever row happened to come back first. Falls back to a
+ *  plain job_id lookup only when events-db.js isn't loaded on this page
+ *  (the standalone Mileage report page never calls this) or the job
+ *  somehow has no Event yet. */
 async function saaMileageFetchForJob(jobId, technicianId) {
+  if (typeof saaEventsFetchCurrentForJob === "function") {
+    try {
+      const event = await saaEventsFetchCurrentForJob(jobId);
+      if (event) return await saaMileageFetchForEvent(event.id, technicianId);
+    } catch (e) { /* fall through to the legacy lookup below */ }
+  }
   // leg_type: "trip" excludes a possible return_to_shop row for the same
   // job (Round 35) -- without this, a job that also happens to be its
   // technician's last stop of the day could return either row here
@@ -330,9 +344,51 @@ async function saaMileageFetchForJob(jobId, technicianId) {
   return data[0];
 }
 
+/** Round 42 Task 121, per Vijayan: "events should have their own miles"
+ *  -- the Event-modal equivalent of saaMileageFetchForJob, one row per
+ *  (event, technician). */
+async function saaMileageFetchForEvent(eventId, technicianId) {
+  let query = _saaClient.from("mileage_logs").select("*").eq("event_id", eventId).eq("leg_type", "trip");
+  if (technicianId) query = query.eq("technician_id", technicianId);
+  const { data, error } = await query;
+  if (error || !data || !data.length) return null;
+  return data[0];
+}
+
+/** Builds a full postal address string from an EVENT's own Service
+ *  Address fields (see templates.py's jbe-address/city/state/zip, Round
+ *  42 Task 120) -- same de-duplication logic as saaMileageJobAddress
+ *  above, just reading service_* columns instead of job_* ones. Falls
+ *  back to fallbackJob's own job_address (via saaMileageJobAddress) for
+ *  an older Event whose own Service Address was never filled in. */
+function saaMileageEventAddress(event, fallbackJob) {
+  if (event && event.service_address) {
+    const addr = event.service_address.trim();
+    const lower = addr.toLowerCase();
+    const present = (v) => !!v && lower.includes(String(v).trim().toLowerCase());
+    const parts = [];
+    if (event.service_city && !present(event.service_city)) parts.push(event.service_city);
+    const stateMissing = event.service_state && !present(event.service_state);
+    const zipMissing = event.service_zip && !present(event.service_zip);
+    if (stateMissing && zipMissing) parts.push([event.service_state, event.service_zip].join(" "));
+    else {
+      if (stateMissing) parts.push(event.service_state);
+      if (zipMissing) parts.push(event.service_zip);
+    }
+    return [addr, parts.join(", ")].filter(Boolean).join(", ");
+  }
+  return fallbackJob ? saaMileageJobAddress(fallbackJob) : null;
+}
+
 /** This technician's OTHER scheduled jobs the same day, oldest-first —
  *  used to work out where a leg chain starts and what "leg_order" a job
- *  falls at. Excludes the job itself when excludeJobId is given. */
+ *  falls at. Excludes the job itself when excludeJobId is given.
+ *  DEPRECATED as of Round 42 Task 121 -- leg-chaining now runs off
+ *  `events` (see _saaMileageTechEventsForDate below), since a Job's own
+ *  scheduled_date/time is itself just a read-through sync of its
+ *  "current" Event (see _saaEventsSyncJobFromCurrentEvent in
+ *  events-db.js) and a multi-Event job needs each Event's mileage kept
+ *  separate. Left in place, unused, per this codebase's convention. */
 async function _saaMileageTechJobsForDate(technicianId, dateStr, excludeJobId) {
   const { data, error } = await _saaClient
     .from("jobs")
@@ -346,10 +402,32 @@ async function _saaMileageTechJobsForDate(technicianId, dateStr, excludeJobId) {
     .sort((a, b) => (a.scheduled_time || "").localeCompare(b.scheduled_time || ""));
 }
 
+/** This technician's OTHER scheduled Events the same day, oldest-first —
+ *  the Round 42 Task 121 replacement for _saaMileageTechJobsForDate
+ *  above, keyed on `events.scheduled_start`/`assigned_technician_id`
+ *  instead of the Job columns those are themselves synced from. Each row
+ *  carries its own Service Address fields plus job_id (for the
+ *  return-to-shop leg's cross-reference). Excludes excludeEventId when
+ *  given. */
+async function _saaMileageTechEventsForDate(technicianId, dateStr, excludeEventId) {
+  const { data, error } = await _saaClient
+    .from("events")
+    .select("id,job_id,service_address,service_city,service_state,service_zip,scheduled_start")
+    .eq("assigned_technician_id", technicianId)
+    .not("scheduled_start", "is", null);
+  if (error || !data) return [];
+  return data
+    .filter((e) => e.id !== excludeEventId && String(e.scheduled_start).slice(0, 10) === dateStr)
+    .sort((a, b) => String(a.scheduled_start).slice(11, 16).localeCompare(String(b.scheduled_start).slice(11, 16)));
+}
+
 /** Works out this job's leg position (1-based) among its technician's
  *  stops that day, and the address the leg before it ends at (the
  *  company address for leg 1). Used both to auto-calculate and to show
- *  "From: ..." context even before a distance has been computed. */
+ *  "From: ..." context even before a distance has been computed.
+ *  DEPRECATED as of Round 42 Task 121 -- see saaMileageEventLegContext,
+ *  the Event-based replacement every current call site now uses. Left in
+ *  place, unused, per this codebase's convention. */
 /** technicianId defaults to job.assigned_technician_id (the primary slot,
  *  same as before Round 25) -- pass it explicitly to get technician 2/3's
  *  own leg-chain context instead, since each technician slot drives its
@@ -362,6 +440,22 @@ async function saaMileageLegContext(job, technicianId) {
   const before = others.filter((j) => (j.scheduled_time || "").localeCompare(thisTime) < 0);
   const legOrder = before.length + 1;
   const fromAddress = legOrder === 1 ? SAA_COMPANY_ADDRESS : saaMileageJobAddress(before[before.length - 1]);
+  return { legOrder, fromAddress: fromAddress || SAA_COMPANY_ADDRESS };
+}
+
+/** Round 42 Task 121 -- the Event-based leg-chaining every mileage write
+ *  now goes through (both the Job Card's own Mileage section, via the
+ *  job's "current Event", and the Event modal's own Mileage section,
+ *  directly). technicianId defaults to event.assigned_technician_id. */
+async function saaMileageEventLegContext(event, technicianId, fallbackJob) {
+  const techId = technicianId || (event && event.assigned_technician_id);
+  if (!event || !techId || !event.scheduled_start) return null;
+  const dateStr = String(event.scheduled_start).slice(0, 10);
+  const others = await _saaMileageTechEventsForDate(techId, dateStr, event.id);
+  const thisTime = String(event.scheduled_start).slice(11, 16);
+  const before = others.filter((e) => String(e.scheduled_start).slice(11, 16).localeCompare(thisTime) < 0);
+  const legOrder = before.length + 1;
+  const fromAddress = legOrder === 1 ? SAA_COMPANY_ADDRESS : saaMileageEventAddress(before[before.length - 1], fallbackJob);
   return { legOrder, fromAddress: fromAddress || SAA_COMPANY_ADDRESS };
 }
 
@@ -425,51 +519,40 @@ async function saaMileageFetchAll({ technicianId, dateFrom, dateTo, jobQuery } =
 
 /* ---- Writes ---- */
 
-/** Auto-calculates (or re-calculates) the leg ending at this job: works
- *  out from/to + leg order, calls the Distance Matrix API, and upserts
- *  the result keyed on job_id (one leg per job). Returns {ok, log} or
- *  {ok:false, error}. Never overwrites a row that was last set manually
- *  unless force is true — recalculating a manual entry is an explicit
- *  choice, not something a routine refresh should do quietly. */
-/** technicianId defaults to job.assigned_technician_id (primary slot) --
- *  every pre-Round-25 call site that doesn't pass one keeps calculating
- *  exactly the automatic primary-tech leg it always has. Passing an
- *  explicit technicianId (technician 2 or 3's id) calculates THAT
- *  technician's own separate leg for the same job instead, upserted as
- *  its own mileage_logs row (job_id, technician_id) now that the unique
- *  constraint allows one row per job PER technician rather than one per
- *  job total. */
-async function saaMileageRecalcForJob(job, force, technicianId) {
+/** Round 42 Task 121, per Vijayan: "events should have their own miles"
+ *  -- auto-calculates (or re-calculates) the leg ending at this EVENT
+ *  (one visit): works out from/to + leg order from that Event's own
+ *  Service Address/Scheduled Start, calls the Distance Matrix API, and
+ *  upserts the result keyed on (event_id, technician_id, leg_type) --
+ *  the REAL unique constraint on mileage_logs (confirmed directly
+ *  against the database; see the bug note on saaMileageRecalcForJob
+ *  below). Returns {ok, log} or {ok:false, error}. Never overwrites a
+ *  row that was last set manually unless force is true. fallbackJob
+ *  (optional) lets an older Event with no Service Address of its own
+ *  fall back to its parent Job's address (see saaMileageEventAddress). */
+async function saaMileageRecalcForEvent(event, force, technicianId, fallbackJob) {
   try {
-    const techId = technicianId || job.assigned_technician_id;
+    const techId = technicianId || event.assigned_technician_id;
     if (!techId) throw new Error("Assign a technician before calculating mileage.");
-    const toAddress = saaMileageJobAddress(job);
-    if (!toAddress) throw new Error("This job needs a Service Address before mileage can be calculated.");
-    if (!job.scheduled_date) throw new Error("This job needs a Scheduled Date before mileage can be calculated.");
+    const toAddress = saaMileageEventAddress(event, fallbackJob);
+    if (!toAddress) throw new Error("This event needs a Service Address before mileage can be calculated.");
+    if (!event.scheduled_start) throw new Error("This event needs a Scheduled Date/Time before mileage can be calculated.");
 
-    const existing = await saaMileageFetchForJob(job.id, techId);
+    const existing = await saaMileageFetchForEvent(event.id, techId);
     if (existing && existing.source === "manual" && !force) {
       return { ok: false, error: "This leg was set manually — recalculating would overwrite it.", manual: true };
     }
 
-    const ctx = await saaMileageLegContext(job, techId);
+    const ctx = await saaMileageEventLegContext(event, techId, fallbackJob);
     const miles = await saaMileageComputeDistance(ctx.fromAddress, toAddress);
-    // Round 42 Task 118: stamps this leg with the Job's current Event for
-    // traceability (event_id lives alongside job_id now, same as
-    // invoices/payments/BOM/photos) — leg-chaining itself (from/to/order)
-    // stays keyed on job_id/technician_id/date, unchanged; only pages that
-    // also load events-db.js can resolve this (the standalone Mileage page
-    // doesn't), hence the guard.
-    const eventId = typeof saaEventsGetDefaultEventId === "function" ? await saaEventsGetDefaultEventId(job.id) : null;
-
     const { data, error } = await _saaClient
       .from("mileage_logs")
       .upsert(
         {
           technician_id: techId,
-          job_id: job.id,
-          event_id: eventId,
-          log_date: job.scheduled_date,
+          job_id: event.job_id || null,
+          event_id: event.id,
+          log_date: String(event.scheduled_start).slice(0, 10),
           leg_order: ctx.legOrder,
           leg_type: "trip",
           from_address: ctx.fromAddress,
@@ -478,64 +561,50 @@ async function saaMileageRecalcForJob(job, force, technicianId) {
           source: "auto",
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "job_id,technician_id,leg_type" }
+        { onConflict: "event_id,technician_id,leg_type" }
       )
       .select("*")
       .single();
     if (error) throw error;
-    // Round 35 ("update miles to include to and from"): whichever job is
+    // Round 35 ("update miles to include to and from"): whichever Event is
     // now this technician's last stop of the day gets an extra leg back to
-    // the shop -- a save/recalc anywhere in the day's chain can change who
-    // that is, so resync every time rather than only when the last job
-    // itself is touched.
-    await saaMileageSyncReturnLeg(techId, job.scheduled_date);
+    // the shop.
+    await saaMileageSyncReturnLeg(techId, String(event.scheduled_start).slice(0, 10));
     return { ok: true, log: data };
   } catch (e) {
     return { ok: false, error: (e && e.message) || String(e) };
   }
 }
 
-/** Best-effort, silent version of saaMileageRecalcForJob for automatic
- *  use: called from job creation, drag-and-drop rescheduling, and Job
- *  Card saves so that EVERY job with enough info on file (technician +
- *  scheduled date + service address) ends up with a real mileage number
- *  recorded — not just the ones where someone happens to click
- *  "Calculate Miles" (round 11 follow-up, 2026-09-13: "Save miles for
- *  every job"). Never throws and never blocks whatever save triggered
- *  it — a missing technician/date/address, an address the routing
- *  service can't find, or the free routing service being briefly down
- *  all just mean this job's mileage stays as it was (fixable by hand
- *  from the Job Card or the Mileage page). A manually-set leg is always
- *  left alone, same guarantee as the "Calculate Miles" button. */
-async function saaMileageEnsureForJob(job, technicianId) {
+/** Best-effort, silent version of saaMileageRecalcForEvent, same
+ *  guarantees as the old saaMileageEnsureForJob (never throws, never
+ *  blocks whatever save triggered it, leaves a manual entry alone). */
+async function saaMileageEnsureForEvent(event, technicianId, fallbackJob) {
   try {
-    return await saaMileageRecalcForJob(job, undefined, technicianId);
+    return await saaMileageRecalcForEvent(event, undefined, technicianId, fallbackJob);
   } catch (e) {
     return { ok: false, error: (e && e.message) || String(e) };
   }
 }
 
-/** Manual override for the leg ending at this job — same from/to/leg-
- *  order context as the auto path (so the row still reads sensibly on
- *  the Mileage page), but the mile figure is whatever the office/tech
- *  typed in, and source is stamped 'manual' so a later recalc won't
- *  silently clobber it. */
-async function saaMileageSetManualForJob(job, miles, technicianId) {
+/** Manual override for the leg ending at this Event — same from/to/leg-
+ *  order context as the auto path, but the mile figure is whatever the
+ *  office/tech typed in, source stamped 'manual'. */
+async function saaMileageSetManualForEvent(event, miles, technicianId, fallbackJob) {
   try {
-    const techId = technicianId || job.assigned_technician_id;
+    const techId = technicianId || event.assigned_technician_id;
     if (!techId) throw new Error("Assign a technician before logging mileage.");
-    const toAddress = saaMileageJobAddress(job) || "(no address on file)";
-    if (!job.scheduled_date) throw new Error("This job needs a Scheduled Date before mileage can be logged.");
-    const ctx = await saaMileageLegContext(job, techId);
-    const eventId = typeof saaEventsGetDefaultEventId === "function" ? await saaEventsGetDefaultEventId(job.id) : null;
+    const toAddress = saaMileageEventAddress(event, fallbackJob) || "(no address on file)";
+    if (!event.scheduled_start) throw new Error("This event needs a Scheduled Date/Time before mileage can be logged.");
+    const ctx = await saaMileageEventLegContext(event, techId, fallbackJob);
     const { data, error } = await _saaClient
       .from("mileage_logs")
       .upsert(
         {
           technician_id: techId,
-          job_id: job.id,
-          event_id: eventId,
-          log_date: job.scheduled_date,
+          job_id: event.job_id || null,
+          event_id: event.id,
+          log_date: String(event.scheduled_start).slice(0, 10),
           leg_order: ctx.legOrder,
           leg_type: "trip",
           from_address: ctx.fromAddress,
@@ -544,36 +613,113 @@ async function saaMileageSetManualForJob(job, miles, technicianId) {
           source: "manual",
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "job_id,technician_id,leg_type" }
+        { onConflict: "event_id,technician_id,leg_type" }
       )
       .select("*")
       .single();
     if (error) throw error;
-    await saaMileageSyncReturnLeg(techId, job.scheduled_date);
+    await saaMileageSyncReturnLeg(techId, String(event.scheduled_start).slice(0, 10));
     return { ok: true, log: data };
   } catch (e) {
     return { ok: false, error: (e && e.message) || String(e) };
   }
 }
 
-/** Keeps the "drive back to the shop" leg in sync with whichever job is
+/** technicianId/legType scope the delete same as the old
+ *  saaMileageDeleteForJob. After deleting, the affected technician/
+ *  date's return leg is resynced. */
+async function saaMileageDeleteForEvent(eventId, technicianId, legType) {
+  const lt = legType || "trip";
+  let selQuery = _saaClient.from("mileage_logs").select("technician_id,log_date").eq("event_id", eventId).eq("leg_type", lt);
+  if (technicianId) selQuery = selQuery.eq("technician_id", technicianId);
+  const { data: affected } = await selQuery;
+
+  let query = _saaClient.from("mileage_logs").delete().eq("event_id", eventId).eq("leg_type", lt);
+  if (technicianId) query = query.eq("technician_id", technicianId);
+  const { error } = await query;
+  if (error) return { ok: false, error: error.message };
+
+  for (const row of affected || []) {
+    await saaMileageSyncReturnLeg(row.technician_id, row.log_date);
+  }
+  return { ok: true };
+}
+
+/* ---- Job Card (legacy) wrappers ----
+   Round 42 Task 121: the Job Card's own Mileage section keeps working
+   exactly as before -- these thin wrappers resolve the Job's "current"
+   Event (see saaEventsFetchCurrentForJob in events-db.js, same "one
+   notion of current" the Job Card's Financials/Invoice/BOM/Photos
+   sections already use) and delegate to the Event-based functions
+   above, passing the Job itself as fallbackJob so an Event whose own
+   Service Address was never filled in still resolves one from the Job.
+   This is also the fix for a real bug found while building this: the
+   OLD versions of these functions upserted with
+   `onConflict: "job_id,technician_id,leg_type"`, but the actual
+   database constraint (added during the original Round 42 multi-visit
+   consolidation) is `UNIQUE (event_id, technician_id, leg_type)` -- a
+   mismatched onConflict target is rejected by Postgres outright
+   ("no unique or exclusion constraint matching the ON CONFLICT
+   specification"), meaning every mileage auto-calculate/manual-set
+   against the real database has been silently failing (safely caught by
+   the try/catch and surfaced as a toast) since that constraint changed,
+   even though it always appeared to work against the Playwright mock
+   client (which doesn't validate onConflict targets at all). Routing
+   through the Event-based functions above, whose onConflict target
+   matches the real constraint, fixes this for both the Job Card and the
+   new Event modal at once. */
+async function _saaMileageEventForJobLegacy(job) {
+  const event = await saaEventsFetchCurrentForJob(job.id);
+  if (!event) throw new Error("This job has no Event yet — nothing to attach mileage to.");
+  return event;
+}
+async function saaMileageRecalcForJob(job, force, technicianId) {
+  try {
+    const event = await _saaMileageEventForJobLegacy(job);
+    return await saaMileageRecalcForEvent(event, force, technicianId, job);
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+async function saaMileageEnsureForJob(job, technicianId) {
+  try {
+    return await saaMileageRecalcForJob(job, undefined, technicianId);
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+async function saaMileageSetManualForJob(job, miles, technicianId) {
+  try {
+    const event = await _saaMileageEventForJobLegacy(job);
+    return await saaMileageSetManualForEvent(event, miles, technicianId, job);
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+async function saaMileageDeleteForJob(jobId, technicianId, legType) {
+  try {
+    const event = await saaEventsFetchCurrentForJob(jobId);
+    if (!event) return { ok: true }; // nothing to delete
+    return await saaMileageDeleteForEvent(event.id, technicianId, legType);
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+/** Keeps the "drive back to the shop" leg in sync with whichever Event is
  *  actually this technician's LAST scheduled stop on this date (Round 35:
- *  "update miles to include to and from" -- the office wants a full
- *  shop -> job -> job -> ... -> shop day captured, not just the drive
- *  between stops, so each day's last job gets an extra leg_type
- *  'return_to_shop' row back to SAA_COMPANY_ADDRESS). Called after every
- *  write/delete that could change who that last job is, so the return
- *  leg follows the schedule automatically instead of needing a manual
- *  fix every time a job is added, rescheduled, or removed. A
- *  manually-corrected return leg (source: 'manual') is left alone as
- *  long as it still points at the real last job, same guarantee the
- *  trip-leg upserts give a manually-set Miles Driven value. Never
- *  throws -- this is best-effort background sync, same as
- *  saaMileageEnsureForJob. */
+ *  "update miles to include to and from"). Called after every write/
+ *  delete that could change who that last Event is. A manually-corrected
+ *  return leg (source: 'manual') is left alone as long as it still points
+ *  at the real last Event. Never throws -- best-effort background sync.
+ *  Round 42 Task 121: rewritten to chain off `events` (see
+ *  _saaMileageTechEventsForDate) instead of `jobs`, and to upsert with the
+ *  onConflict target that actually matches the database (event_id,
+ *  technician_id, leg_type) -- see the bug note above. */
 async function saaMileageSyncReturnLeg(technicianId, dateStr) {
   try {
     if (!technicianId || !dateStr) return;
-    const jobs = await _saaMileageTechJobsForDate(technicianId, dateStr, null);
+    const events = await _saaMileageTechEventsForDate(technicianId, dateStr, null);
 
     const { data: existingRows } = await _saaClient
       .from("mileage_logs")
@@ -583,29 +729,30 @@ async function saaMileageSyncReturnLeg(technicianId, dateStr) {
       .eq("leg_type", "return_to_shop");
     const existing = (existingRows || [])[0] || null;
 
-    if (!jobs.length) {
+    if (!events.length) {
       // No scheduled stops left this day for this technician -- nothing to
       // return from, so clear any stale return leg.
       if (existing) await _saaClient.from("mileage_logs").delete().eq("id", existing.id);
       return;
     }
 
-    const lastJob = jobs[jobs.length - 1];
-    if (existing && existing.job_id === lastJob.id) {
+    const lastEvent = events[events.length - 1];
+    if (existing && existing.event_id === lastEvent.id) {
       if (existing.source === "manual") return; // already correct, and hand-corrected -- leave it
     } else if (existing) {
-      // The last job of the day changed (reschedule, new later job added,
-      // earlier job removed) -- the old return leg no longer belongs here.
+      // The last stop of the day changed (reschedule, new later Event
+      // added, earlier one removed) -- the old return leg no longer belongs here.
       if (existing.source === "manual") return; // a manual override stays until someone clears it themselves
       await _saaClient.from("mileage_logs").delete().eq("id", existing.id);
     }
 
-    const fromAddress = saaMileageJobAddress(lastJob) || SAA_COMPANY_ADDRESS;
+    const fromAddress = saaMileageEventAddress(lastEvent) || SAA_COMPANY_ADDRESS;
     const miles = await saaMileageComputeDistance(fromAddress, SAA_COMPANY_ADDRESS);
     await _saaClient.from("mileage_logs").upsert(
       {
         technician_id: technicianId,
-        job_id: lastJob.id,
+        job_id: lastEvent.job_id || null,
+        event_id: lastEvent.id,
         log_date: dateStr,
         leg_order: 999,
         leg_type: "return_to_shop",
@@ -615,41 +762,13 @@ async function saaMileageSyncReturnLeg(technicianId, dateStr) {
         source: "auto",
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "job_id,technician_id,leg_type" }
+      { onConflict: "event_id,technician_id,leg_type" }
     );
   } catch (e) {
     // Best-effort: a return leg that fails to compute (bad address, the
     // free routing service briefly down) just stays as it was until the
     // next successful sync -- never let it block whatever save triggered it.
   }
-}
-
-/** technicianId scopes the delete to just that technician's leg for the
- *  job -- pass it (Round 25) so clearing technician 2/3's own Miles
- *  Driven field can't accidentally wipe the primary technician's leg, or
- *  vice versa. Omitting it deletes every leg on file for the job (all
- *  technicians), same as the original one-row-per-job behavior.
- *  legType (Round 35) defaults to 'trip' -- clearing a job's Miles Driven
- *  field should only ever remove that job's own arrival leg, never an
- *  unrelated return_to_shop leg that happens to share the same job_id
- *  because this job is (or was) the day's last stop. After deleting, the
- *  affected technician/date's return leg is resynced in case this job's
- *  removal changes who the day's actual last stop is. */
-async function saaMileageDeleteForJob(jobId, technicianId, legType) {
-  const lt = legType || "trip";
-  let selQuery = _saaClient.from("mileage_logs").select("technician_id,log_date").eq("job_id", jobId).eq("leg_type", lt);
-  if (technicianId) selQuery = selQuery.eq("technician_id", technicianId);
-  const { data: affected } = await selQuery;
-
-  let query = _saaClient.from("mileage_logs").delete().eq("job_id", jobId).eq("leg_type", lt);
-  if (technicianId) query = query.eq("technician_id", technicianId);
-  const { error } = await query;
-  if (error) return { ok: false, error: error.message };
-
-  for (const row of affected || []) {
-    await saaMileageSyncReturnLeg(row.technician_id, row.log_date);
-  }
-  return { ok: true };
 }
 
 /** A standalone entry with no job behind it — a parts-house run, a trip

@@ -90,6 +90,90 @@ async function saaBomFetchJob(jobId) {
   return Object.assign({}, job, { customer: customer || null, linkedQuote: quote || null, manualItems: manualItems || [] });
 }
 
+/** Round 42 Task 122: Event-scoped equivalent of saaBomFetchJob -- loads
+ *  one specific Event's own Bill of Material for the dedicated BOM page,
+ *  reached via bill-of-material.html?event=<id> (the Event modal's own
+ *  "Bill of Material" link -- distinct from, and in addition to, the Job
+ *  Card's ?job= link). Per Vijayan: "it will have its own working
+ *  control" -- an Event's Bill of Material is its own quote link, its own
+ *  manually-added items, and its own numbering (see
+ *  saaBomEnsureNumberForEvent/saaBomCreateOrderForEvent below), separate
+ *  from the parent Job's. Returns the same shape as saaBomFetchJob
+ *  (customer/linkedQuote/manualItems) so the page's existing render
+ *  functions (saaBomCombinedItems etc.) work unchanged, plus a light
+ *  `job` reference (job_number/title only, for a "back to Job" link) and
+ *  an `isEvent: true` flag so saaBomAddItem below knows which id is which. */
+async function saaBomFetchEvent(eventId) {
+  const { data: event, error: e1 } = await _saaClient.from("events").select("*").eq("id", eventId).single();
+  if (e1) throw e1;
+  const [{ data: customer }, { data: quote }, { data: job }, manualItems] = await Promise.all([
+    event.customer_id ? _saaClient.from("customers").select("*").eq("id", event.customer_id).maybeSingle() : { data: null },
+    event.linked_quote_id ? _saaClient.from("quotes").select("*").eq("id", event.linked_quote_id).maybeSingle() : { data: null },
+    event.job_id ? _saaClient.from("jobs").select("id,job_number,title").eq("id", event.job_id).maybeSingle() : { data: null },
+    saaBomFetchItemsForEvent(eventId),
+  ]);
+  return Object.assign({}, event, {
+    customer: customer || null,
+    linkedQuote: quote || null,
+    job: job || null,
+    manualItems: manualItems || [],
+    isEvent: true,
+  });
+}
+
+/** Event-scoped equivalent of saaBomFetchItems (jobs-db.js). */
+async function saaBomFetchItemsForEvent(eventId) {
+  const { data, error } = await _saaClient
+    .from("job_materials")
+    .select("*")
+    .eq("event_id", eventId)
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+/** Event-scoped equivalents of saaBomEnsureNumber/saaBomCreateOrder
+ *  (jobs-db.js), writing to events.bom_number/bom_order_number/
+ *  bom_order_date/bom_status/bom_supplier (added by the Round 42 Task 121
+ *  migration) via saaEventsUpdate instead of jobs.* via saaJobsUpdateJob.
+ *  Both draw from the SAME BOM-YYYY-#### / PO-YYYY-#### sequence as the
+ *  Job Card (see _saaBomNextNumber/_saaBomNextOrderNumber in jobs-db.js,
+ *  now counting across both jobs and events), so numbers never collide
+ *  between a Job's own BOM and one of its Events' BOMs. */
+async function saaBomEnsureNumberForEvent(event) {
+  try {
+    if (event.bom_number) return { ok: true, bomNumber: event.bom_number };
+    const firstName = event.customer ? event.customer.first_name : await _saaCustomerFirstName(event.customer_id);
+    const bomNumber = await _saaBomNextNumber(firstName);
+    const res = await saaEventsUpdate(event.id, { bom_number: bomNumber });
+    if (!res.ok) return res;
+    event.bom_number = bomNumber;
+    return { ok: true, bomNumber };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+async function saaBomCreateOrderForEvent(event, supplier) {
+  try {
+    const numRes = await saaBomEnsureNumberForEvent(event);
+    if (!numRes.ok) return numRes;
+    const patch = { bom_supplier: supplier || null };
+    if (!event.bom_order_number) {
+      const firstName = event.customer ? event.customer.first_name : await _saaCustomerFirstName(event.customer_id);
+      patch.bom_order_number = await _saaBomNextOrderNumber(firstName);
+      patch.bom_order_date = new Date().toISOString().slice(0, 10);
+      patch.bom_status = "ordered";
+    }
+    const res = await saaEventsUpdate(event.id, patch);
+    if (!res.ok) return res;
+    Object.assign(event, patch);
+    return { ok: true, orderNumber: event.bom_order_number, orderDate: event.bom_order_date, bomNumber: event.bom_number };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
 /** Combines the worksheet-derived items (from the linked quote's saved
  *  form_state, if any) with this job's manually-added job_materials rows
  *  into one flat qty+unit list — no cost anywhere, per "no need to
@@ -118,12 +202,25 @@ async function saaBomAddItem(jobDetail, { description, unit, qty }) {
     qty = Number(qty) || 1;
     unit = (unit || "ea").trim() || "ea";
     const existing = jobDetail.manualItems || [];
-    // Round 42 Task 118: auto-attaches to the Job's current Event (see
-    // saaEventsGetDefaultEventId in events-db.js, now loaded on this page).
-    const eventId = typeof saaEventsGetDefaultEventId === "function" ? await saaEventsGetDefaultEventId(jobDetail.id) : null;
+    // Round 42 Task 122: jobDetail can now be either a Job detail (from
+    // saaBomFetchJob, jobDetail.id is the job's own id) or an Event detail
+    // (from saaBomFetchEvent, jobDetail.isEvent is true and jobDetail.id is
+    // the EVENT's id, with jobDetail.job_id pointing at its parent Job) --
+    // this item's row needs the right id in each column either way.
+    const isEvent = !!jobDetail.isEvent;
+    // Round 42 Task 118: for the Job-scoped page (unchanged), auto-attaches
+    // to the Job's current Event (see saaEventsGetDefaultEventId in
+    // events-db.js, now loaded on this page). For the Event-scoped page,
+    // the item belongs to exactly the Event this BOM page is showing.
+    const eventId = isEvent
+      ? jobDetail.id
+      : (typeof saaEventsGetDefaultEventId === "function" ? await saaEventsGetDefaultEventId(jobDetail.id) : null);
+    const insertRow = isEvent
+      ? { job_id: jobDetail.job_id || null, event_id: eventId, description, qty, unit, sort_order: existing.length }
+      : { job_id: jobDetail.id, event_id: eventId, description, qty, unit, sort_order: existing.length };
     const { data, error } = await _saaClient
       .from("job_materials")
-      .insert({ job_id: jobDetail.id, event_id: eventId, description, qty, unit, sort_order: existing.length })
+      .insert(insertRow)
       .select("*")
       .single();
     if (error) throw error;
