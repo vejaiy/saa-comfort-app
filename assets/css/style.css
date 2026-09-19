@@ -662,3 +662,46 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .manual-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); margin-bottom: 8px; flex-wrap: wrap; }
 .manual-row .name { font-weight: 600; }
 .manual-row .meta { color: var(--muted); font-size: .8rem; }
+
+/* ============================================================
+   Round 42 (2026-09-19) — System + Event History on the Job Card.
+   Event Status colors are a SEPARATE vocabulary from the Calendar's
+   --st-* appointment-status colors above (Events add Confirmed/
+   In Progress/Rescheduled and drop On Site/Waiting for Parts, which
+   moved to being a Job Status instead — see events_event_status_check
+   in the Round 42 schema). Reuses the same hex values where the two
+   vocabularies share a concept (Scheduled/En Route/Completed/
+   Cancelled/No Show) so the two color schemes read consistently.
+   ============================================================ */
+:root {
+  --evt-scheduled: #d6a70a;
+  --evt-confirmed: #1e8fd9;
+  --evt-en_route: #1e6fd9;
+  --evt-in_progress: #7a3fd1;
+  --evt-completed: #1c7c4d;
+  --evt-cancelled: #b3261e;
+  --evt-rescheduled: #c9701c;
+  --evt-no_show: #33404a;
+}
+.jb-event-badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: .7rem; font-weight: 700; color: #fff; white-space: nowrap; }
+.jb-event-badge.evt-scheduled { background: var(--evt-scheduled); color: #3a2c00; }
+.jb-event-badge.evt-confirmed { background: var(--evt-confirmed); }
+.jb-event-badge.evt-en_route { background: var(--evt-en_route); }
+.jb-event-badge.evt-in_progress { background: var(--evt-in_progress); }
+.jb-event-badge.evt-completed { background: var(--evt-completed); }
+.jb-event-badge.evt-cancelled { background: var(--evt-cancelled); }
+.jb-event-badge.evt-rescheduled { background: var(--evt-rescheduled); }
+.jb-event-badge.evt-no_show { background: var(--evt-no_show); }
+
+.jb-event-list { list-style: none; margin: 10px 0 0; padding: 0; }
+.jb-event-list li { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-left: 4px solid var(--evt-scheduled); border-radius: 8px; background: var(--card); margin-bottom: 8px; cursor: pointer; transition: box-shadow .12s; }
+.jb-event-list li:hover { box-shadow: var(--shadow); }
+.jb-event-list li .jb-event-main { flex: 1; min-width: 0; }
+.jb-event-list li .jb-event-title { font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.jb-event-list li .jb-event-meta { color: var(--muted); font-size: .8rem; margin-top: 2px; }
+.jb-event-empty { color: var(--muted); font-size: .85rem; padding: 8px 2px; }
+.jb-event-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+.jb-system-box { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: #fbfcfd; margin-bottom: 10px; }
+.jb-system-box .jb-system-name { font-weight: 700; color: var(--ink); }
+.jb-system-box .jb-system-meta { color: var(--muted); font-size: .82rem; margin-top: 2px; }

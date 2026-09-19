@@ -21,6 +21,10 @@ let _jbQuoteSearchTimer = null;
 let _jbPhotos = []; // every job_photos row for the open job (general + inspection-linked)
 let _jbInspectionResults = []; // [{index, item, checked}] — synced with INSPECTION_ITEMS by index
 let _jbWarrantyFiles = []; // every job_warranty_files row for the open job
+let _jbSystem = null; // Round 42 (2026-09-19): the open job's System row (systems-db.js)
+let _jbEvents = []; // Round 42: the open job's full Event History, newest first (events-db.js)
+let _jbEventModalMode = null; // "create" | "edit" -- which flow jb-event-modal is currently in
+let _jbEventModalTarget = null; // the Event object being edited, or null in "create" mode
 
 function _jbToast(msg, isError) {
   const el = document.getElementById("jb-toast");
@@ -1491,6 +1495,217 @@ async function jbCalculateMileageSlot(n) {
   }
 }
 
+/* ============================== Round 42 (2026-09-19): System + Event History ==============================
+ * Customer -> System -> Job -> Event. The System section shows/edits the
+ * one piece of HVAC equipment this Job is permanently attached to; the
+ * Event History section lists every visit (Event) against this Job,
+ * newest first, each clickable to open its full record. "+ Schedule
+ * Follow-Up" / "+ Schedule New Event" both open the same jb-event-modal
+ * in create mode, auto-associated to whichever Job is already open --
+ * no re-picking Customer/System/Job, per spec. */
+
+const SAA_SYSTEM_TYPE_OPTION_PAIRS = SAA_SYSTEM_TYPE_OPTIONS.map((v) => [v, v]);
+const SAA_SYSTEM_ORIENTATION_OPTION_PAIRS = [["", "—"]].concat(SAA_SYSTEM_ORIENTATION_OPTIONS.map((v) => [v, v]));
+
+async function jbRenderSystemSection(job) {
+  _jbSystem = job.system_id ? await saaSystemsFetchById(job.system_id) : null;
+
+  const box = document.getElementById("jbd-system-box");
+  if (!_jbSystem) {
+    box.innerHTML = `<span class="muted" style="font-size:.85rem">No System on file for this job yet.</span>`;
+  } else {
+    const bits = [_jbSystem.manufacturer, _jbSystem.model_number ? `#${_jbSystem.model_number}` : null, _jbSystem.tonnage ? `${_jbSystem.tonnage}T` : null].filter(Boolean).join(" · ");
+    box.innerHTML = `<div class="jb-system-name">${_jbSystem.system_name || "System"}</div>` +
+      (bits ? `<div class="jb-system-meta">${bits}</div>` : "");
+  }
+
+  document.getElementById("jbd-sys-type").innerHTML = `<option value="">—</option>` + _jbOptionsHtml(SAA_SYSTEM_TYPE_OPTION_PAIRS, _jbSystem ? _jbSystem.system_type : "");
+  document.getElementById("jbd-sys-orientation").innerHTML = _jbOptionsHtml(SAA_SYSTEM_ORIENTATION_OPTION_PAIRS, _jbSystem ? _jbSystem.system_orientation : "");
+  document.getElementById("jbd-sys-name").value = (_jbSystem && _jbSystem.system_name) || "";
+  document.getElementById("jbd-sys-manufacturer").value = (_jbSystem && _jbSystem.manufacturer) || "";
+  document.getElementById("jbd-sys-model").value = (_jbSystem && _jbSystem.model_number) || "";
+  document.getElementById("jbd-sys-serial").value = (_jbSystem && _jbSystem.serial_number) || "";
+  document.getElementById("jbd-sys-tonnage").value = (_jbSystem && _jbSystem.tonnage) || "";
+  document.getElementById("jbd-sys-refrigerant").value = (_jbSystem && _jbSystem.refrigerant) || "";
+  document.getElementById("jbd-sys-install-date").value = (_jbSystem && _jbSystem.install_date) || "";
+  document.getElementById("jbd-sys-location").value = (_jbSystem && _jbSystem.system_location) || "";
+  document.getElementById("jbd-sys-warranty").value = (_jbSystem && _jbSystem.warranty_info) || "";
+  document.getElementById("jbd-sys-status").textContent = "";
+}
+
+async function jbSaveSystem() {
+  if (!_jbCurrentJob || !_jbSystem) return;
+  const btn = document.getElementById("jbd-sys-save-btn");
+  const msg = document.getElementById("jbd-sys-status");
+  btn.disabled = true;
+  const res = await saaSystemsUpdate(_jbSystem.id, {
+    system_name: document.getElementById("jbd-sys-name").value.trim() || "System",
+    system_type: document.getElementById("jbd-sys-type").value || null,
+    manufacturer: document.getElementById("jbd-sys-manufacturer").value.trim() || null,
+    model_number: document.getElementById("jbd-sys-model").value.trim() || null,
+    serial_number: document.getElementById("jbd-sys-serial").value.trim() || null,
+    tonnage: document.getElementById("jbd-sys-tonnage").value || null,
+    refrigerant: document.getElementById("jbd-sys-refrigerant").value.trim() || null,
+    install_date: document.getElementById("jbd-sys-install-date").value || null,
+    system_location: document.getElementById("jbd-sys-location").value.trim() || null,
+    system_orientation: document.getElementById("jbd-sys-orientation").value || null,
+    warranty_info: document.getElementById("jbd-sys-warranty").value.trim() || null,
+  });
+  btn.disabled = false;
+  if (res.ok) {
+    // jbRenderSystemSection re-populates every field from the DB (and
+    // clears jbd-sys-status itself, since it's also used when a fresh Job
+    // is opened) -- so the "System saved." message has to be set AFTER
+    // that call runs, not before, or this re-render wipes it immediately.
+    await jbRenderSystemSection(_jbCurrentJob);
+    msg.textContent = "System saved.";
+    msg.style.color = "";
+  } else {
+    msg.textContent = res.error;
+    msg.style.color = "#b3261e";
+  }
+}
+
+function _jbEventTimeLabel(iso) {
+  if (!iso) return "Unscheduled";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "Unscheduled";
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+async function jbRenderEventTimeline(job) {
+  _jbEvents = await saaEventsFetchForJob(job.id);
+  const list = document.getElementById("jbd-event-list");
+  if (!_jbEvents.length) {
+    list.innerHTML = `<li class="jb-event-empty" style="cursor:default;border:none;padding:4px 2px">No events yet — use "Schedule New Event" above to add the first visit.</li>`;
+    return;
+  }
+  list.innerHTML = _jbEvents.map((e) => {
+    const techNames = [e.technician, e.technician2, e.technician3].filter(Boolean).map((t) => t.name).join(", ");
+    return `
+    <li data-event-id="${e.id}">
+      <div class="jb-event-main">
+        <div class="jb-event-title">
+          <span>${saaEventTypeLabel(e.event_type)}</span>
+          <span class="jb-event-badge evt-${e.event_status}">${saaEventStatusLabel(e.event_status)}</span>
+        </div>
+        <div class="jb-event-meta">${_jbEventTimeLabel(e.scheduled_start)}${techNames ? " · " + techNames : ""}${e.reason ? " · " + e.reason : ""}</div>
+      </div>
+    </li>`;
+  }).join("");
+  list.querySelectorAll("li[data-event-id]").forEach((li) => {
+    li.addEventListener("click", () => {
+      const ev = _jbEvents.find((e) => e.id === li.dataset.eventId);
+      if (ev) jbOpenEventModal(ev);
+    });
+  });
+}
+
+function _jbEventTechOptionsHtml(selectedId) {
+  return `<option value="">None</option>` + _jbTechnicians.map((t) => `<option value="${t.id}"${t.id === selectedId ? " selected" : ""}>${t.name}</option>`).join("");
+}
+
+/** Opens jb-event-modal. Pass an existing Event object to edit it, or
+ *  null to create a new one (used by both "+ Schedule Follow-Up" and
+ *  "+ Schedule New Event" -- the only difference between them is the
+ *  Event Type the form starts pre-set to). */
+function jbOpenEventModal(event, defaultType) {
+  _jbEventModalMode = event ? "edit" : "create";
+  _jbEventModalTarget = event || null;
+
+  document.getElementById("jb-event-modal-title").textContent = event ? "Event" : "Schedule Event";
+  document.getElementById("jb-event-modal-number").textContent = event ? event.event_number : "";
+  document.getElementById("jbe-type").innerHTML = _jbOptionsHtml(SAA_EVENT_TYPE_OPTIONS, event ? event.event_type : (defaultType || "service_call"));
+  document.getElementById("jbe-status").innerHTML = _jbOptionsHtml(SAA_EVENT_STATUS_OPTIONS, event ? event.event_status : "scheduled");
+  document.getElementById("jbe-tech").innerHTML = _jbEventTechOptionsHtml(event ? event.assigned_technician_id : (_jbCurrentJob ? _jbCurrentJob.assigned_technician_id : ""));
+  document.getElementById("jbe-tech2").innerHTML = _jbEventTechOptionsHtml(event ? event.assigned_technician_id_2 : "");
+
+  const start = event && event.scheduled_start ? new Date(event.scheduled_start) : null;
+  const pad = (n) => String(n).padStart(2, "0");
+  document.getElementById("jbe-date").value = start ? `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}` : "";
+  document.getElementById("jbe-time").value = start ? `${pad(start.getHours())}:${pad(start.getMinutes())}` : "";
+
+  document.getElementById("jbe-reason").value = (event && event.reason) || "";
+  document.getElementById("jbe-description").value = (event && event.description) || "";
+  document.getElementById("jbe-tech-notes").value = (event && event.technician_notes) || "";
+  document.getElementById("jbe-cust-notes").value = (event && event.customer_notes) || "";
+  document.getElementById("jbe-work").value = (event && event.work_performed) || "";
+  document.getElementById("jbe-parts").value = (event && event.parts_used) || "";
+  document.getElementById("jbe-sig-name").value = (event && event.customer_signature_name) || "";
+  document.getElementById("jbe-sig-date").value = (event && event.customer_signature_date) || "";
+  document.getElementById("jb-event-status-msg").textContent = "";
+
+  document.getElementById("jb-event-modal").hidden = false;
+}
+
+function jbCloseEventModal() {
+  document.getElementById("jb-event-modal").hidden = true;
+  _jbEventModalTarget = null;
+}
+
+async function jbSaveEventModal() {
+  if (!_jbCurrentJob) return;
+  const btn = document.getElementById("jb-event-save-btn");
+  const msg = document.getElementById("jb-event-status-msg");
+  btn.disabled = true;
+
+  const dateVal = document.getElementById("jbe-date").value;
+  const timeVal = document.getElementById("jbe-time").value || "09:00";
+  const scheduledStart = dateVal ? `${dateVal}T${timeVal}:00` : null;
+  const eventType = document.getElementById("jbe-type").value;
+  const eventStatus = document.getElementById("jbe-status").value;
+  const technicianId = document.getElementById("jbe-tech").value || null;
+  const technicianId2 = document.getElementById("jbe-tech2").value || null;
+  const reason = document.getElementById("jbe-reason").value.trim() || null;
+  const description = document.getElementById("jbe-description").value.trim() || null;
+  // Work-performed / notes / signature fields the modal also exposes --
+  // real DB column names, since these only ever go through saaEventsUpdate
+  // (directly on edit; as a same-turn follow-up patch on create, so
+  // nothing typed into them is silently dropped either way).
+  const detailFields = {
+    technician_notes: document.getElementById("jbe-tech-notes").value.trim() || null,
+    customer_notes: document.getElementById("jbe-cust-notes").value.trim() || null,
+    work_performed: document.getElementById("jbe-work").value.trim() || null,
+    parts_used: document.getElementById("jbe-parts").value.trim() || null,
+    customer_signature_name: document.getElementById("jbe-sig-name").value.trim() || null,
+    customer_signature_date: document.getElementById("jbe-sig-date").value || null,
+  };
+
+  let res;
+  if (_jbEventModalMode === "edit" && _jbEventModalTarget) {
+    res = await saaEventsUpdate(_jbEventModalTarget.id, Object.assign({}, detailFields, {
+      event_type: eventType,
+      event_status: eventStatus,
+      scheduled_start: scheduledStart,
+      scheduled_end: null,
+      assigned_technician_id: technicianId,
+      assigned_technician_id_2: technicianId2,
+      reason,
+      description,
+    }));
+  } else {
+    res = await saaEventsCreateForJob(_jbCurrentJob.id, {
+      eventType, eventStatus, scheduledStart, scheduledEnd: null,
+      technicianId, technicianId2, reason, description,
+    });
+    if (res.ok && Object.values(detailFields).some((v) => v !== null)) {
+      // Rare on a freshly-scheduled event, but nothing the office typed
+      // into the detail fields before saving should be lost.
+      await saaEventsUpdate(res.eventId, detailFields);
+    }
+  }
+
+  btn.disabled = false;
+  if (res.ok) {
+    msg.textContent = "";
+    jbCloseEventModal();
+    await jbRenderEventTimeline(_jbCurrentJob);
+  } else {
+    msg.textContent = res.error;
+    msg.style.color = "#b3261e";
+  }
+}
+
 async function jbOpenDetail(jobId) {
   const job = _jbAllJobs.find((j) => j.id === jobId);
   if (!job) return;
@@ -1500,6 +1715,8 @@ async function jbOpenDetail(jobId) {
   document.getElementById("jbd-title").textContent = job.title || saaJobTypeLabel(job.job_type);
   document.getElementById("jbd-jobnum").textContent = `${_jbJobNum(job)} · Received ${_jbFormatDate(job.created_at)}`;
   jbRenderCustomerBox(job);
+  await jbRenderSystemSection(job);
+  await jbRenderEventTimeline(job);
 
   document.getElementById("jbd-type").innerHTML = _jbOptionsHtml(SAA_JOBS_TYPE_OPTIONS, job.job_type);
   document.getElementById("jbd-priority").innerHTML = _jbOptionsHtml(SAA_JOBS_PRIORITY_OPTIONS, job.priority);
@@ -1976,6 +2193,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("jbd-quick-invoice-btn").addEventListener("click", jbQuickInvoice);
   document.getElementById("jb-insp-save-btn").addEventListener("click", jbSaveInspection);
   document.getElementById("jb-insp-close-btn").addEventListener("click", () => { document.getElementById("jb-inspection-modal").hidden = true; });
+
+  // Round 42 (2026-09-19): System section + Event History timeline wiring.
+  document.getElementById("jbd-sys-save-btn").addEventListener("click", jbSaveSystem);
+  document.getElementById("jbd-schedule-followup-btn").addEventListener("click", () => jbOpenEventModal(null, "follow_up"));
+  document.getElementById("jbd-schedule-event-btn").addEventListener("click", () => jbOpenEventModal(null));
+  document.getElementById("jb-event-save-btn").addEventListener("click", jbSaveEventModal);
+  document.getElementById("jb-event-close-btn").addEventListener("click", jbCloseEventModal);
+  document.getElementById("jb-event-modal").addEventListener("click", (e) => {
+    if (e.target.id === "jb-event-modal") jbCloseEventModal(); // clicked the backdrop, not the card
+  });
 
   if (_jbIsFullPage) {
     // Legacy deep link, kept for any bookmarked/saved jobs.html?job=<id>
