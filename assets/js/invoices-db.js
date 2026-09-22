@@ -11,8 +11,18 @@
    ============================================================ */
 
 /** filters: { status, paymentStatus, search } — all optional.
- *  Returns invoices newest-first, each augmented with its job, customer,
- *  amountPaid, totalDue, and derived paymentStatus. */
+ *  Returns invoices newest-first, each augmented with its job, event (when
+ *  the invoice is tied to one specific visit), customer, amountPaid,
+ *  totalDue, and derived paymentStatus.
+ *
+ *  Round 46 (2026-09-22), per Vijayan: "link right invoices to its
+ *  respective events or jobs. clicking the invoice in invoice list should
+ *  directly open that particular event or job." Invoices have carried an
+ *  event_id since Round 42 Task 121 (financials are per-Event), but this
+ *  global list never joined it -- it only ever showed/linked the parent
+ *  Job, so an invoice raised against one visit of a multi-visit Job had no
+ *  way to open that specific visit from here. Now stitches `event` the
+ *  same way `job`/`customer` are stitched. */
 async function saaInvoicesFetchAll(filters) {
   filters = filters || {};
   const { data: invoices, error: e1 } = await _saaClient
@@ -23,16 +33,19 @@ async function saaInvoicesFetchAll(filters) {
   if (!invoices || !invoices.length) return [];
 
   const jobIds = [...new Set(invoices.map((i) => i.job_id).filter(Boolean))];
+  const eventIds = [...new Set(invoices.map((i) => i.event_id).filter(Boolean))];
   const custIds = [...new Set(invoices.map((i) => i.customer_id).filter(Boolean))];
   const invoiceIds = invoices.map((i) => i.id);
 
-  const [{ data: jobs }, { data: customers }, { data: payments }] = await Promise.all([
+  const [{ data: jobs }, { data: events }, { data: customers }, { data: payments }] = await Promise.all([
     jobIds.length ? _saaClient.from("jobs").select("id,job_number,job_type,title").in("id", jobIds) : { data: [] },
+    eventIds.length ? _saaClient.from("events").select("id,event_number,event_type").in("id", eventIds) : { data: [] },
     custIds.length ? _saaClient.from("customers").select("id,first_name,last_name,phone").in("id", custIds) : { data: [] },
     invoiceIds.length ? _saaClient.from("payments").select("invoice_id,amount").in("invoice_id", invoiceIds) : { data: [] },
   ]);
 
   const jobById = Object.fromEntries((jobs || []).map((j) => [j.id, j]));
+  const eventById = Object.fromEntries((events || []).map((e) => [e.id, e]));
   const custById = Object.fromEntries((customers || []).map((c) => [c.id, c]));
   const paidByInvoice = {};
   const hasPaymentByInvoice = {};
@@ -46,6 +59,7 @@ async function saaInvoicesFetchAll(filters) {
     const hasPayment = !!hasPaymentByInvoice[inv.id];
     return Object.assign({}, inv, {
       job: jobById[inv.job_id] || null,
+      event: inv.event_id ? eventById[inv.event_id] || null : null,
       customer: custById[inv.customer_id] || null,
       amountPaid,
       totalDue: saaJobsInvoiceTotalDue(inv),
@@ -61,6 +75,7 @@ async function saaInvoicesFetchAll(filters) {
       const custName = r.customer ? `${r.customer.first_name || ""} ${r.customer.last_name || ""}`.toLowerCase() : "";
       return (r.invoice_number || "").toLowerCase().includes(q)
         || (r.job && (r.job.job_number || "").toLowerCase().includes(q))
+        || (r.event && (r.event.event_number || "").toLowerCase().includes(q))
         || custName.includes(q)
         || (r.customer && String(r.customer.phone || "").includes(q));
     });

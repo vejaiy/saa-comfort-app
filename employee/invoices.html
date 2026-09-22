@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Invoices | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260922c">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260922d">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260922c"></script>
-<script src="../assets/js/supabase-config.js?v=20260922c"></script>
-<script src="../assets/js/auth.js?v=20260922c"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260922d"></script>
+<script src="../assets/js/supabase-config.js?v=20260922d"></script>
+<script src="../assets/js/auth.js?v=20260922d"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -60,12 +60,12 @@
 
 <div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Invoices</div>
 <div class="page-title-row"><h1>Invoices</h1><a class="page-close-btn" href="dashboard.html" title="Close" aria-label="Close">&times;</a></div>
-<div class="note-box blue">Every invoice raised across every job, newest first. Click a row to open that job's Job Card, where you can update, print, or record a payment against it.</div>
+<div class="note-box blue">Every invoice raised across every job, newest first. Click a row to open the Job Card &mdash; landing directly on that invoice's own Event when it has one &mdash; where you can update, print, or record a payment against it.</div>
 
 <div class="jobs-toolbar">
   <select id="inv-status-filter"><option value="">All Statuses</option><option value="draft">Draft</option><option value="sent">Sent</option><option value="paid">Paid</option><option value="void">Void</option></select>
   <select id="inv-pay-filter"><option value="">All Payment Status</option><option value="unpaid">Unpaid</option><option value="partial">Partially Paid</option><option value="paid">Paid</option></select>
-  <input type="text" id="inv-search" placeholder="Invoice #, job #, customer, or phone&hellip;" style="min-width:240px">
+  <input type="text" id="inv-search" placeholder="Invoice #, job/event #, customer, or phone&hellip;" style="min-width:240px">
   <button type="button" class="btn btn-ghost btn-sm" id="inv-clear-btn">Clear Filters</button>
   <button type="button" class="btn btn-ghost btn-sm" id="inv-download-btn">⬇️ Download (Excel)</button>
 </div>
@@ -78,7 +78,7 @@
   <div class="jobs-table-wrap">
     <table class="jobs-table">
       <thead>
-        <tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Job</th><th>Amount</th><th>Total Due</th><th>Paid</th><th>Balance</th><th>Status</th><th>Payment</th></tr>
+        <tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Job / Event</th><th>Amount</th><th>Total Due</th><th>Paid</th><th>Balance</th><th>Status</th><th>Payment</th></tr>
       </thead>
       <tbody id="inv-tbody"></tbody>
     </table>
@@ -87,10 +87,11 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260922c"></script>
-<script src="../assets/js/worksheet.js?v=20260922c"></script>
-<script src="../assets/js/jobs-db.js?v=20260922c"></script>
-<script src="../assets/js/invoices-db.js?v=20260922c"></script>
+<script src="../assets/js/pricing-data.js?v=20260922d"></script>
+<script src="../assets/js/worksheet.js?v=20260922d"></script>
+<script src="../assets/js/jobs-db.js?v=20260922d"></script>
+<script src="../assets/js/events-db.js?v=20260922d"></script>
+<script src="../assets/js/invoices-db.js?v=20260922d"></script>
 <script>
   // Same document-status labels the Job Card's own Invoice Status select
   // uses (_jbInvoiceLabel in jobs.js) -- kept as a local copy here rather
@@ -105,9 +106,15 @@
     if (!c) return "&mdash;";
     return _invEsc([c.first_name, c.last_name].filter(Boolean).join(" ") || "(no name)");
   }
-  function _invJobLabel(job) {
-    if (!job) return "&mdash;";
-    return _invEsc(job.job_number || saaJobTypeLabel(job.job_type));
+  // Round 46 (2026-09-22), per Vijayan: "link right invoices to its
+  // respective events or jobs." An invoice raised against one visit of a
+  // multi-visit Job shows that visit's own Event # (the specific thing it
+  // was actually billed for) -- an older or job-level invoice with no
+  // event_id falls back to the Job #.
+  function _invLinkedLabel(r) {
+    if (r.event) return _invEsc(r.event.event_number || saaEventTypeLabel(r.event.event_type));
+    if (r.job) return _invEsc(r.job.job_number || saaJobTypeLabel(r.job.job_type));
+    return "&mdash;";
   }
 
   function _invFilters() {
@@ -137,11 +144,11 @@
 
     tbody.innerHTML = rows.map((r) => {
       const balance = (Number(r.totalDue) || 0) - (Number(r.amountPaid) || 0);
-      return `<tr class="jb-row" data-job-id="${r.job ? r.job.id : ""}" style="cursor:${r.job ? "pointer" : "default"}">
+      return `<tr class="jb-row" data-job-id="${r.job ? r.job.id : ""}" data-event-id="${r.event ? r.event.id : ""}" style="cursor:${r.job ? "pointer" : "default"}">
         <td>${_invEsc(r.invoice_number)}</td>
         <td>${_invEsc(r.issue_date || (r.created_at || "").slice(0, 10))}</td>
         <td>${_invCustName(r.customer)}</td>
-        <td>${_invJobLabel(r.job)}</td>
+        <td>${_invLinkedLabel(r)}</td>
         <td>${fmtMoney(r.amount_total)}</td>
         <td>${fmtMoney(r.totalDue)}</td>
         <td>${fmtMoney(r.amountPaid)}</td>
@@ -151,10 +158,23 @@
       </tr>`;
     }).join("");
 
+    // Round 46 (2026-09-22): opens the exact record this invoice was
+    // raised against -- when it has its own Event (the common case since
+    // Round 42), that's the Job Card's "?job=&event=" deep link (same
+    // mechanism the Jobs List's own expand-row uses, jbOpenEventDirect in
+    // jobs.js), landing directly on that visit's Event modal instead of
+    // just the parent Job Card; an older/job-level invoice with no event
+    // still opens the plain Job Card as before.
     tbody.querySelectorAll("tr.jb-row[data-job-id]").forEach((tr) => {
       const jobId = tr.dataset.jobId;
       if (!jobId) return;
-      tr.addEventListener("click", () => { window.location.href = `jobs.html?job=${encodeURIComponent(jobId)}`; });
+      const eventId = tr.dataset.eventId;
+      tr.addEventListener("click", () => {
+        const url = eventId
+          ? `jobs.html?job=${encodeURIComponent(jobId)}&event=${encodeURIComponent(eventId)}`
+          : `jobs.html?job=${encodeURIComponent(jobId)}`;
+        window.location.href = url;
+      });
     });
   }
 
@@ -179,7 +199,7 @@
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }
   document.getElementById("inv-download-btn").addEventListener("click", () => {
-    const header = ["Invoice #", "Date", "Customer", "Job", "Amount", "Total Due", "Paid", "Balance", "Status", "Payment"];
+    const header = ["Invoice #", "Date", "Customer", "Job / Event", "Amount", "Total Due", "Paid", "Balance", "Status", "Payment"];
     const lines = [header.map(_invCsvField).join(",")];
     _invLastRows.forEach((r) => {
       const balance = (Number(r.totalDue) || 0) - (Number(r.amountPaid) || 0);
@@ -187,7 +207,7 @@
         r.invoice_number,
         r.issue_date || (r.created_at || "").slice(0, 10),
         r.customer ? [r.customer.first_name, r.customer.last_name].filter(Boolean).join(" ") : "",
-        r.job ? (r.job.job_number || saaJobTypeLabel(r.job.job_type)) : "",
+        r.event ? (r.event.event_number || saaEventTypeLabel(r.event.event_type)) : (r.job ? (r.job.job_number || saaJobTypeLabel(r.job.job_type)) : ""),
         fmtMoney(r.amount_total),
         fmtMoney(r.totalDue),
         fmtMoney(r.amountPaid),
