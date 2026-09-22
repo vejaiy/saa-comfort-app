@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quotes | Employee | SAA Comfort Air LLC</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260922b">
+
+<style>body.emp-shell{visibility:hidden}</style>
+</head>
+<body class="emp-shell">
+<script src="../assets/js/vendor/supabase.js?v=20260922b"></script>
+<script src="../assets/js/supabase-config.js?v=20260922b"></script>
+<script src="../assets/js/auth.js?v=20260922b"></script>
+<script>saaRequireAuth();</script>
+<header class="emp-header">
+  <div class="container">
+    <div>
+      <a class="brand" href="dashboard.html" style="font-size:1rem">
+        <span class="mark" style="width:34px;height:34px;font-size:.62rem;letter-spacing:-0.3px">SAA</span>
+        <span>Employee Tools</span>
+      </a>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select onchange="if(this.value) window.location.href=this.value" style="width:auto;min-width:170px">
+        <option value="">Jump to page&hellip;</option>
+        <option value="dashboard.html">Dashboard</option>
+        <option value="calendar.html">Dispatch Calendar</option>
+        <option value="quotation.html">Create Quote</option>
+        <option value="repair.html">Repair</option>
+        <option value="condenser-change.html">Condenser Change</option>
+        <option value="coil-change.html">Coil Change</option>
+        <option value="furnace-change.html">Furnace Change</option>
+        <option value="plenum-change.html">Plenum Change</option>
+        <option value="drainline-maintenance.html">Drainline Maintenance</option>
+        <option value="duct-cleaning.html">Duct Cleaning</option>
+        <option value="labor.html">Labor</option>
+        <option value="inspection.html">Inspection / QC</option>
+        <option value="maintenance-plan.html">Maintenance Plan</option>
+        <option value="custom-solutions.html">Custom HVAC Solutions</option>
+        <option value="jobs.html">Jobs</option>
+        <option value="quotes.html" selected>Quotes</option>
+        <option value="customers.html">Customers</option>
+        <option value="bill-of-material.html">Bill of Material</option>
+        <option value="invoices.html">Invoices</option>
+        <option value="payments.html">Payments</option>
+        <option value="mileage.html">Mileage</option>
+        <option value="instruction-manual.html">Instruction Manual</option>
+        <option value="tool-list.html">Tool List</option>
+        <option value="receipts.html">Receipts</option>
+      </select>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Dashboard</a>
+      <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
+      <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
+    </div>
+  </div>
+</header>
+<main class="container" style="padding:26px 20px 60px">
+
+<div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Quotes</div>
+<div class="cal-page-head">
+  <div>
+    <h1 style="margin-bottom:4px">Quotes</h1>
+    <p class="muted" style="margin:0">Every quote saved across every customer, newest first. Click one to reopen it on its worksheet.</p>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a class="btn btn-ghost" href="repair.html">+ Repair Quote</a>
+    <a class="btn btn-navy" href="quotation.html">+ New Quote</a>
+  </div>
+</div>
+
+<div class="jobs-toolbar">
+  <select id="q-type-filter"><option value="">All Types</option><option value="new_install">New Installation</option><option value="replacement">Complete System Replacement</option><option value="repair">Repair</option></select>
+  <select id="q-status-filter"><option value="">All Statuses</option><option value="draft">Draft</option><option value="sent">Sent</option><option value="accepted">Accepted</option><option value="declined">Declined</option></select>
+  <input type="text" id="q-search" placeholder="Quote #, customer, or address&hellip;" style="min-width:240px">
+  <button type="button" class="btn btn-ghost btn-sm" id="q-clear-btn">Clear Filters</button>
+  <button type="button" class="btn btn-ghost btn-sm" id="q-download-btn">&#11015;&#65039; Download (Excel)</button>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <h3 style="margin:0">Quotes</h3>
+    <span class="muted" id="q-summary" style="font-size:.85rem"></span>
+  </div>
+  <div class="jobs-table-wrap">
+    <table class="jobs-table">
+      <thead>
+        <tr><th>Quote #</th><th>Date</th><th>Customer</th><th>Type</th><th>Job Address</th><th>Linked Job</th><th>Total</th><th>Status</th></tr>
+      </thead>
+      <tbody id="q-tbody"></tbody>
+    </table>
+    <p class="muted" id="q-empty" style="text-align:center;padding:30px" hidden>No quotes match your filters.</p>
+  </div>
+</div>
+
+</main>
+<script src="../assets/js/pricing-data.js?v=20260922b"></script>
+<script src="../assets/js/worksheet.js?v=20260922b"></script>
+<script src="../assets/js/jobs-db.js?v=20260922b"></script>
+<script src="../assets/js/quotes-db.js?v=20260922b"></script>
+<script>
+  // Round 44: quote status isn't editable from this list (same "read here,
+  // edit on the worksheet" split as the Invoices list) -- a plain label
+  // map, same idea as _invStatusLabel in gen_invoices.py.
+  const _qStatusLabel = { draft: "Draft", sent: "Sent", accepted: "Accepted", declined: "Declined" };
+
+  function _qEsc(s) {
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function _qCustName(c) {
+    if (!c) return "&mdash;";
+    return _qEsc([c.first_name, c.last_name].filter(Boolean).join(" ") || "(no name)");
+  }
+  function _qWorksheetPage(quote) {
+    return quote.quote_type === "repair" ? "repair.html" : "quotation.html";
+  }
+  function _qDate(iso) {
+    if (!iso) return "&mdash;";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "&mdash;";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  let _qAll = [];
+  let _qLastRows = [];
+
+  function _qFilteredRows() {
+    const type = document.getElementById("q-type-filter").value;
+    const status = document.getElementById("q-status-filter").value;
+    const search = (document.getElementById("q-search").value || "").trim().toLowerCase();
+    return _qAll.filter((q) => {
+      if (type && q.quote_type !== type) return false;
+      if (status && q.status !== status) return false;
+      if (search) {
+        const hay = [
+          q.quote_number, q.job_address,
+          q.customer && q.customer.first_name, q.customer && q.customer.last_name, q.customer && q.customer.phone,
+        ].filter(Boolean).join(" ").toLowerCase();
+        if (!hay.includes(search)) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderQuotes() {
+    const rows = _qFilteredRows();
+    _qLastRows = rows;
+    const tbody = document.getElementById("q-tbody");
+    document.getElementById("q-empty").hidden = rows.length > 0;
+    const totalValue = rows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
+    document.getElementById("q-summary").textContent = rows.length
+      ? `${rows.length} quote${rows.length === 1 ? "" : "s"} &middot; ${fmtMoney(totalValue)} total`.replace(/&middot;/g, "\u00b7")
+      : "";
+
+    tbody.innerHTML = rows.map((q) => `<tr class="jb-row" data-quote-id="${q.id}" data-quote-page="${_qWorksheetPage(q)}">
+        <td>${_qEsc(q.quote_number) || "&mdash;"}</td>
+        <td>${_qDate(q.created_at)}</td>
+        <td>${_qCustName(q.customer)}</td>
+        <td>${_qEsc(saaJobTypeLabel(q.quote_type))}</td>
+        <td>${_qEsc(q.job_address) || "&mdash;"}</td>
+        <td>${q.job ? _qEsc(q.job.job_number || saaJobTypeLabel(q.job.job_type)) : "&mdash;"}</td>
+        <td>${fmtMoney(q.total)}</td>
+        <td><span class="jb-badge">${_qStatusLabel[q.status] || q.status || "&mdash;"}</span></td>
+      </tr>`).join("");
+
+    tbody.querySelectorAll(".jb-row").forEach((tr) => {
+      tr.addEventListener("click", () => {
+        window.open(`${tr.dataset.quotePage}?quote=${encodeURIComponent(tr.dataset.quoteId)}`, "_blank", "noopener");
+      });
+    });
+  }
+
+  document.getElementById("q-type-filter").addEventListener("change", renderQuotes);
+  document.getElementById("q-status-filter").addEventListener("change", renderQuotes);
+  let _qSearchTimer = null;
+  document.getElementById("q-search").addEventListener("input", () => {
+    clearTimeout(_qSearchTimer);
+    _qSearchTimer = setTimeout(renderQuotes, 200);
+  });
+  document.getElementById("q-clear-btn").addEventListener("click", () => {
+    document.getElementById("q-type-filter").value = "";
+    document.getElementById("q-status-filter").value = "";
+    document.getElementById("q-search").value = "";
+    renderQuotes();
+  });
+
+  function _qCsvField(v) {
+    const s = String(v == null ? "" : v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+  document.getElementById("q-download-btn").addEventListener("click", () => {
+    const header = ["Quote #", "Date", "Customer", "Type", "Job Address", "Linked Job", "Total", "Status"];
+    const lines = [header.map(_qCsvField).join(",")];
+    _qLastRows.forEach((q) => {
+      lines.push([
+        q.quote_number,
+        (q.created_at || "").slice(0, 10),
+        q.customer ? [q.customer.first_name, q.customer.last_name].filter(Boolean).join(" ") : "",
+        saaJobTypeLabel(q.quote_type),
+        q.job_address || "",
+        q.job ? (q.job.job_number || saaJobTypeLabel(q.job.job_type)) : "",
+        fmtMoney(q.total),
+        _qStatusLabel[q.status] || q.status || "",
+      ].map(_qCsvField).join(","));
+    });
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `SAA-quotes-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  (async function init() {
+    _qAll = await saaQuotesFetchAll();
+    renderQuotes();
+  })();
+</script>
+</body>
+</html>

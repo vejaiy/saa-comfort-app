@@ -233,6 +233,21 @@ async function saaJobsFetchAll() {
     : { data: [], error: null };
   if (e6) throw e6;
 
+  // Round 44 (2026-09-22), per Vijayan: "add + (expand button) and show
+  // its events underneath it ... so I can get to events directly from
+  // jobs page instead of opening the job." One batched fetch of every
+  // Job's Events (same shape saaEventsFetchForJob uses per-job, newest
+  // first) so the Jobs List can render each Job's own Event rows inline
+  // without a query per row on expand.
+  const { data: allEvents, error: e7 } = jobIds.length
+    ? await _saaClient.from("events").select("*").in("job_id", jobIds).order("scheduled_start", { ascending: false })
+    : { data: [], error: null };
+  if (e7) throw e7;
+  const eventsByJob = {};
+  (allEvents || []).forEach((e) => {
+    (eventsByJob[e.job_id] || (eventsByJob[e.job_id] = [])).push(e);
+  });
+
   const custById = Object.fromEntries((customers || []).map((c) => [c.id, c]));
   const techById = Object.fromEntries((technicians || []).map((t) => [t.id, t]));
   const quoteById = Object.fromEntries((quotes || []).map((q) => [q.id, q]));
@@ -266,6 +281,15 @@ async function saaJobsFetchAll() {
       invoice,
       amountPaid: paid,
       paymentStatus: saaJobsPaymentStatus(invoice, paid, hasPayment),
+      // Round 44: this Job's own Events, newest first, each with its
+      // technician(s) resolved the same way the parent Job's are above —
+      // backs the Jobs List's expand-row (see jbRenderTable/_jbEventRowHtml
+      // in jobs.js).
+      events: (eventsByJob[j.id] || []).map((e) => Object.assign({}, e, {
+        technician: techById[e.assigned_technician_id] || null,
+        technician2: e.assigned_technician_id_2 ? techById[e.assigned_technician_id_2] || null : null,
+        technician3: e.assigned_technician_id_3 ? techById[e.assigned_technician_id_3] || null : null,
+      })),
     });
   });
 }

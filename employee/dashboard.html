@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dashboard | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260921d">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260922b">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260921d"></script>
-<script src="../assets/js/supabase-config.js?v=20260921d"></script>
-<script src="../assets/js/auth.js?v=20260921d"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260922b"></script>
+<script src="../assets/js/supabase-config.js?v=20260922b"></script>
+<script src="../assets/js/auth.js?v=20260922b"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -27,7 +27,7 @@
         <option value="">Jump to page&hellip;</option>
         <option value="dashboard.html" selected>Dashboard</option>
         <option value="calendar.html">Dispatch Calendar</option>
-        <option value="quotation.html">Quotation</option>
+        <option value="quotation.html">Create Quote</option>
         <option value="repair.html">Repair</option>
         <option value="condenser-change.html">Condenser Change</option>
         <option value="coil-change.html">Coil Change</option>
@@ -40,6 +40,8 @@
         <option value="maintenance-plan.html">Maintenance Plan</option>
         <option value="custom-solutions.html">Custom HVAC Solutions</option>
         <option value="jobs.html">Jobs</option>
+        <option value="quotes.html">Quotes</option>
+        <option value="customers.html">Customers</option>
         <option value="bill-of-material.html">Bill of Material</option>
         <option value="invoices.html">Invoices</option>
         <option value="payments.html">Payments</option>
@@ -108,7 +110,11 @@
 <!-- Round 37 follow-up (2026-09-17), per Vijayan: "invoice and payments
      in dashboard to show invoice list and payment lists in separate
      pages when clicked" -- until now an invoice/payment only existed
-     inside its own job's Job Card, with no cross-job list view. -->
+     inside its own job's Job Card, with no cross-job list view.
+     Round 44 (2026-09-22) added Quotes and Customers to this same grid,
+     per Vijayan: "Add a provision in dashboard to see all customer
+     profile ... Add another provision in dashboard to view all quotes
+     in list form similar to jobs." -->
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:28px">
   <a class="card category-card" href="invoices.html" style="display:flex;align-items:center;gap:18px;text-decoration:none">
     <div class="icon-wrap" style="flex:0 0 auto;font-size:26px">🧾</div>
@@ -124,13 +130,27 @@
       <p class="muted" style="margin:0">Every payment recorded across every job, newest first.</p>
     </div>
   </a>
+  <a class="card category-card" href="quotes.html" style="display:flex;align-items:center;gap:18px;text-decoration:none">
+    <div class="icon-wrap" style="flex:0 0 auto;font-size:26px">📄</div>
+    <div>
+      <h3 style="margin-bottom:2px">Quotes</h3>
+      <p class="muted" style="margin:0">Every quote saved across every customer — reopen one, or start a new one.</p>
+    </div>
+  </a>
+  <a class="card category-card" href="customers.html" style="display:flex;align-items:center;gap:18px;text-decoration:none">
+    <div class="icon-wrap" style="flex:0 0 auto;font-size:26px">👤</div>
+    <div>
+      <h3 style="margin-bottom:2px">Customers</h3>
+      <p class="muted" style="margin:0">Every customer on file — contact info, systems, and every job, in one profile.</p>
+    </div>
+  </a>
 </div>
 
 <h2 style="font-size:1.1rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted)">Quotation Worksheets</h2>
 <div class="tool-grid" style="margin-bottom:32px">
       <a class="tool-card" href="quotation.html" style="text-decoration:none">
         <div class="icon">🧾</div>
-        <h3 style="margin-bottom:0">Quotation</h3>
+        <h3 style="margin-bottom:0">Create Quote</h3>
         <p class="muted" style="margin:0">New installation or full system replacement — pick the type on the worksheet.</p>
       </a>
       <a class="tool-card" href="repair.html" style="text-decoration:none">
@@ -210,8 +230,8 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260921d"></script>
-<script src="../assets/js/worksheet.js?v=20260921d"></script>
+<script src="../assets/js/pricing-data.js?v=20260922b"></script>
+<script src="../assets/js/worksheet.js?v=20260922b"></script>
 <script>
 (function () {
   var overlay = document.getElementById('dash-cal-fullscreen');

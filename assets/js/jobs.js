@@ -27,6 +27,15 @@ let _jbEventModalMode = null; // "create" | "edit" -- which flow jb-event-modal 
 let _jbEventModalTarget = null; // the Event object being edited, or null in "create" mode
 let _jbEventCompletedAtOpen = { date: "", time: "" }; // Round 42 Task 120: change-detection so Save doesn't re-stamp an unedited (possibly estimated) Completed Time -- same idea as job._jbCompletedTimeAtOpen
 
+// Round 44 (2026-09-22), per Vijayan: "Redo jobs page view ... add + (expand
+// button) and show its events underneath it kind of group function in excel
+// ... so I can get to events directly from jobs page instead of opening the
+// job and looking for events i want." Which Job rows are currently expanded
+// on the Jobs List -- a plain Set of job ids, kept across re-renders (search/
+// filter/sort) so toggling a row open doesn't collapse again just because the
+// table re-drew, but reset on a fresh full load (jbLoadAll).
+let _jbExpandedJobIds = new Set();
+
 /* Round 42 Task 121-124: per-Event full working controls (Quote/
  * Financials/Mileage/Photos/Receipts/Invoice & Payment/Inspection/BOM),
  * mirroring the Job Card's own "jb*"/"_jb*" state one level down, scoped to
@@ -362,13 +371,60 @@ function _jbUpdateFilterHeaderHighlight() {
   });
 }
 
+// Round 44: total column count of the main table (the expand toggle column
+// plus the 12 data columns) -- the nested Event row spans all of them with
+// one colspan'd cell so its content can be indented under the Job # column
+// without needing to line up under every individual column.
+const _JB_TABLE_COLSPAN = 13;
+
+function _jbEsc(s) {
+  return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** One Event's label for the Jobs List expand-row: event number FIRST
+ *  (per Vijayan: "show event number in before event name"), then its type,
+ *  status badge, and scheduled time -- deliberately more compact than the
+ *  Job Card's own Event History timeline (jbRenderEventTimeline), since
+ *  this is a quick-scan/quick-jump list, not the full detail view. */
+function _jbEventRowHtml(job, e) {
+  const techNames = [e.technician, e.technician2, e.technician3].filter(Boolean).map((t) => t.name).join(", ");
+  return `
+    <tr class="jb-event-subrow" data-job-id="${job.id}" data-event-id="${e.id}">
+      <td colspan="${_JB_TABLE_COLSPAN}">
+        <div class="jb-event-subrow-inner">
+          <span class="jb-event-subrow-num">${_jbEsc(e.event_number || "—")}</span>
+          <span class="jb-event-subrow-sep">&mdash;</span>
+          <span class="jb-event-subrow-type">${_jbEsc(saaEventTypeLabel(e.event_type))}</span>
+          <span class="jb-event-badge evt-${e.event_status}">${_jbEsc(saaEventStatusLabel(e.event_status))}</span>
+          <span class="jb-event-subrow-meta">${_jbEventTimeLabel(e.scheduled_start)}${techNames ? " · " + _jbEsc(techNames) : ""}</span>
+        </div>
+      </td>
+    </tr>`;
+}
+
+function _jbToggleExpandRow(jobId) {
+  if (_jbExpandedJobIds.has(jobId)) _jbExpandedJobIds.delete(jobId);
+  else _jbExpandedJobIds.add(jobId);
+  jbRenderTable();
+}
+
 function jbRenderTable() {
   const tbody = document.getElementById("jb-tbody");
   if (!tbody) return; // embedded Job Card context (e.g. calendar.html) has no Jobs List table
   const rows = jbApplyFilters();
   document.getElementById("jb-empty").hidden = rows.length > 0;
-  tbody.innerHTML = rows.map((j) => `
+  tbody.innerHTML = rows.map((j) => {
+    const events = j.events || [];
+    const expanded = _jbExpandedJobIds.has(j.id);
+    // Round 44: the expand toggle is only shown when there's something to
+    // expand -- a Job with no Events yet gets a blank cell instead of a
+    // button that would just open an empty group.
+    const expandCell = events.length
+      ? `<button type="button" class="jb-expand-btn" data-id="${j.id}" title="${expanded ? "Collapse" : "Expand"} events" aria-label="${expanded ? "Collapse" : "Expand"} events">${expanded ? "−" : "+"}</button>`
+      : "";
+    const mainRow = `
     <tr class="jb-row" data-id="${j.id}">
+      <td class="jb-expand-cell">${expandCell}</td>
       <td>${_jbJobNum(j)}</td>
       <td>${_jbFormatDate(j.created_at)}</td>
       <td>${_jbFormatDate(j.scheduled_date)}</td>
@@ -381,9 +437,31 @@ function jbRenderTable() {
       <td><span class="jb-badge jb-status-${j.status}">${_jbJobStatusLabel(j)}</span></td>
       <td><span class="jb-badge jb-pay-${j.paymentStatus}">${_jbPaymentLabel[j.paymentStatus]}</span></td>
       <td>${_jbQuoteCellHtml(j)}</td>
-    </tr>`).join("");
+    </tr>`;
+    const eventRows = expanded ? events.map((e) => _jbEventRowHtml(j, e)).join("") : "";
+    return mainRow + eventRows;
+  }).join("");
+
   tbody.querySelectorAll(".jb-row").forEach((tr) => {
     tr.addEventListener("click", () => jbOpenDetail(tr.dataset.id));
+  });
+  // The expand +/− button toggles the group instead of opening the Job
+  // Card -- stop the click from bubbling up to the row's own listener.
+  tbody.querySelectorAll(".jb-expand-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      _jbToggleExpandRow(btn.dataset.id);
+    });
+  });
+  // Clicking a nested Event row jumps straight to that Event -- opens its
+  // parent Job Card and, once loaded, opens that Event's own modal on top,
+  // instead of leaving the office to open the Job and hunt through its
+  // Event History list for the one they wanted.
+  tbody.querySelectorAll(".jb-event-subrow").forEach((tr) => {
+    tr.addEventListener("click", (e) => {
+      e.stopPropagation();
+      jbOpenEventDirect(tr.dataset.jobId, tr.dataset.eventId);
+    });
   });
   // The Quote $ link opens the quotation in a new tab instead of the Job
   // Card the rest of the row opens -- stop the click from also bubbling up
@@ -396,6 +474,18 @@ function jbRenderTable() {
   });
   _jbUpdateSortArrows();
   _jbUpdateFilterHeaderHighlight();
+}
+
+/** Opens a Job Card straight to one of its Events, from the Jobs List's
+ *  expand-row (or a `?job=&event=` deep link -- see the DOMContentLoaded
+ *  handler below). Reuses jbOpenDetail/jbOpenEventModal as-is rather than
+ *  building a second, parallel "standalone event" view, so every save/
+ *  re-render/history-chain behavior the Event modal already has keeps
+ *  working unchanged. */
+async function jbOpenEventDirect(jobId, eventId) {
+  await jbOpenDetail(jobId);
+  const ev = _jbEvents.find((e) => e.id === eventId);
+  if (ev) jbOpenEventModal(ev);
 }
 
 async function jbLoadAll() {
@@ -3340,6 +3430,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     await jbLoadAll();
     const params = new URLSearchParams(window.location.search);
     const openId = params.get("job");
-    if (openId && _jbAllJobs.some((j) => j.id === openId)) jbOpenDetail(openId);
+    // Round 44: an optional &event=<id> alongside ?job=<id> jumps straight
+    // to that Event's own modal once the Job Card is open -- same deep-link
+    // shape the Jobs List's own expand-row uses internally (jbOpenEventDirect),
+    // just reachable from a URL too (e.g. pasted from elsewhere in the app).
+    const openEventId = params.get("event");
+    if (openId && _jbAllJobs.some((j) => j.id === openId)) {
+      if (openEventId) jbOpenEventDirect(openId, openEventId);
+      else jbOpenDetail(openId);
+    }
   }
 });

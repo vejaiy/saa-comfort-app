@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Customers | Employee | SAA Comfort Air LLC</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260922b">
+
+<style>body.emp-shell{visibility:hidden}</style>
+</head>
+<body class="emp-shell">
+<script src="../assets/js/vendor/supabase.js?v=20260922b"></script>
+<script src="../assets/js/supabase-config.js?v=20260922b"></script>
+<script src="../assets/js/auth.js?v=20260922b"></script>
+<script>saaRequireAuth();</script>
+<header class="emp-header">
+  <div class="container">
+    <div>
+      <a class="brand" href="dashboard.html" style="font-size:1rem">
+        <span class="mark" style="width:34px;height:34px;font-size:.62rem;letter-spacing:-0.3px">SAA</span>
+        <span>Employee Tools</span>
+      </a>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select onchange="if(this.value) window.location.href=this.value" style="width:auto;min-width:170px">
+        <option value="">Jump to page&hellip;</option>
+        <option value="dashboard.html">Dashboard</option>
+        <option value="calendar.html">Dispatch Calendar</option>
+        <option value="quotation.html">Create Quote</option>
+        <option value="repair.html">Repair</option>
+        <option value="condenser-change.html">Condenser Change</option>
+        <option value="coil-change.html">Coil Change</option>
+        <option value="furnace-change.html">Furnace Change</option>
+        <option value="plenum-change.html">Plenum Change</option>
+        <option value="drainline-maintenance.html">Drainline Maintenance</option>
+        <option value="duct-cleaning.html">Duct Cleaning</option>
+        <option value="labor.html">Labor</option>
+        <option value="inspection.html">Inspection / QC</option>
+        <option value="maintenance-plan.html">Maintenance Plan</option>
+        <option value="custom-solutions.html">Custom HVAC Solutions</option>
+        <option value="jobs.html">Jobs</option>
+        <option value="quotes.html">Quotes</option>
+        <option value="customers.html" selected>Customers</option>
+        <option value="bill-of-material.html">Bill of Material</option>
+        <option value="invoices.html">Invoices</option>
+        <option value="payments.html">Payments</option>
+        <option value="mileage.html">Mileage</option>
+        <option value="instruction-manual.html">Instruction Manual</option>
+        <option value="tool-list.html">Tool List</option>
+        <option value="receipts.html">Receipts</option>
+      </select>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Dashboard</a>
+      <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
+      <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
+    </div>
+  </div>
+</header>
+<main class="container" style="padding:26px 20px 60px">
+
+<div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Customers</div>
+<div class="page-title-row"><h1>Customers</h1><a class="page-close-btn" href="dashboard.html" title="Close" aria-label="Close">&times;</a></div>
+<div class="note-box blue">Every customer on file. Click a row to open their profile — contact info, systems, and every job, in one place.</div>
+
+<div class="jobs-toolbar">
+  <input type="text" id="cust-search" placeholder="Name, phone, email, or address&hellip;" style="flex:1;min-width:220px">
+  <button type="button" class="btn btn-ghost btn-sm" id="cust-clear-btn">Clear</button>
+  <button type="button" class="btn btn-ghost btn-sm" id="cust-download-btn">&#11015;&#65039; Download (Excel)</button>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <h3 style="margin:0">Customers</h3>
+    <span class="muted" id="cust-summary" style="font-size:.85rem"></span>
+  </div>
+  <div class="jobs-table-wrap">
+    <table class="jobs-table">
+      <thead>
+        <tr><th>Name</th><th>Phone</th><th>Email</th><th>Billing Address</th><th>City</th><th>Zip</th><th>Systems</th><th>Jobs</th><th>Added</th></tr>
+      </thead>
+      <tbody id="cust-tbody"></tbody>
+    </table>
+    <p class="muted" id="cust-empty" style="text-align:center;padding:30px" hidden>No customers match your search.</p>
+  </div>
+</div>
+
+<!-- ============ Customer Profile panel ============ -->
+<div class="modal-overlay" id="cust-profile-modal" hidden>
+  <div class="modal-card" style="max-width:640px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <div>
+        <h3 style="margin-bottom:2px" id="cp-name">&mdash;</h3>
+        <p class="muted" id="cp-contact" style="margin:0;font-size:.85rem"></p>
+      </div>
+      <button type="button" class="page-close-btn" id="cp-close-btn" title="Close" aria-label="Close" style="position:static">&times;</button>
+    </div>
+
+    <h4 style="margin:16px 0 6px">Billing Address</h4>
+    <p class="muted" id="cp-address" style="margin:0;font-size:.9rem">&mdash;</p>
+
+    <h4 style="margin:16px 0 6px">Systems <span class="muted" id="cp-sys-count" style="font-weight:400"></span></h4>
+    <ul class="cp-list" id="cp-systems" style="margin:0;padding:0;list-style:none"></ul>
+
+    <h4 style="margin:16px 0 6px">Jobs <span class="muted" id="cp-job-count" style="font-weight:400"></span></h4>
+    <ul class="cp-list cp-list-clickable" id="cp-jobs" style="margin:0;padding:0;list-style:none"></ul>
+
+    <div class="modal-close-row">
+      <button type="button" class="btn btn-ghost btn-sm" id="cp-close-btn-2">Close</button>
+    </div>
+  </div>
+</div>
+
+</main>
+<script src="../assets/js/pricing-data.js?v=20260922b"></script>
+<script src="../assets/js/worksheet.js?v=20260922b"></script>
+<script src="../assets/js/jobs-db.js?v=20260922b"></script>
+<script src="../assets/js/customers-db.js?v=20260922b"></script>
+<script>
+  function _custEsc(s) {
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function _custName(c) {
+    return _custEsc([c.first_name, c.last_name].filter(Boolean).join(" ") || "(no name)");
+  }
+  function _custDate(iso) {
+    if (!iso) return "&mdash;";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "&mdash;";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  const _custJobStatusLabel = Object.fromEntries(SAA_JOBS_STATUS_OPTIONS);
+
+  let _custAll = [];
+  let _custLastRows = [];
+
+  function _custFilteredRows() {
+    const q = (document.getElementById("cust-search").value || "").trim().toLowerCase();
+    if (!q) return _custAll;
+    return _custAll.filter((c) => {
+      const hay = [c.first_name, c.last_name, c.phone, c.email, c.billing_address, c.billing_city, c.billing_zip]
+        .filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(q);
+    });
+  }
+
+  function renderCustomers() {
+    const rows = _custFilteredRows();
+    _custLastRows = rows;
+    const tbody = document.getElementById("cust-tbody");
+    document.getElementById("cust-empty").hidden = rows.length > 0;
+    document.getElementById("cust-summary").textContent = rows.length
+      ? `${rows.length} customer${rows.length === 1 ? "" : "s"}`
+      : "";
+
+    tbody.innerHTML = rows.map((c) => `<tr class="jb-row" data-id="${c.id}">
+        <td>${_custName(c)}</td>
+        <td>${c.phone ? saaFormatPhone(c.phone) : "&mdash;"}</td>
+        <td>${_custEsc(c.email) || "&mdash;"}</td>
+        <td>${_custEsc(c.billing_address) || "&mdash;"}</td>
+        <td>${_custEsc(c.billing_city) || "&mdash;"}</td>
+        <td>${_custEsc(c.billing_zip) || "&mdash;"}</td>
+        <td>${c.systemCount || 0}</td>
+        <td>${c.jobCount || 0}${c.currentJobCount ? ` (${c.currentJobCount} current)` : ""}</td>
+        <td>${_custDate(c.created_at)}</td>
+      </tr>`).join("");
+
+    tbody.querySelectorAll(".jb-row").forEach((tr) => {
+      tr.addEventListener("click", () => openCustomerProfile(tr.dataset.id));
+    });
+  }
+
+  async function openCustomerProfile(customerId) {
+    const profile = await saaCustomersFetchProfile(customerId);
+    if (!profile.customer) return;
+    const c = profile.customer;
+    document.getElementById("cp-name").textContent = [c.first_name, c.last_name].filter(Boolean).join(" ") || "(no name)";
+    document.getElementById("cp-contact").textContent = [c.phone ? saaFormatPhone(c.phone) : null, c.email].filter(Boolean).join(" · ") || "No phone or email on file";
+    document.getElementById("cp-address").textContent = [c.billing_address, [c.billing_city, c.billing_state, c.billing_zip].filter(Boolean).join(", ")].filter(Boolean).join(", ") || "No address on file";
+
+    document.getElementById("cp-sys-count").textContent = profile.systems.length ? `(${profile.systems.length})` : "";
+    document.getElementById("cp-systems").innerHTML = profile.systems.length
+      ? profile.systems.map((s) => `<li style="padding:6px 0;border-bottom:1px solid #f0f3f6">
+          <div style="font-weight:600">${_custEsc(s.system_name || "System")}</div>
+          <div class="muted" style="font-size:.8rem">${[s.manufacturer, s.tonnage ? s.tonnage + " ton" : null, s.system_location].filter(Boolean).join(" · ") || "&mdash;"}</div>
+        </li>`).join("")
+      : `<li class="muted" style="padding:4px 0">No systems on file.</li>`;
+
+    document.getElementById("cp-job-count").textContent = profile.jobs.length ? `(${profile.jobs.length})` : "";
+    document.getElementById("cp-jobs").innerHTML = profile.jobs.length
+      ? profile.jobs.map((j) => `<li data-job-id="${j.id}" style="padding:6px 0;border-bottom:1px solid #f0f3f6;cursor:pointer">
+          <div style="font-weight:600">${_custEsc(j.job_number || saaJobTypeLabel(j.job_type))} <span class="jb-badge">${_custJobStatusLabel[j.status] || j.status}</span>${j.is_current === false ? ' <span class="jb-badge">Historical</span>' : ""}</div>
+          <div class="muted" style="font-size:.8rem">${_custEsc(j.title) || saaJobTypeLabel(j.job_type)} &middot; ${_custDate(j.scheduled_date || j.created_at)}</div>
+        </li>`).join("")
+      : `<li class="muted" style="padding:4px 0">No jobs on file.</li>`;
+    document.getElementById("cp-jobs").querySelectorAll("li[data-job-id]").forEach((li) => {
+      li.addEventListener("click", () => window.open(`jobs.html?job=${encodeURIComponent(li.dataset.jobId)}`, "_blank", "noopener"));
+    });
+
+    document.getElementById("cust-profile-modal").hidden = false;
+  }
+
+  function closeCustomerProfile() { document.getElementById("cust-profile-modal").hidden = true; }
+  document.getElementById("cp-close-btn").addEventListener("click", closeCustomerProfile);
+  document.getElementById("cp-close-btn-2").addEventListener("click", closeCustomerProfile);
+  document.getElementById("cust-profile-modal").addEventListener("click", (e) => {
+    if (e.target.id === "cust-profile-modal") closeCustomerProfile();
+  });
+
+  let _custSearchTimer = null;
+  document.getElementById("cust-search").addEventListener("input", () => {
+    clearTimeout(_custSearchTimer);
+    _custSearchTimer = setTimeout(renderCustomers, 200);
+  });
+  document.getElementById("cust-clear-btn").addEventListener("click", () => {
+    document.getElementById("cust-search").value = "";
+    renderCustomers();
+  });
+
+  function _custCsvField(v) {
+    const s = String(v == null ? "" : v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+  document.getElementById("cust-download-btn").addEventListener("click", () => {
+    const header = ["Name", "Phone", "Email", "Billing Address", "City", "State", "Zip", "Systems", "Jobs", "Current Jobs", "Added"];
+    const lines = [header.map(_custCsvField).join(",")];
+    _custLastRows.forEach((c) => {
+      lines.push([
+        [c.first_name, c.last_name].filter(Boolean).join(" "),
+        c.phone ? saaFormatPhone(c.phone) : "",
+        c.email || "",
+        c.billing_address || "",
+        c.billing_city || "",
+        c.billing_state || "",
+        c.billing_zip || "",
+        c.systemCount || 0,
+        c.jobCount || 0,
+        c.currentJobCount || 0,
+        (c.created_at || "").slice(0, 10),
+      ].map(_custCsvField).join(","));
+    });
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `SAA-customers-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  (async function init() {
+    _custAll = await saaCustomersFetchAll();
+    renderCustomers();
+  })();
+</script>
+</body>
+</html>

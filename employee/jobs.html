@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jobs | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260922a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260922b">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260922a"></script>
-<script src="../assets/js/supabase-config.js?v=20260922a"></script>
-<script src="../assets/js/auth.js?v=20260922a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260922b"></script>
+<script src="../assets/js/supabase-config.js?v=20260922b"></script>
+<script src="../assets/js/auth.js?v=20260922b"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -27,7 +27,7 @@
         <option value="">Jump to page&hellip;</option>
         <option value="dashboard.html">Dashboard</option>
         <option value="calendar.html">Dispatch Calendar</option>
-        <option value="quotation.html">Quotation</option>
+        <option value="quotation.html">Create Quote</option>
         <option value="repair.html">Repair</option>
         <option value="condenser-change.html">Condenser Change</option>
         <option value="coil-change.html">Coil Change</option>
@@ -40,6 +40,8 @@
         <option value="maintenance-plan.html">Maintenance Plan</option>
         <option value="custom-solutions.html">Custom HVAC Solutions</option>
         <option value="jobs.html" selected>Jobs</option>
+        <option value="quotes.html">Quotes</option>
+        <option value="customers.html">Customers</option>
         <option value="bill-of-material.html">Bill of Material</option>
         <option value="invoices.html">Invoices</option>
         <option value="payments.html">Payments</option>
@@ -91,6 +93,11 @@
   <table class="jobs-table">
     <thead>
       <tr class="jb-th-row">
+        <!-- Round 44 (2026-09-22), per Vijayan: "add + (expand button) and
+             show its events underneath it kind of group function in excel."
+             This leading column is just the expand toggle -- no sort/filter
+             of its own, so it stays out of _JB_COLUMNS entirely. -->
+        <th style="width:30px"></th>
         <th class="jb-sortable" data-sort="jobnum"><span class="jb-th-label">Job #</span> <span class="jb-sort-arrow" data-arrow="jobnum"></span></th>
         <th class="jb-sortable" data-sort="received"><span class="jb-th-label">Date Received</span> <span class="jb-sort-arrow" data-arrow="received"></span></th>
         <th class="jb-sortable" data-sort="scheduled"><span class="jb-th-label">Scheduled</span> <span class="jb-sort-arrow" data-arrow="scheduled"></span></th>
@@ -105,6 +112,7 @@
         <th class="jb-sortable" data-sort="quote"><span class="jb-th-label">Quote $</span> <span class="jb-sort-arrow" data-arrow="quote"></span></th>
       </tr>
       <tr class="jb-filter-row">
+        <th></th>
         <th><input type="text" id="jb-filter-jobnum" class="jb-col-filter" placeholder="Filter&hellip;"></th>
         <th><input type="text" id="jb-filter-received" class="jb-col-filter" placeholder="Filter&hellip;"></th>
         <th><input type="text" id="jb-filter-scheduled" class="jb-col-filter" placeholder="Filter&hellip;"></th>
@@ -226,7 +234,7 @@
       <button type="button" class="btn btn-ghost btn-sm" id="jbd-quick-receipt-btn">🧾 Receipt</button>
       <button type="button" class="btn btn-ghost btn-sm" id="jbd-quick-invoice-btn">💵 Invoice</button>
       <a class="btn btn-ghost btn-sm" id="jbd-quick-bom-btn" href="#" target="_blank" rel="noopener">🧰 Bill of Material</a>
-      <a class="btn btn-ghost btn-sm" id="jbd-quick-quote-btn" href="#" target="_blank" rel="noopener">📄 Quotation</a>
+      <a class="btn btn-ghost btn-sm" id="jbd-quick-quote-btn" href="#" target="_blank" rel="noopener">📄 Quote</a>
     </div>
 
     <div class="jb-detail-grid">
@@ -727,17 +735,17 @@
 <div id="jb-toast" class="cal-toast" hidden></div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260922a"></script>
-<script src="../assets/js/worksheet.js?v=20260922a"></script>
-<script src="../assets/js/systems-db.js?v=20260922a"></script>
-<script src="../assets/js/events-db.js?v=20260922a"></script>
-<script src="../assets/js/jobs-db.js?v=20260922a"></script>
-<script src="../assets/js/job-photos-db.js?v=20260922a"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260922a"></script>
-<script src="../assets/js/camera-capture.js?v=20260922a"></script>
-<script src="../assets/js/print-invoice.js?v=20260922a"></script>
-<script src="../assets/js/maps-config.js?v=20260922a"></script>
-<script src="../assets/js/mileage-db.js?v=20260922a"></script>
-<script src="../assets/js/jobs.js?v=20260922a"></script>
+<script src="../assets/js/pricing-data.js?v=20260922b"></script>
+<script src="../assets/js/worksheet.js?v=20260922b"></script>
+<script src="../assets/js/systems-db.js?v=20260922b"></script>
+<script src="../assets/js/events-db.js?v=20260922b"></script>
+<script src="../assets/js/jobs-db.js?v=20260922b"></script>
+<script src="../assets/js/job-photos-db.js?v=20260922b"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260922b"></script>
+<script src="../assets/js/camera-capture.js?v=20260922b"></script>
+<script src="../assets/js/print-invoice.js?v=20260922b"></script>
+<script src="../assets/js/maps-config.js?v=20260922b"></script>
+<script src="../assets/js/mileage-db.js?v=20260922b"></script>
+<script src="../assets/js/jobs.js?v=20260922b"></script>
 </body>
 </html>

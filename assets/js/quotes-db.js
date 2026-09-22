@@ -209,6 +209,40 @@ async function saaFindDuplicateQuotes({ firstName, lastName, phone, quoteType, e
   }
 }
 
+/** Round 44 (2026-09-22), per Vijayan: "Add another provision in dashboard
+ *  to view all quotes in list form similar to jobs." Every quote across
+ *  every customer, newest first, with its customer and (if any) the Job
+ *  it's linked to -- backs the new Quotes list page (quotes.html), same
+ *  cross-record pattern as saaInvoicesFetchAll/saaJobsFetchAll. */
+async function saaQuotesFetchAll() {
+  const { data: quotes, error } = await _saaClient
+    .from("quotes")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+
+  const custIds = [...new Set((quotes || []).map((q) => q.customer_id).filter(Boolean))];
+  const jobIds = [...new Set((quotes || []).map((q) => q.job_id).filter(Boolean))];
+  const [{ data: customers, error: e2 }, { data: jobs, error: e3 }] = await Promise.all([
+    custIds.length
+      ? _saaClient.from("customers").select("id,first_name,last_name,phone").in("id", custIds)
+      : { data: [], error: null },
+    jobIds.length
+      ? _saaClient.from("jobs").select("id,job_number,job_type,is_current").in("id", jobIds)
+      : { data: [], error: null },
+  ]);
+  if (e2) throw e2;
+  if (e3) throw e3;
+
+  const custById = Object.fromEntries((customers || []).map((c) => [c.id, c]));
+  const jobById = Object.fromEntries((jobs || []).map((j) => [j.id, j]));
+
+  return (quotes || []).map((q) => Object.assign({}, q, {
+    customer: custById[q.customer_id] || null,
+    job: jobById[q.job_id] || null,
+  }));
+}
+
 /** returns: { ok: true } | { ok: false, error } */
 async function saaDeleteQuote(quoteId) {
   try {

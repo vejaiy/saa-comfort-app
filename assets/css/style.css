@@ -515,6 +515,39 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .jb-quote-link { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--navy); text-decoration: underline; cursor: pointer; }
 .jb-quote-link:hover { color: #0d1f33; }
 
+/* Round 44 (2026-09-22), per Vijayan: "add + (expand button) and show its
+   events underneath it kind of group function in excel." The toggle button
+   sits in its own narrow leading column; the Event rows it reveals are
+   plain <tr>s (so they still sit in normal document flow between Job rows,
+   not an absolutely-positioned overlay) with one colspan'd cell holding an
+   indented single-line summary of that Event. */
+.jb-expand-cell { text-align: center; }
+.jb-expand-btn {
+  width: 20px; height: 20px; line-height: 18px; padding: 0; border-radius: 4px;
+  border: 1px solid var(--line); background: #fff; color: var(--navy, #14304d);
+  font-size: .85rem; font-weight: 700; cursor: pointer;
+}
+.jb-expand-btn:hover { background: #eef3f6; border-color: var(--navy, #14304d); }
+
+.jobs-table tr.jb-event-subrow { cursor: pointer; background: #fbfcfd; }
+.jobs-table tr.jb-event-subrow:hover { background: #eef3f6; }
+.jobs-table tr.jb-event-subrow td { padding: 8px 12px 8px 40px; border-bottom: 1px solid #f0f3f6; }
+.jb-event-subrow-inner { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; white-space: normal; }
+.jb-event-subrow-num { font-weight: 700; color: var(--navy, #14304d); }
+.jb-event-subrow-sep { color: var(--muted); }
+.jb-event-subrow-type { font-weight: 600; color: var(--ink, #1a2733); }
+.jb-event-subrow-meta { color: var(--muted); font-size: .8rem; }
+
+/* Round 44 (2026-09-22): Customer Profile panel (customers.html) --
+   plain list rows for a customer's Systems/Jobs, distinct from
+   .jb-event-list (the Job Card's own colored-card timeline) since these
+   are a denser reference list, not a set of actionable event cards. */
+.cp-list { margin: 0; padding: 0; list-style: none; }
+.cp-list li { padding: 6px 0; border-bottom: 1px solid #f0f3f6; }
+.cp-list li:last-child { border-bottom: none; }
+.cp-list-clickable li { cursor: pointer; }
+.cp-list-clickable li:hover { background: #f5f8fa; }
+
 .jb-badge { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: .72rem; font-weight: 700; background: #eef3f6; color: var(--muted); white-space: nowrap; }
 /* .jb-badge's own `display` overrides the browser's default [hidden]
    rule (same class of bug already fixed once for .modal-overlay -- see
