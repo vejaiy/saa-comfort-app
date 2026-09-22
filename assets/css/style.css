@@ -538,6 +538,26 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .jb-event-subrow-type { font-weight: 600; color: var(--ink, #1a2733); }
 .jb-event-subrow-meta { color: var(--muted); font-size: .8rem; }
 
+/* Round 45 (2026-09-22), per Vijayan: "In Jobs download give options in
+   drop down list format 1. Download all, 2. Download jobs, 3. Download
+   events." A small toggle menu anchored under the existing Download
+   button -- no library needed, same idea as the modal overlays elsewhere
+   in this app, just anchored instead of centered full-screen. */
+.jb-download-wrap { position: relative; display: inline-block; }
+.jb-download-menu {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 30;
+  min-width: 180px; background: #fff; border: 1px solid var(--line);
+  border-radius: 8px; box-shadow: 0 8px 24px rgba(16, 36, 57, .18);
+  overflow: hidden;
+}
+.jb-download-menu-item {
+  display: block; width: 100%; text-align: left; padding: 10px 14px;
+  background: none; border: none; border-top: 1px solid var(--line);
+  font-size: .85rem; color: var(--ink, #1a2733); cursor: pointer;
+}
+.jb-download-menu-item:first-child { border-top: none; }
+.jb-download-menu-item:hover { background: #eef3f6; }
+
 /* Round 44 (2026-09-22): Customer Profile panel (customers.html) --
    plain list rows for a customer's Systems/Jobs, distinct from
    .jb-event-list (the Job Card's own colored-card timeline) since these

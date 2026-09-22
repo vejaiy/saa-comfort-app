@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jobs | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260922b">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260922c">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260922b"></script>
-<script src="../assets/js/supabase-config.js?v=20260922b"></script>
-<script src="../assets/js/auth.js?v=20260922b"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260922c"></script>
+<script src="../assets/js/supabase-config.js?v=20260922c"></script>
+<script src="../assets/js/auth.js?v=20260922c"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -80,7 +80,19 @@
     <option value="all">All Jobs</option>
   </select>
   <button type="button" class="btn btn-ghost btn-sm" id="jb-clear-filters-btn">Clear Filters &amp; Sort</button>
-  <button type="button" class="btn btn-ghost btn-sm" id="jb-download-btn">&#11015;&#65039; Download (Excel)</button>
+  <!-- Round 45 (2026-09-22), per Vijayan: "In Jobs download give options
+       in drop down list format 1. Download all, 2. Download jobs,
+       3. Download events." The single CSV-via-Blob download button
+       (Round 39) is now a small toggle menu -- see jb-download-wrap CSS
+       and the jbDownload*Csv functions in jobs.js. -->
+  <div class="jb-download-wrap" id="jb-download-wrap">
+    <button type="button" class="btn btn-ghost btn-sm" id="jb-download-btn">&#11015;&#65039; Download (Excel) &#9662;</button>
+    <div class="jb-download-menu" id="jb-download-menu" hidden>
+      <button type="button" class="jb-download-menu-item" id="jb-download-all-btn">Download All</button>
+      <button type="button" class="jb-download-menu-item" id="jb-download-jobs-btn">Download Jobs</button>
+      <button type="button" class="jb-download-menu-item" id="jb-download-events-btn">Download Events</button>
+    </div>
+  </div>
 </div>
 
 <!-- Round 24: every column got a sort (click the header) and a filter
@@ -480,6 +492,17 @@
           </div>
           <div class="muted" id="jbd-mileage-note" style="font-size:.78rem"></div>
 
+          <!-- Round 45 (2026-09-22), per Vijayan: "Add another button to
+               calculate return miles to office" -- the trip home, job site
+               back to SAA_COMPANY_ADDRESS. Read-only (like the Quote # field
+               elsewhere) since it's only ever set by this Calculate button,
+               never typed in by hand. -->
+          <div class="field-row" style="margin-top:10px">
+            <div class="field"><label>Return Miles (to Office)</label><input type="number" step="0.1" min="0" id="jbd-return-mileage-miles" placeholder="0.0" readonly style="background:#f3f5f7;color:var(--muted)"></div>
+            <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbd-return-mileage-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Return Miles</button></div>
+          </div>
+          <div class="muted" id="jbd-return-mileage-note" style="font-size:.78rem"></div>
+
           <!-- Round 25 (2026-09-14), per Vijayan: "Mileage will be default
                to 1 tech. add provision to add mileage to multiple tech if
                they drive separately." Technician 2/3 never get an
@@ -619,6 +642,14 @@
       </div>
       <div class="muted" id="jbe-mileage-note" style="font-size:.78rem"></div>
 
+      <!-- Round 45 (2026-09-22): Event-modal mirror of the Job Card's
+           Return Miles (to Office) field just above. -->
+      <div class="field-row" style="margin-top:10px">
+        <div class="field"><label>Return Miles (to Office)</label><input type="number" step="0.1" min="0" id="jbe-return-mileage-miles" placeholder="0.0" readonly style="background:#f3f5f7;color:var(--muted)"></div>
+        <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbe-return-mileage-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Return Miles</button></div>
+      </div>
+      <div class="muted" id="jbe-return-mileage-note" style="font-size:.78rem"></div>
+
       <div class="jbd-mileage-slot" id="jbe-mileage2-block" hidden style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)">
         <div class="muted" style="font-size:.78rem;margin-bottom:6px">If Technician 2 drove separately:</div>
         <div class="field-row">
@@ -735,17 +766,17 @@
 <div id="jb-toast" class="cal-toast" hidden></div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260922b"></script>
-<script src="../assets/js/worksheet.js?v=20260922b"></script>
-<script src="../assets/js/systems-db.js?v=20260922b"></script>
-<script src="../assets/js/events-db.js?v=20260922b"></script>
-<script src="../assets/js/jobs-db.js?v=20260922b"></script>
-<script src="../assets/js/job-photos-db.js?v=20260922b"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260922b"></script>
-<script src="../assets/js/camera-capture.js?v=20260922b"></script>
-<script src="../assets/js/print-invoice.js?v=20260922b"></script>
-<script src="../assets/js/maps-config.js?v=20260922b"></script>
-<script src="../assets/js/mileage-db.js?v=20260922b"></script>
-<script src="../assets/js/jobs.js?v=20260922b"></script>
+<script src="../assets/js/pricing-data.js?v=20260922c"></script>
+<script src="../assets/js/worksheet.js?v=20260922c"></script>
+<script src="../assets/js/systems-db.js?v=20260922c"></script>
+<script src="../assets/js/events-db.js?v=20260922c"></script>
+<script src="../assets/js/jobs-db.js?v=20260922c"></script>
+<script src="../assets/js/job-photos-db.js?v=20260922c"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260922c"></script>
+<script src="../assets/js/camera-capture.js?v=20260922c"></script>
+<script src="../assets/js/print-invoice.js?v=20260922c"></script>
+<script src="../assets/js/maps-config.js?v=20260922c"></script>
+<script src="../assets/js/mileage-db.js?v=20260922c"></script>
+<script src="../assets/js/jobs.js?v=20260922c"></script>
 </body>
 </html>

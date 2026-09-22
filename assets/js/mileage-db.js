@@ -326,18 +326,23 @@ async function saaMileageComputeDistance(originAddress, destAddress) {
  *  plain job_id lookup only when events-db.js isn't loaded on this page
  *  (the standalone Mileage report page never calls this) or the job
  *  somehow has no Event yet. */
-async function saaMileageFetchForJob(jobId, technicianId) {
+/** Round 45 (2026-09-22), per Vijayan: "Add another button to calculate
+ *  return miles to office" -- legType now takes an optional legType
+ *  ("trip", the default, or "return_to_shop") so this same lookup can
+ *  fetch either leg of a job/event's mileage without a second function. */
+async function saaMileageFetchForJob(jobId, technicianId, legType) {
+  const lt = legType || "trip";
   if (typeof saaEventsFetchCurrentForJob === "function") {
     try {
       const event = await saaEventsFetchCurrentForJob(jobId);
-      if (event) return await saaMileageFetchForEvent(event.id, technicianId);
+      if (event) return await saaMileageFetchForEvent(event.id, technicianId, lt);
     } catch (e) { /* fall through to the legacy lookup below */ }
   }
   // leg_type: "trip" excludes a possible return_to_shop row for the same
   // job (Round 35) -- without this, a job that also happens to be its
   // technician's last stop of the day could return either row here
   // arbitrarily, since both share the same job_id/technician_id.
-  let query = _saaClient.from("mileage_logs").select("*").eq("job_id", jobId).eq("leg_type", "trip");
+  let query = _saaClient.from("mileage_logs").select("*").eq("job_id", jobId).eq("leg_type", lt);
   if (technicianId) query = query.eq("technician_id", technicianId);
   const { data, error } = await query;
   if (error || !data || !data.length) return null;
@@ -346,9 +351,11 @@ async function saaMileageFetchForJob(jobId, technicianId) {
 
 /** Round 42 Task 121, per Vijayan: "events should have their own miles"
  *  -- the Event-modal equivalent of saaMileageFetchForJob, one row per
- *  (event, technician). */
-async function saaMileageFetchForEvent(eventId, technicianId) {
-  let query = _saaClient.from("mileage_logs").select("*").eq("event_id", eventId).eq("leg_type", "trip");
+ *  (event, technician, legType). Round 45: legType param added (see
+ *  saaMileageFetchForJob above) so the same function fetches either the
+ *  outbound "trip" leg or the "return_to_shop" leg. */
+async function saaMileageFetchForEvent(eventId, technicianId, legType) {
+  let query = _saaClient.from("mileage_logs").select("*").eq("event_id", eventId).eq("leg_type", legType || "trip");
   if (technicianId) query = query.eq("technician_id", technicianId);
   const { data, error } = await query;
   if (error || !data || !data.length) return null;
@@ -587,6 +594,60 @@ async function saaMileageEnsureForEvent(event, technicianId, fallbackJob) {
   }
 }
 
+/** Round 45 (2026-09-22), per Vijayan: "Add another button to calculate
+ *  return miles to office" -- an explicit, on-demand version of the
+ *  "drive back to the shop" leg that saaMileageSyncReturnLeg otherwise
+ *  only computes silently in the background for whichever Event turns
+ *  out to be a technician's actual LAST stop of the day. This lets the
+ *  office get a return-to-office mileage figure for THIS Event's own
+ *  trip specifically -- useful even when more stops follow the same day
+ *  -- by computing this Event's own address -> SAA_COMPANY_ADDRESS and
+ *  upserting it onto the exact same (event_id, technician_id,
+ *  leg_type='return_to_shop') row the background sync uses, so both
+ *  paths share one source of truth per Event. Same manual-override
+ *  guard as saaMileageRecalcForEvent, for parity, even though nothing
+ *  currently writes a manual return_to_shop row. */
+async function saaMileageRecalcReturnForEvent(event, force, technicianId, fallbackJob) {
+  try {
+    const techId = technicianId || event.assigned_technician_id;
+    if (!techId) throw new Error("Assign a technician before calculating mileage.");
+    const fromAddress = saaMileageEventAddress(event, fallbackJob);
+    if (!fromAddress) throw new Error("This event needs a Service Address before return mileage can be calculated.");
+    if (!event.scheduled_start) throw new Error("This event needs a Scheduled Date/Time before mileage can be calculated.");
+
+    const existing = await saaMileageFetchForEvent(event.id, techId, "return_to_shop");
+    if (existing && existing.source === "manual" && !force) {
+      return { ok: false, error: "This return trip was entered manually — recalculating would overwrite it.", manual: true };
+    }
+
+    const miles = await saaMileageComputeDistance(fromAddress, SAA_COMPANY_ADDRESS);
+    const { data, error } = await _saaClient
+      .from("mileage_logs")
+      .upsert(
+        {
+          technician_id: techId,
+          job_id: event.job_id || null,
+          event_id: event.id,
+          log_date: String(event.scheduled_start).slice(0, 10),
+          leg_order: 999,
+          leg_type: "return_to_shop",
+          from_address: fromAddress,
+          to_address: SAA_COMPANY_ADDRESS,
+          miles,
+          source: "auto",
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "event_id,technician_id,leg_type" }
+      )
+      .select("*")
+      .single();
+    if (error) throw error;
+    return { ok: true, log: data };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
 /** Manual override for the leg ending at this Event — same from/to/leg-
  *  order context as the auto path, but the mile figure is whatever the
  *  office/tech typed in, source stamped 'manual'. */
@@ -692,6 +753,17 @@ async function saaMileageSetManualForJob(job, miles, technicianId) {
   try {
     const event = await _saaMileageEventForJobLegacy(job);
     return await saaMileageSetManualForEvent(event, miles, technicianId, job);
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+/** Round 45 (2026-09-22): Job Card wrapper for saaMileageRecalcReturnForEvent
+ *  -- same "resolve the Job's current Event, delegate" pattern as
+ *  saaMileageRecalcForJob above. */
+async function saaMileageRecalcReturnForJob(job, force, technicianId) {
+  try {
+    const event = await _saaMileageEventForJobLegacy(job);
+    return await saaMileageRecalcReturnForEvent(event, force, technicianId, job);
   } catch (e) {
     return { ok: false, error: (e && e.message) || String(e) };
   }

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260922b">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260922c">
 <script>
 if (new URLSearchParams(location.search).get('embed') === '1') {
   document.documentElement.classList.add('saa-embed');
@@ -14,9 +14,9 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260922b"></script>
-<script src="../assets/js/supabase-config.js?v=20260922b"></script>
-<script src="../assets/js/auth.js?v=20260922b"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260922c"></script>
+<script src="../assets/js/supabase-config.js?v=20260922c"></script>
+<script src="../assets/js/auth.js?v=20260922c"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -585,6 +585,17 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
           </div>
           <div class="muted" id="jbd-mileage-note" style="font-size:.78rem"></div>
 
+          <!-- Round 45 (2026-09-22), per Vijayan: "Add another button to
+               calculate return miles to office" -- the trip home, job site
+               back to SAA_COMPANY_ADDRESS. Read-only (like the Quote # field
+               elsewhere) since it's only ever set by this Calculate button,
+               never typed in by hand. -->
+          <div class="field-row" style="margin-top:10px">
+            <div class="field"><label>Return Miles (to Office)</label><input type="number" step="0.1" min="0" id="jbd-return-mileage-miles" placeholder="0.0" readonly style="background:#f3f5f7;color:var(--muted)"></div>
+            <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbd-return-mileage-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Return Miles</button></div>
+          </div>
+          <div class="muted" id="jbd-return-mileage-note" style="font-size:.78rem"></div>
+
           <!-- Round 25 (2026-09-14), per Vijayan: "Mileage will be default
                to 1 tech. add provision to add mileage to multiple tech if
                they drive separately." Technician 2/3 never get an
@@ -724,6 +735,14 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
       </div>
       <div class="muted" id="jbe-mileage-note" style="font-size:.78rem"></div>
 
+      <!-- Round 45 (2026-09-22): Event-modal mirror of the Job Card's
+           Return Miles (to Office) field just above. -->
+      <div class="field-row" style="margin-top:10px">
+        <div class="field"><label>Return Miles (to Office)</label><input type="number" step="0.1" min="0" id="jbe-return-mileage-miles" placeholder="0.0" readonly style="background:#f3f5f7;color:var(--muted)"></div>
+        <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbe-return-mileage-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Return Miles</button></div>
+      </div>
+      <div class="muted" id="jbe-return-mileage-note" style="font-size:.78rem"></div>
+
       <div class="jbd-mileage-slot" id="jbe-mileage2-block" hidden style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)">
         <div class="muted" style="font-size:.78rem;margin-bottom:6px">If Technician 2 drove separately:</div>
         <div class="field-row">
@@ -841,19 +860,19 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260922b"></script>
-<script src="../assets/js/worksheet.js?v=20260922b"></script>
-<script src="../assets/js/systems-db.js?v=20260922b"></script>
-<script src="../assets/js/events-db.js?v=20260922b"></script>
-<script src="../assets/js/calendar-db.js?v=20260922b"></script>
-<script src="../assets/js/jobs-db.js?v=20260922b"></script>
-<script src="../assets/js/job-photos-db.js?v=20260922b"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260922b"></script>
-<script src="../assets/js/camera-capture.js?v=20260922b"></script>
-<script src="../assets/js/print-invoice.js?v=20260922b"></script>
-<script src="../assets/js/maps-config.js?v=20260922b"></script>
-<script src="../assets/js/mileage-db.js?v=20260922b"></script>
-<script src="../assets/js/jobs.js?v=20260922b"></script>
-<script src="../assets/js/calendar.js?v=20260922b"></script>
+<script src="../assets/js/pricing-data.js?v=20260922c"></script>
+<script src="../assets/js/worksheet.js?v=20260922c"></script>
+<script src="../assets/js/systems-db.js?v=20260922c"></script>
+<script src="../assets/js/events-db.js?v=20260922c"></script>
+<script src="../assets/js/calendar-db.js?v=20260922c"></script>
+<script src="../assets/js/jobs-db.js?v=20260922c"></script>
+<script src="../assets/js/job-photos-db.js?v=20260922c"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260922c"></script>
+<script src="../assets/js/camera-capture.js?v=20260922c"></script>
+<script src="../assets/js/print-invoice.js?v=20260922c"></script>
+<script src="../assets/js/maps-config.js?v=20260922c"></script>
+<script src="../assets/js/mileage-db.js?v=20260922c"></script>
+<script src="../assets/js/jobs.js?v=20260922c"></script>
+<script src="../assets/js/calendar.js?v=20260922c"></script>
 </body>
 </html>

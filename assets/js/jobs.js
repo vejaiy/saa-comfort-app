@@ -501,40 +501,123 @@ async function jbLoadAll() {
 // what's on screen right now (respects the active column filters/search/
 // sort), not the whole unfiltered table, matching the Tool List's same
 // filtered-export behavior.
+//
+// Round 45 (2026-09-22), per Vijayan: "In Jobs download give options in
+// drop down list format 1. Download all, 2. Download jobs, 3. Download
+// events. Display event columns similar to Jobs." The single-button
+// download is now three: Jobs (the original Round 39 export, unchanged),
+// Events (new -- every Event under the currently-filtered Jobs, one row
+// per Event, in the same column shape as the Jobs export), and All (both,
+// as two sections of one CSV file -- this app has no xlsx/multi-sheet
+// library, so a blank-line-separated section is the same pattern used
+// nowhere else yet but reads cleanly in Excel/Sheets either way).
 function _jbCsvField(v) {
   const s = String(v == null ? "" : v);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
-function jbDownloadCsv() {
-  const rows = jbApplyFilters();
-  const header = ["Job #", "Date Received", "Scheduled", "Customer", "Phone", "Service Address", "Job Type", "Priority", "Technician", "Status", "Payment", "Quote $"];
-  const lines = [header.map(_jbCsvField).join(",")];
-  rows.forEach((j) => {
-    const amt = _jbQuoteAmount(j);
-    lines.push([
-      _jbJobNum(j),
-      _jbFormatDate(j.created_at),
-      _jbFormatDate(j.scheduled_date),
-      _jbCustName(j.customer),
-      j.customer && j.customer.phone ? saaFormatPhone(j.customer.phone) : "",
-      [j.job_address, j.job_city].filter(Boolean).join(", "),
-      saaJobTypeLabel(j.job_type),
-      _jbPriorityLabel[j.priority] || j.priority || "",
-      _jbTechDisplayNames(j),
-      _jbJobStatusLabel(j),
-      _jbPaymentLabel[j.paymentStatus] || "",
-      amt != null ? fmtMoney(amt) : "",
-    ].map(_jbCsvField).join(","));
-  });
+
+function _jbTriggerCsvDownload(lines, filenameStem) {
   const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `SAA-jobs-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `${filenameStem}-${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+const _JB_JOBS_CSV_HEADER = ["Job #", "Date Received", "Scheduled", "Customer", "Phone", "Service Address", "Job Type", "Priority", "Technician", "Status", "Payment", "Quote $"];
+
+function _jbJobCsvRow(j) {
+  const amt = _jbQuoteAmount(j);
+  return [
+    _jbJobNum(j),
+    _jbFormatDate(j.created_at),
+    _jbFormatDate(j.scheduled_date),
+    _jbCustName(j.customer),
+    j.customer && j.customer.phone ? saaFormatPhone(j.customer.phone) : "",
+    [j.job_address, j.job_city].filter(Boolean).join(", "),
+    saaJobTypeLabel(j.job_type),
+    _jbPriorityLabel[j.priority] || j.priority || "",
+    _jbTechDisplayNames(j),
+    _jbJobStatusLabel(j),
+    _jbPaymentLabel[j.paymentStatus] || "",
+    amt != null ? fmtMoney(amt) : "",
+  ];
+}
+
+function _jbBuildJobsCsvLines(rows) {
+  const lines = [_JB_JOBS_CSV_HEADER.map(_jbCsvField).join(",")];
+  rows.forEach((j) => lines.push(_jbJobCsvRow(j).map(_jbCsvField).join(",")));
+  return lines;
+}
+
+/** Same column order as the Jobs export -- Vijayan: "Display event columns
+ *  similar to Jobs" -- but each row is one EVENT (one visit), not one Job.
+ *  "Date Received" stays the parent Job's intake date (an Event doesn't
+ *  have its own intake), while Scheduled/Technician/Status come from the
+ *  Event's own fields (its own visit time, whoever was actually assigned
+ *  to THAT visit, and that visit's own Completed/Scheduled/etc. status --
+ *  not the parent Job's, since a multi-visit Job's Events can each be at a
+ *  different stage). Service Address prefers the Event's own Service
+ *  Address (Round 42 gave Events their own) and falls back to the Job's.
+ *  Customer/Phone/Job Type/Priority/Payment/Quote $ are Job/Customer-level
+ *  facts, so every Event under the same Job repeats the same value.
+ *  Leads with Event # (mirroring "Job #" leading the Jobs export) plus the
+ *  parent Job # so an Events export row can always be traced back. */
+const _JB_EVENTS_CSV_HEADER = ["Event #", "Job #", "Date Received", "Scheduled", "Customer", "Phone", "Service Address", "Job Type", "Priority", "Technician", "Status", "Payment", "Quote $"];
+
+function _jbEventTechNames(e) {
+  const names = [e.technician, e.technician2, e.technician3].filter(Boolean).map((t) => t.name);
+  return names.length ? names.join(", ") : "None";
+}
+
+function _jbEventCsvRow(job, e) {
+  const amt = _jbQuoteAmount(job);
+  const eventAddress = [e.service_address, e.service_city].filter(Boolean).join(", ");
+  return [
+    e.event_number || "",
+    _jbJobNum(job),
+    _jbFormatDate(job.created_at),
+    _jbEventTimeLabel(e.scheduled_start),
+    _jbCustName(job.customer),
+    job.customer && job.customer.phone ? saaFormatPhone(job.customer.phone) : "",
+    eventAddress || [job.job_address, job.job_city].filter(Boolean).join(", "),
+    saaJobTypeLabel(job.job_type),
+    _jbPriorityLabel[job.priority] || job.priority || "",
+    _jbEventTechNames(e),
+    saaEventStatusLabel(e.event_status),
+    _jbPaymentLabel[job.paymentStatus] || "",
+    amt != null ? fmtMoney(amt) : "",
+  ];
+}
+
+function _jbBuildEventsCsvLines(rows) {
+  const lines = [_JB_EVENTS_CSV_HEADER.map(_jbCsvField).join(",")];
+  rows.forEach((j) => (j.events || []).forEach((e) => lines.push(_jbEventCsvRow(j, e).map(_jbCsvField).join(","))));
+  return lines;
+}
+
+function jbDownloadJobsCsv() {
+  _jbTriggerCsvDownload(_jbBuildJobsCsvLines(jbApplyFilters()), "SAA-jobs");
+}
+
+function jbDownloadEventsCsv() {
+  _jbTriggerCsvDownload(_jbBuildEventsCsvLines(jbApplyFilters()), "SAA-events");
+}
+
+function jbDownloadAllCsv() {
+  const rows = jbApplyFilters();
+  const lines = ["JOBS", ..._jbBuildJobsCsvLines(rows), "", "EVENTS", ..._jbBuildEventsCsvLines(rows)];
+  _jbTriggerCsvDownload(lines, "SAA-jobs-and-events");
+}
+
+function _jbToggleDownloadMenu(forceOpen) {
+  const menu = document.getElementById("jb-download-menu");
+  if (!menu) return;
+  menu.hidden = forceOpen === undefined ? !menu.hidden : !forceOpen;
 }
 
 /* ============================== New Job popup ============================== */
@@ -2092,6 +2175,16 @@ async function jbRenderMileageSection(job) {
   noteEl.textContent = existing
     ? (existing.source === "manual" ? "Entered manually." : "Auto-calculated from addresses.")
     : "";
+
+  // Round 45 (2026-09-22): the return-to-office leg for this same job/
+  // event, if one's already on file (either from a prior click of
+  // "Calculate Return Miles" below, or from the background end-of-day
+  // sync in mileage-db.js).
+  const returnMilesEl = document.getElementById("jbd-return-mileage-miles");
+  const returnNoteEl = document.getElementById("jbd-return-mileage-note");
+  const existingReturn = await saaMileageFetchForJob(job.id, null, "return_to_shop");
+  returnMilesEl.value = existingReturn && existingReturn.miles != null ? existingReturn.miles : "";
+  returnNoteEl.textContent = existingReturn ? "Auto-calculated from addresses." : "";
 }
 
 async function jbCalculateMileage() {
@@ -2118,6 +2211,31 @@ async function jbCalculateMileage() {
   } finally {
     btn.disabled = false;
     btn.textContent = "📍 Calculate Miles";
+  }
+}
+
+/** Round 45 (2026-09-22), per Vijayan: "Add another button to calculate
+ *  return miles to office" -- the Job Card's own trigger for the trip
+ *  home (job site -> SAA_COMPANY_ADDRESS), same button/field pattern as
+ *  jbCalculateMileage above, just the reverse leg. */
+async function jbCalculateReturnMileage() {
+  if (!_jbCurrentJob) return;
+  const snap = _jbMileageSnapshot();
+  const btn = document.getElementById("jbd-return-mileage-calc-btn");
+  btn.disabled = true;
+  btn.textContent = "Calculating…";
+  try {
+    const res = await saaMileageRecalcReturnForJob(snap);
+    if (res.ok) {
+      document.getElementById("jbd-return-mileage-miles").value = res.log.miles != null ? res.log.miles : "";
+      document.getElementById("jbd-return-mileage-note").textContent = "Auto-calculated from addresses.";
+      _jbToast(`${res.log.miles} return miles calculated.`);
+    } else {
+      _jbToast(res.error, true);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "📍 Calculate Return Miles";
   }
 }
 
@@ -2238,6 +2356,14 @@ async function jbeRenderMileageSection() {
   noteEl.textContent = existing
     ? (existing.source === "manual" ? "Entered manually." : "Auto-calculated from addresses.")
     : "";
+
+  // Round 45 (2026-09-22): Event-modal mirror of the Job Card's Return
+  // Miles (to Office) display -- see jbRenderMileageSection.
+  const returnMilesEl = document.getElementById("jbe-return-mileage-miles");
+  const returnNoteEl = document.getElementById("jbe-return-mileage-note");
+  const existingReturn = await saaMileageFetchForEvent(event.id, techId, "return_to_shop");
+  returnMilesEl.value = existingReturn && existingReturn.miles != null ? existingReturn.miles : "";
+  returnNoteEl.textContent = existingReturn ? "Auto-calculated from addresses." : "";
 }
 
 async function jbeCalculateMileage() {
@@ -2265,6 +2391,31 @@ async function jbeCalculateMileage() {
   } finally {
     btn.disabled = false;
     btn.textContent = "📍 Calculate Miles";
+  }
+}
+
+/** Round 45 (2026-09-22): Event-modal mirror of jbCalculateReturnMileage
+ *  above -- this Event's own trip home (its Service Address ->
+ *  SAA_COMPANY_ADDRESS). */
+async function jbeCalculateReturnMileage() {
+  const event = _jbEventModalTarget;
+  if (!event || !event.id) { _jbToast("Save this Event first, then calculate mileage.", true); return; }
+  const snap = _jbeMileageEventSnapshot();
+  const btn = document.getElementById("jbe-return-mileage-calc-btn");
+  btn.disabled = true;
+  btn.textContent = "Calculating…";
+  try {
+    const res = await saaMileageRecalcReturnForEvent(snap, false, null, _jbCurrentJob);
+    if (res.ok) {
+      document.getElementById("jbe-return-mileage-miles").value = res.log.miles != null ? res.log.miles : "";
+      document.getElementById("jbe-return-mileage-note").textContent = "Auto-calculated from addresses.";
+      _jbToast(`${res.log.miles} return miles calculated.`);
+    } else {
+      _jbToast(res.error, true);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "📍 Calculate Return Miles";
   }
 }
 
@@ -3205,8 +3356,23 @@ document.addEventListener("DOMContentLoaded", async () => {
       jbRenderTable();
     });
 
+    // Round 45 (2026-09-22): the old single Download button is now a
+    // toggle for a 3-item menu (All / Jobs / Events) -- see
+    // _jbToggleDownloadMenu and the jbDownload*Csv functions above.
     const jbDownloadBtn = document.getElementById("jb-download-btn");
-    if (jbDownloadBtn) jbDownloadBtn.addEventListener("click", jbDownloadCsv);
+    const jbDownloadWrap = document.getElementById("jb-download-wrap");
+    if (jbDownloadBtn) {
+      jbDownloadBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        _jbToggleDownloadMenu();
+      });
+      document.getElementById("jb-download-all-btn").addEventListener("click", () => { _jbToggleDownloadMenu(false); jbDownloadAllCsv(); });
+      document.getElementById("jb-download-jobs-btn").addEventListener("click", () => { _jbToggleDownloadMenu(false); jbDownloadJobsCsv(); });
+      document.getElementById("jb-download-events-btn").addEventListener("click", () => { _jbToggleDownloadMenu(false); jbDownloadEventsCsv(); });
+      document.addEventListener("click", (e) => {
+        if (jbDownloadWrap && !jbDownloadWrap.contains(e.target)) _jbToggleDownloadMenu(false);
+      });
+    }
 
     document.getElementById("jb-new-btn").addEventListener("click", jbOpenNewJobModal);
     document.getElementById("jbn-cancel-btn").addEventListener("click", () => { document.getElementById("jb-new-modal").hidden = true; });
@@ -3332,6 +3498,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     e.target.value = ""; // allow re-selecting the same filename later
   });
   document.getElementById("jbd-mileage-calc-btn").addEventListener("click", jbCalculateMileage);
+  document.getElementById("jbd-return-mileage-calc-btn").addEventListener("click", jbCalculateReturnMileage);
   // Recompute the "Trip: ..." context line (not the miles themselves) the
   // moment technician/date/address fields change, so it never shows a
   // stale route while the office is still filling out the card.
@@ -3401,6 +3568,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById(id).addEventListener("input", jbeComputeProfit);
   });
   document.getElementById("jbe-mileage-calc-btn").addEventListener("click", jbeCalculateMileage);
+  document.getElementById("jbe-return-mileage-calc-btn").addEventListener("click", jbeCalculateReturnMileage);
   document.getElementById("jbe-mileage2-calc-btn").addEventListener("click", () => jbeCalculateMileageSlot(2));
   document.getElementById("jbe-mileage3-calc-btn").addEventListener("click", () => jbeCalculateMileageSlot(3));
   // Recompute the Event modal's own "Trip: ..." context line the moment
