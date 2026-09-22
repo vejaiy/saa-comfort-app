@@ -755,7 +755,9 @@ function saaCalOpenNewServicePopup(ctx) {
   document.getElementById("ns-job-search").value = "";
   document.getElementById("ns-job-results").hidden = true;
   document.getElementById("ns-selected-job").hidden = true;
-  document.getElementById("nsx-event-type").innerHTML = _saaCalOptionsHtml(SAA_EVENT_TYPE_OPTIONS, "service_call");
+  // Round 43: Job Type now (not Event Type) -- this tab starts a brand-new
+  // Job for the found Job's Customer+System, see the ns-save-btn handler.
+  document.getElementById("nsx-job-type").innerHTML = _saaCalOptionsHtml(SAA_JOBS_TYPE_OPTIONS, "service_call");
   document.getElementById("ns-title").value = "";
   document.getElementById("ns-status").textContent = "";
   saaCalRenderTypeGrid();
@@ -945,11 +947,16 @@ async function saaCalOnSystemChange() {
   const warn = document.getElementById("ns-system-warning");
   document.getElementById("ns-newsystem-fields").hidden = !!systemId;
   warn.textContent = "";
-  if (!systemId) return;
-  const dup = await saaSystemsFindOpenJobForSystem(systemId);
-  if (dup.ok && dup.jobs.length) {
-    const j = dup.jobs[0];
-    warn.textContent = `⚠️ This system already has an open job (${j.job_number}, ${j.status}). Consider the Existing Job tab instead, or continue to create a separate job.`;
+  if (!systemId || !saaCalSelectedCustomer || saaCalSelectedCustomer.isNew) return;
+  // Round 43: "one current Job per Customer+System" -- this system already
+  // has a current Job, so saving here will convert it into a historical
+  // Event (confirmed again, with full detail, at Save time -- see the
+  // ns-save-btn handler). This replaces the old plain "possible duplicate"
+  // wording, which suggested creating a second side-by-side job was a
+  // normal option; under the new rule it never is.
+  const cur = await saaSystemsFindCurrentJobForSystem(saaCalSelectedCustomer.customer.id, systemId);
+  if (cur.ok && cur.job) {
+    warn.textContent = `⚠️ This system's current job is ${cur.job.job_number} (${(Object.fromEntries(SAA_JOBS_STATUS_OPTIONS)[cur.job.status]) || cur.job.status}). Creating a new job here will convert it into a historical Event.`;
   }
 }
 
@@ -1034,9 +1041,14 @@ function saaCalRenderJobResults(jobs, query) {
     const custName = j.customer ? saaCalCustName(j.customer) : "Unknown customer";
     const sysBit = j.system ? (j.system.system_name || "System") : "No system";
     const lastEvt = j.latestEvent ? saaCalFormatShortDate(j.latestEvent.scheduled_start) : "No events yet";
+    // Round 43 (2026-09-22): picking any Job here now starts a brand-new
+    // Job for its Customer+System -- flagging a historical (already-
+    // converted) one so the office knows they aren't reopening it, just
+    // using it to identify which System to start the next visit for.
+    const historicalTag = j.is_current === false ? " · (historical)" : "";
     return `<div class="cal-cust-result" data-idx="${i}">
       <div class="cal-cust-result-main" data-idx="${i}">
-        <div class="name">${_saaCalEsc(j.job_number)} — ${_saaCalEsc(custName)}</div>
+        <div class="name">${_saaCalEsc(j.job_number)} — ${_saaCalEsc(custName)}${historicalTag}</div>
         <div class="addr">${_saaCalEsc(sysBit)} · ${_saaCalEsc(j.status)}</div>
         <div class="svc-meta">Latest event: ${_saaCalEsc(lastEvt)}</div>
       </div>
@@ -1171,24 +1183,52 @@ function saaCalWireStaticHandlers() {
 
     if (saaCalScheduleTab === "existing") {
       if (!saaCalSelectedExistingJob) { status.textContent = "Search for and select an existing job first."; return; }
-      const eventType = document.getElementById("nsx-event-type").value || "service_call";
+      const foundJob = saaCalSelectedExistingJob;
+      if (!foundJob.system_id) {
+        status.textContent = "This job has no System on file -- open its Job Card (Jobs list) to add one before starting a new job for it.";
+        return;
+      }
+      const jobType = document.getElementById("nsx-job-type").value || "service_call";
+
+      // Round 43: "Existing Job" no longer adds a 2nd Event under
+      // foundJob -- it starts a brand-new current Job for foundJob's own
+      // Customer+System, which converts whichever Job is CURRENTLY active
+      // there (not necessarily foundJob itself, if an older/historical
+      // Job was what search happened to match) into a historical Event.
+      // Same confirmation as the New Job tab's existing-System branch.
+      const cur = await saaSystemsFindCurrentJobForSystem(foundJob.customer_id, foundJob.system_id);
+      if (cur.ok && cur.job) {
+        const lastVisit = cur.job.scheduled_date ? saaCalFormatShortDate(cur.job.scheduled_date) : "no date on file";
+        const statusLabel = (Object.fromEntries(SAA_JOBS_STATUS_OPTIONS)[cur.job.status]) || cur.job.status;
+        const proceed = await saaConfirm(
+          `CURRENT JOB FOUND\n\n${cur.job.job_number}\nLast Visit: ${lastVisit}\nStatus: ${statusLabel}\n\nCreating this new Job will convert the current Job into a historical Event. Continue?`,
+          { title: "New Job", okLabel: "Create New Job & Convert Previous Job", cancelLabel: "Cancel" }
+        );
+        if (!proceed) { status.textContent = "Not created."; return; }
+      }
+
       let startDatetime = null, endDatetime = null;
       if (techId && timeVal) {
         const [hh, mm] = timeVal.split(":").map(Number);
         const startMinutes = hh * 60 + mm;
-        const dur = SAA_CAL_EVENTTYPE_DURATION[eventType] || 60;
+        const type = saaCalTypesByKey[jobType] || {};
+        const dur = type.default_duration_minutes || 60;
         startDatetime = saaCalTimeStr(saaCalCurrentDate, startMinutes);
         endDatetime = saaCalTimeStr(saaCalCurrentDate, startMinutes + dur);
       }
       status.textContent = "Saving…";
-      const res = await saaEventsCreateForJob(saaCalSelectedExistingJob.id, {
-        eventType, eventStatus: "scheduled", scheduledStart: startDatetime, scheduledEnd: endDatetime,
-        technicianId: techId, reason: document.getElementById("ns-title").value.trim() || null,
+      const res = await saaJobsCreateForExistingSystem(foundJob.customer_id, foundJob.system_id, {
+        jobType, status: "new", title: document.getElementById("ns-title").value.trim() || "",
+        priority: foundJob.priority || "normal",
+        jobAddress: foundJob.job_address || null, jobCity: foundJob.job_city || null, jobState: foundJob.job_state || "TX", jobZip: foundJob.job_zip || null,
+        technicianId: techId, scheduledDate: startDatetime ? startDatetime.slice(0, 10) : null, scheduledTime: timeVal || null,
+        startDatetime, endDatetime,
+        customerFirstName: foundJob.customer ? foundJob.customer.first_name : undefined,
       });
       if (res.ok) {
         document.getElementById("cal-newsvc-modal").hidden = true;
         await saaCalLoadAndRender();
-        saaCalShowToast(techId && startDatetime ? "Event scheduled." : "Added to Unscheduled Jobs.");
+        saaCalShowToast(res.convertedFromJobNumber ? `New Job created -- ${res.convertedFromJobNumber} is now a historical Event.` : "New Job created.");
       } else {
         status.textContent = "Error: " + res.error;
       }
@@ -1207,9 +1247,30 @@ function saaCalWireStaticHandlers() {
       startDatetime = saaCalTimeStr(saaCalCurrentDate, startMinutes);
       endDatetime = saaCalTimeStr(saaCalCurrentDate, startMinutes + dur);
     }
-    status.textContent = "Saving…";
     const sc = saaCalSelectedCustomer;
     const systemId = document.getElementById("ns-system-select").value || null;
+
+    // Round 43: "one current Job per Customer+System" -- picking an
+    // EXISTING System that already has a current Job means saving here
+    // will convert it into a historical Event (see
+    // saaJobsCreateForExistingSystem, events-db.js). Confirm before doing
+    // that irreversible-feeling thing, per spec item 18/19, rather than
+    // just the softer inline warning saaCalOnSystemChange already shows
+    // once a System is picked.
+    if (systemId && !sc.isNew) {
+      const cur = await saaSystemsFindCurrentJobForSystem(sc.customer.id, systemId);
+      if (cur.ok && cur.job) {
+        const lastVisit = cur.job.scheduled_date ? saaCalFormatShortDate(cur.job.scheduled_date) : "no date on file";
+        const statusLabel = (Object.fromEntries(SAA_JOBS_STATUS_OPTIONS)[cur.job.status]) || cur.job.status;
+        const proceed = await saaConfirm(
+          `CURRENT JOB FOUND\n\n${cur.job.job_number}\nLast Visit: ${lastVisit}\nStatus: ${statusLabel}\n\nCreating this new Job will convert the current Job into a historical Event. Continue?`,
+          { title: "New Job", okLabel: "Create New Job & Convert Previous Job", cancelLabel: "Cancel" }
+        );
+        if (!proceed) { status.textContent = "Not created."; return; }
+      }
+    }
+
+    status.textContent = "Saving…";
     const res = await saaCalScheduleNewJob({
       customerId: sc.isNew ? null : sc.customer.id,
       newCustomer: sc.isNew ? { firstName: sc.customer.first_name, lastName: sc.customer.last_name, phone: sc.customer.phone, address: sc.customer.billing_address, city: sc.customer.billing_city, zip: sc.customer.billing_zip } : null,

@@ -154,6 +154,15 @@ async function saaSystemsCreateWithJob(customerId, systemFields, jobFields) {
         job_state: (jobFields && jobFields.jobState) || "TX",
         job_zip: (jobFields && jobFields.jobZip) || null,
         priority: (jobFields && jobFields.priority) || "normal",
+        // Round 43 (2026-09-22): explicit rather than relying on the
+        // column's DB-level DEFAULT true -- this always creates a brand
+        // new System, so there's never a pre-existing current Job to
+        // conflict with, but is_current is now a load-bearing business
+        // field (Jobs List's Current/Historical filter, the historical
+        // read-only gate) and the mock Supabase client used by Playwright
+        // tests doesn't apply column defaults on insert the way real
+        // Postgres does.
+        is_current: true,
         // These four are the legacy per-job schedule/technician columns
         // (see _saaEventsSyncJobFromCurrentEvent in events-db.js) —
         // accepted here so a caller building its own Event right after

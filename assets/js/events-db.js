@@ -611,6 +611,164 @@ async function saaSystemsFindOpenJobForSystem(systemId, excludeJobId) {
   }
 }
 
+/* ============================== Round 43: "one current Job per
+ * Customer+System" ==============================
+ * Per Vijayan's spec: for a given Customer+System there is at most ONE
+ * current Job at a time (jobs.is_current). Creating a new Job for a
+ * Customer+System that already has one automatically converts the old
+ * current Job into a historical Event under the brand-new Job -- every
+ * field the old Job carried (financials, mileage, invoices, payments,
+ * photos, BOM, quote link, inspection checklist) moves onto that Event
+ * (re-pointing whichever of those were still attached directly to the
+ * old Job, via its own event_id column), nothing is deleted or renamed,
+ * and the old Job row itself is kept (flagged is_current=false, status
+ * 'converted_to_event') for audit/history. This retires the old
+ * "+ Schedule Follow-Up / + Schedule New Event" behavior of adding a
+ * second/third Event under the SAME still-open Job (per Vijayan's
+ * "Replace it" answer, Round 43) -- a Job is now effectively a single
+ * visit, and "another visit" always means a brand-new Job. See
+ * claude/round42-jobs-events-systems-phase1-schema.md (Round 43
+ * section) for the full design writeup, including the
+ * saa_create_job_with_conversion() Postgres function (one atomic
+ * transaction, per spec item 13) that this wraps. */
+
+/** jobs.status -> events.event_status, used only when a Job is being
+ *  converted into an Event on this path -- mirrors SAA_JOBTYPE_TO_EVENTTYPE
+ *  above but for status instead of type. Falls back to "completed" for
+ *  anything unmapped, since a Job being converted almost always means its
+ *  own work already wrapped up (a brand-new visit is starting specifically
+ *  because the last one is done, not because it's still open). */
+const SAA_JOBSTATUS_TO_EVENTSTATUS = {
+  new: "scheduled", lead: "scheduled", quoted: "scheduled", assigned: "scheduled",
+  scheduled: "scheduled", open: "scheduled", waiting_customer: "scheduled",
+  waiting_parts: "scheduled", estimate_sent: "scheduled", approved: "scheduled",
+  in_progress: "in_progress", completed: "completed", closed: "completed",
+  cancelled: "cancelled",
+};
+
+/** Is there already a CURRENT Job (is_current=true) for this exact
+ *  Customer+System? This is the Round 43 check that gates every
+ *  "+ New Job" entry point's confirmation ("Creating this new Job will
+ *  convert the current Job into a historical Event. Continue?") --
+ *  distinct from the older saaSystemsFindOpenJobForSystem above (which
+ *  only warns and lets a second OPEN job be created side-by-side; this
+ *  one is the actual business rule enforcement, keyed on is_current
+ *  rather than a heuristic list of "open" statuses). Returns
+ *  { ok:true, job: {...} | null } | { ok:false, error }. */
+async function saaSystemsFindCurrentJobForSystem(customerId, systemId) {
+  try {
+    if (!systemId) return { ok: true, job: null };
+    const { data, error } = await _saaClient
+      .from("jobs")
+      .select("id,job_number,status,job_type,scheduled_date,created_at")
+      .eq("customer_id", customerId)
+      .eq("system_id", systemId)
+      .eq("is_current", true)
+      .maybeSingle();
+    if (error) throw error;
+    return { ok: true, job: data || null };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+/** The Round 43 "+ New Job" entry point for an ALREADY-EXISTING System --
+ *  used by the Calendar's "+ Schedule -> New Job" tab (when an existing
+ *  System is picked, not "+ Add New System") and by the Job Card's own
+ *  "Start Next Job" action (Customer+System pre-filled from the Job
+ *  that's about to become historical). If this Customer+System has no
+ *  current Job yet (a brand-new System, or one whose only prior Job was
+ *  already converted/closed out some other way), this is exactly
+ *  equivalent to a plain Job insert -- the conversion only fires when one
+ *  is actually found, all inside the one saa_create_job_with_conversion()
+ *  transaction (never a partial "new job exists but old one wasn't
+ *  converted" state). jobFields takes the same shape saaSystemsCreateWithJob's
+ *  jobFields does. Also creates the new Job's own starter Event
+ *  (saaEventsCreateForJob), same as every other Job-creation path in the
+ *  app, so it shows up on the Dispatch Calendar immediately. Returns
+ *  { ok:true, jobId, hadCurrentJob, convertedFromJobNumber,
+ *  convertedToEventId, convertedToEventNumber } | { ok:false, error }. */
+async function saaJobsCreateForExistingSystem(customerId, systemId, jobFields) {
+  try {
+    if (!customerId) return { ok: false, error: "A customer is required." };
+    if (!systemId) return { ok: false, error: "A system is required." };
+    const f = jobFields || {};
+
+    const firstName = f.customerFirstName || (await _saaCustomerFirstName(customerId));
+    const jobNumber = await _saaJobsNextJobNumber(firstName);
+
+    // The old current Job's own type/status decide the mapped Event
+    // Type/Status it gets converted into (resolved here in JS, reusing
+    // the existing maps, rather than duplicating them a third time inside
+    // the Postgres function).
+    const currentRes = await saaSystemsFindCurrentJobForSystem(customerId, systemId);
+    if (!currentRes.ok) return { ok: false, error: currentRes.error };
+    const oldJob = currentRes.job;
+    const eventNumber = oldJob ? await _saaEventsNextEventNumber() : null;
+    const eventType = oldJob ? (SAA_JOBTYPE_TO_EVENTTYPE[oldJob.job_type] || "other") : null;
+    const eventStatus = oldJob ? (SAA_JOBSTATUS_TO_EVENTSTATUS[oldJob.status] || "completed") : null;
+
+    const { data: rpcData, error: rpcErr } = await _saaClient.rpc("saa_create_job_with_conversion", {
+      p_customer_id: customerId,
+      p_system_id: systemId,
+      p_new_job: {
+        job_number: jobNumber,
+        job_type: f.jobType || "service_call",
+        status: f.status || "new",
+        title: f.title || "",
+        job_address: f.jobAddress || null,
+        job_city: f.jobCity || null,
+        job_state: f.jobState || "TX",
+        job_zip: f.jobZip || null,
+        priority: f.priority || "normal",
+        assigned_technician_id: f.technicianId || null,
+        assigned_technician_id_2: f.technicianId2 || null,
+        assigned_technician_id_3: f.technicianId3 || null,
+        scheduled_date: f.scheduledDate || null,
+        scheduled_time: f.scheduledTime || null,
+        notes: f.notes || null,
+        linked_quote_id: f.linkedQuoteId || null,
+        quoted_amount: f.quotedAmount != null ? f.quotedAmount : null,
+      },
+      p_event_number: eventNumber,
+      p_event_type: eventType,
+      p_event_status: eventStatus,
+    });
+    if (rpcErr) throw rpcErr;
+
+    const evRes = await saaEventsCreateForJob(rpcData.newJobId, {
+      eventType: SAA_JOBTYPE_TO_EVENTTYPE[f.jobType] || "service_call",
+      eventStatus: "scheduled",
+      scheduledStart: f.startDatetime || null,
+      scheduledEnd: f.endDatetime || null,
+      technicianId: f.technicianId || null,
+      technicianId2: f.technicianId2 || null,
+      technicianId3: f.technicianId3 || null,
+      reason: f.title || null,
+    });
+    if (!evRes.ok) {
+      return {
+        ok: true, jobId: rpcData.newJobId, hadCurrentJob: rpcData.hadCurrentJob,
+        convertedFromJobId: rpcData.convertedFromJobId, convertedFromJobNumber: rpcData.convertedFromJobNumber,
+        convertedToEventId: rpcData.convertedToEventId,
+        warning: "Job created, but its own starter Event couldn't be scheduled: " + evRes.error,
+      };
+    }
+    return {
+      ok: true,
+      jobId: rpcData.newJobId,
+      starterEventId: evRes.eventId,
+      hadCurrentJob: rpcData.hadCurrentJob,
+      convertedFromJobId: rpcData.convertedFromJobId,
+      convertedFromJobNumber: rpcData.convertedFromJobNumber,
+      convertedToEventId: rpcData.convertedToEventId,
+      convertedToEventNumber: eventNumber,
+    };
+  } catch (e) {
+    return { ok: false, error: _saaEventsFriendlyDbError(e) };
+  }
+}
+
 function _saaEventsFriendlyDbError(e) {
   const raw = (e && e.message) || String(e);
   if (/violates check constraint "events_event_type_check"/.test(raw)) {

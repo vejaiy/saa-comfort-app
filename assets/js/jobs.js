@@ -154,6 +154,15 @@ function _jbJobNum(job) {
 }
 
 const _jbStatusLabel = Object.fromEntries(SAA_JOBS_STATUS_OPTIONS);
+// Round 43 (2026-09-22): 'converted_to_event' is deliberately left OUT of
+// SAA_JOBS_STATUS_OPTIONS (the curated list that fills the Status <select>
+// on the Job Card and the Jobs List's Status filter) so it can never be
+// manually picked -- it's only ever set by the conversion transaction.
+// Special-cased here instead of just adding it to that list.
+function _jbJobStatusLabel(j) {
+  if (j.status === "converted_to_event") return "Converted to Event";
+  return _jbStatusLabel[j.status] || j.status;
+}
 const _jbPriorityLabel = Object.fromEntries(SAA_JOBS_PRIORITY_OPTIONS);
 const _jbPaymentLabel = { unpaid: "Unpaid", partial: "Partially Paid", paid: "Paid" };
 const _jbInvoiceLabel = { draft: "Draft", sent: "Sent", partial: "Partially Paid", paid: "Paid", overdue: "Overdue", void: "Void" };
@@ -282,7 +291,16 @@ function jbApplyFilters() {
       : document.getElementById(col.filterId).value,
   })).filter((cf) => cf.value);
 
+  // Round 43 (2026-09-22), spec item 23: "Job search needs Current/
+  // Historical/All filters, default Current Jobs." A standalone dropdown
+  // rather than a _JB_COLUMNS entry, since it isn't a real table column --
+  // it filters on is_current, which has no column of its own in the grid.
+  const currentFilterEl = document.getElementById("jb-filter-current");
+  const currentFilter = currentFilterEl ? currentFilterEl.value : "current";
+
   let rows = _jbAllJobs.filter((j) => {
+    if (currentFilter === "current" && j.is_current === false) return false;
+    if (currentFilter === "historical" && j.is_current !== false) return false;
     for (const { col, value } of colFilters) {
       if (col.kind === "select") {
         const mv = col.matchValue(j);
@@ -360,7 +378,7 @@ function jbRenderTable() {
       <td>${saaJobTypeLabel(j.job_type)}</td>
       <td><span class="jb-badge jb-pri-${j.priority}">${_jbPriorityLabel[j.priority] || j.priority}</span></td>
       <td>${_jbTechDisplayNames(j)}</td>
-      <td><span class="jb-badge jb-status-${j.status}">${_jbStatusLabel[j.status] || j.status}</span></td>
+      <td><span class="jb-badge jb-status-${j.status}">${_jbJobStatusLabel(j)}</span></td>
       <td><span class="jb-badge jb-pay-${j.paymentStatus}">${_jbPaymentLabel[j.paymentStatus]}</span></td>
       <td>${_jbQuoteCellHtml(j)}</td>
     </tr>`).join("");
@@ -413,7 +431,7 @@ function jbDownloadCsv() {
       saaJobTypeLabel(j.job_type),
       _jbPriorityLabel[j.priority] || j.priority || "",
       _jbTechDisplayNames(j),
-      _jbStatusLabel[j.status] || j.status || "",
+      _jbJobStatusLabel(j),
       _jbPaymentLabel[j.paymentStatus] || "",
       amt != null ? fmtMoney(amt) : "",
     ].map(_jbCsvField).join(","));
@@ -2293,12 +2311,32 @@ function _jbEventTimeLabel(iso) {
 async function jbRenderEventTimeline(job) {
   _jbEvents = await saaEventsFetchForJob(job.id);
   const list = document.getElementById("jbd-event-list");
+
+  // Round 43 (2026-09-22): "Start Next Job" only makes sense from the
+  // CURRENT Job for a Customer+System -- a historical Job's own banner
+  // already points at the Event it was converted into, and its
+  // Customer+System already has a different, newer current Job elsewhere.
+  // Hiding these here avoids someone starting yet another Job from a
+  // record that isn't the active one.
+  const followupBtn = document.getElementById("jbd-schedule-followup-btn");
+  const eventBtn = document.getElementById("jbd-schedule-event-btn");
+  const isHistorical = job.is_current === false;
+  if (followupBtn) followupBtn.hidden = isHistorical;
+  if (eventBtn) eventBtn.hidden = isHistorical;
+
   if (!_jbEvents.length) {
-    list.innerHTML = `<li class="jb-event-empty" style="cursor:default;border:none;padding:4px 2px">No events yet — use "Schedule New Event" above to add the first visit.</li>`;
+    list.innerHTML = isHistorical
+      ? `<li class="jb-event-empty" style="cursor:default;border:none;padding:4px 2px">This Job is historical — see the linked Event above for its ongoing history.</li>`
+      : `<li class="jb-event-empty" style="cursor:default;border:none;padding:4px 2px">No events yet — use "Start Next Job" above once this Job's first visit is done.</li>`;
     return;
   }
   list.innerHTML = _jbEvents.map((e) => {
     const techNames = [e.technician, e.technician2, e.technician3].filter(Boolean).map((t) => t.name).join(", ");
+    // Round 43: a chain event carries original_job_number when it was
+    // itself produced by a conversion -- surfacing it here traces the
+    // permanent history chain (spec items 10/26) without needing to open
+    // each Event just to see where it came from.
+    const originLine = e.original_job_number ? `<div class="jb-event-meta">Original Job: ${e.original_job_number}</div>` : "";
     return `
     <li data-event-id="${e.id}">
       <div class="jb-event-main">
@@ -2307,6 +2345,7 @@ async function jbRenderEventTimeline(job) {
           <span class="jb-event-badge evt-${e.event_status}">${saaEventStatusLabel(e.event_status)}</span>
         </div>
         <div class="jb-event-meta">${_jbEventTimeLabel(e.scheduled_start)}${techNames ? " · " + techNames : ""}${e.reason ? " · " + e.reason : ""}</div>
+        ${originLine}
       </div>
     </li>`;
   }).join("");
@@ -2636,6 +2675,33 @@ async function jbOpenDetail(jobId) {
 
   document.getElementById("jbd-title").textContent = job.title || saaJobTypeLabel(job.job_type);
   document.getElementById("jbd-jobnum").textContent = `${_jbJobNum(job)} · Received ${_jbFormatDate(job.created_at)}`;
+
+  // Round 43 (2026-09-22): historical-Job banner. A converted Job's own
+  // events.job_id gets re-pointed FORWARD onto the new current Job (so the
+  // history-chain query keeps working from the current Job's side) --
+  // which means the historical Job itself no longer "owns" any Event by
+  // job_id. Its one link back to the history it's part of is
+  // converted_to_event_id, captured at the moment of conversion.
+  const historicalBanner = document.getElementById("jbd-historical-banner");
+  if (job.is_current === false) {
+    historicalBanner.hidden = false;
+    document.getElementById("jbd-historical-event-num").textContent = "";
+    const link = document.getElementById("jbd-historical-event-link");
+    link.onclick = async (ev) => {
+      ev.preventDefault();
+      if (!job.converted_to_event_id) return;
+      const linkedEvent = await saaEventsFetchById(job.converted_to_event_id);
+      if (linkedEvent) jbOpenEventModal(linkedEvent);
+    };
+    if (job.converted_to_event_id) {
+      saaEventsFetchById(job.converted_to_event_id).then((ev) => {
+        if (ev) document.getElementById("jbd-historical-event-num").textContent = ev.event_number;
+      });
+    }
+  } else {
+    historicalBanner.hidden = true;
+  }
+
   jbRenderCustomerBox(job);
   await jbRenderSystemSection(job);
   await jbRenderEventTimeline(job);
@@ -2727,6 +2793,16 @@ async function jbSaveDetail(opts) {
   const job = _jbCurrentJob;
   if (!job) return;
   const statusMsg = document.getElementById("jbd-status-msg");
+  // Round 43: a historical Job (converted into an Event by a later visit)
+  // is read-only -- it's a permanent snapshot of that visit's info, not
+  // something still being worked. Block writes here rather than disabling
+  // every individual field in the Job Card; the historical banner tells
+  // the user why and links to the Event that now carries this history.
+  if (job.is_current === false) {
+    statusMsg.textContent = "This Job is historical (view its Event to make changes).";
+    if (!opts.silent) _jbToast("This Job is historical and can't be edited. Open its linked Event instead.", true);
+    return;
+  }
   statusMsg.textContent = "Saving…";
 
   const patch = {
@@ -2896,8 +2972,68 @@ function jbScheduleAutosave() {
   if (!_jbCurrentJob || !modal || modal.hidden) return;
   clearTimeout(_jbAutosaveTimer);
   const statusMsg = document.getElementById("jbd-status-msg");
+  // Round 43: don't even show "Unsaved changes…" (let alone schedule a
+  // save) on a historical Job -- jbSaveDetail would just reject it anyway,
+  // but staying silent here avoids a misleading autosave countdown on a
+  // card that's read-only.
+  if (_jbCurrentJob.is_current === false) {
+    if (statusMsg) statusMsg.textContent = "This Job is historical (view its Event to make changes).";
+    return;
+  }
   if (statusMsg) statusMsg.textContent = "Unsaved changes…";
   _jbAutosaveTimer = setTimeout(() => { jbSaveDetail({ silent: true }); }, 1200);
+}
+
+/** Round 43 (2026-09-22): replaces the retired "+ Schedule Follow-Up" /
+ *  "+ Schedule New Event" buttons on the Job Card's Event History section.
+ *  Per the new business rule there's only ever ONE current Job per
+ *  Customer + System -- a follow-up visit is always a brand-new Job, which
+ *  atomically converts this still-open one into a historical Event
+ *  (saaJobsCreateForExistingSystem / saa_create_job_with_conversion), not
+ *  a second Event bolted onto this same Job.
+ *
+ *  This is a one-click flow rather than reopening a full "+ New Job" form:
+ *  the Customer + System are already fixed (this IS that Customer's
+ *  System), so there's nothing to pick -- just confirm the conversion,
+ *  carry over the sensible defaults (address, technician, priority, job
+ *  type) from the job being closed out, and land straight in the new
+ *  current Job's own card so the office can adjust anything that changed
+ *  (new problem description, different date, etc). Deliberately doesn't
+ *  reuse jobs.html's jb-new-modal/jbSaveNewJob, since that modal only
+ *  exists in the DOM on the standalone Jobs List page -- the Job Card
+ *  itself is embedded on several other pages (Calendar, and per the
+ *  spec eventually Customer/System/Employee dashboard too) where that
+ *  modal's markup isn't present. */
+async function jbStartNextJob() {
+  const job = _jbCurrentJob;
+  if (!job || job.is_current === false) return; // buttons are hidden in this case; belt-and-suspenders
+  const statusMsg = document.getElementById("jbd-status-msg");
+  if (!job.system_id) {
+    _jbToast("This job has no System on file yet -- add one (System section above) before starting the next job.", true);
+    return;
+  }
+  const proceed = await saaConfirm(
+    `Starting a new Job for this Customer + System will convert the current Job (${job.job_number || ""}) into a historical Event, and its full record (financials, photos, invoice, notes, etc.) is carried over. Continue?`,
+    { title: "Start Next Job", okLabel: "Create New Job & Convert Previous Job", cancelLabel: "Cancel" }
+  );
+  if (!proceed) return;
+
+  if (statusMsg) statusMsg.textContent = "Creating next job…";
+  const res = await saaJobsCreateForExistingSystem(job.customer_id, job.system_id, {
+    jobType: job.job_type, status: "new", title: job.title || "", priority: job.priority || "normal",
+    jobAddress: job.job_address || null, jobCity: job.job_city || null, jobState: job.job_state || "TX", jobZip: job.job_zip || null,
+    technicianId: job.assigned_technician_id || null, technicianId2: job.assigned_technician_id_2 || null, technicianId3: job.assigned_technician_id_3 || null,
+    customerFirstName: job.customer ? job.customer.first_name : undefined,
+  });
+  if (!res.ok) {
+    if (statusMsg) statusMsg.textContent = res.error;
+    _jbToast(res.error, true);
+    return;
+  }
+  _jbToast(res.convertedFromJobNumber ? `New Job created -- ${res.convertedFromJobNumber} is now a historical Event.` : "New Job created.");
+  await jbLoadAll();
+  await jbOpenDetail(res.jobId);
+  if (typeof saaCalLoadAndRender === "function") await saaCalLoadAndRender(); // Job Card can be an overlay on the Calendar (Round 6 item 7) -- refresh the grid behind it
 }
 
 /** Save-and-exit: used by the Close (X) button, the Close button, and a
@@ -2958,6 +3094,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       document.getElementById(id).addEventListener("input", jbRenderTable);
       document.getElementById(id).addEventListener("change", jbRenderTable);
     });
+    // Round 43 (2026-09-22): Current/Historical/All filter -- standalone,
+    // not part of _jbFilterIds/_JB_COLUMNS (see jbApplyFilters), defaults
+    // to "Current Jobs" per spec item 23.
+    const jbFilterCurrent = document.getElementById("jb-filter-current");
+    if (jbFilterCurrent) jbFilterCurrent.addEventListener("change", jbRenderTable);
 
     document.querySelectorAll(".jb-sortable").forEach((th) => {
       th.addEventListener("click", () => {
@@ -2969,6 +3110,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     document.getElementById("jb-clear-filters-btn").addEventListener("click", () => {
       _jbFilterIds.forEach((id) => { document.getElementById(id).value = ""; });
+      if (jbFilterCurrent) jbFilterCurrent.value = "current"; // "Clear Filters" restores the default view, not an unfiltered one -- same idea _JB_DEFAULT_SORT already follows below
       _jbSort = Object.assign({}, _JB_DEFAULT_SORT);
       jbRenderTable();
     });
@@ -3118,8 +3260,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Round 42 (2026-09-19): System section + Event History timeline wiring.
   document.getElementById("jbd-sys-save-btn").addEventListener("click", jbSaveSystem);
-  document.getElementById("jbd-schedule-followup-btn").addEventListener("click", () => jbOpenEventModal(null, "follow_up"));
-  document.getElementById("jbd-schedule-event-btn").addEventListener("click", () => jbOpenEventModal(null));
+  // Round 43: both buttons now drive the same "Start Next Job" flow (see
+  // jbStartNextJob) -- the old "add a 2nd/3rd Event under this same still-
+  // open Job" behavior is retired now that a Job is a single visit.
+  document.getElementById("jbd-schedule-followup-btn").addEventListener("click", jbStartNextJob);
+  document.getElementById("jbd-schedule-event-btn").addEventListener("click", jbStartNextJob);
   document.getElementById("jb-event-save-btn").addEventListener("click", jbSaveEventModal);
   document.getElementById("jb-event-close-btn").addEventListener("click", jbCloseEventModal);
   document.getElementById("jb-event-modal").addEventListener("click", (e) => {

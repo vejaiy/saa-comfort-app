@@ -239,29 +239,42 @@ async function saaCalScheduleNewJob(payload) {
     let jobId, systemId;
 
     if (payload.systemId) {
-      // Existing System picked -- a new Job attaches to it directly (no
-      // second System row for the same physical equipment).
-      const jobNumber = await _saaCalNextJobNumber(firstNameForNumber);
-      const { data: job, error: jErr } = await _saaClient
-        .from("jobs")
-        .insert({
-          job_number: jobNumber,
-          customer_id: customerId,
-          system_id: payload.systemId,
-          job_type: payload.jobType,
-          status: "new",
-          title: payload.title || "",
-          priority: payload.priority || "normal",
-          job_address: payload.jobAddress || null,
-          job_city: payload.jobCity || null,
-          job_state: "TX",
-          job_zip: payload.jobZip || null,
-        })
-        .select("id")
-        .single();
-      if (jErr) throw jErr;
-      jobId = job.id;
-      systemId = payload.systemId;
+      // Existing System picked -- Round 43: for a given Customer+System
+      // there's only ever ONE current Job, so this now goes through
+      // saaJobsCreateForExistingSystem (events-db.js) instead of a bare
+      // insert -- if that System already has a current Job (the normal
+      // case for a repeat visit), it gets automatically converted into a
+      // historical Event first, atomically, rather than silently sitting
+      // side-by-side with a second "current" job for the same equipment.
+      // The office already saw and confirmed this via the "+ Schedule"
+      // popup's own pre-save confirmation (see calendar.js's ns-save-btn
+      // handler) before this call is ever made.
+      const [startDate, startTime] = (payload.startDatetime || "").split("T");
+      const res = await saaJobsCreateForExistingSystem(customerId, payload.systemId, {
+        jobType: payload.jobType,
+        status: "new",
+        title: payload.title || "",
+        priority: payload.priority || "normal",
+        jobAddress: payload.jobAddress || null,
+        jobCity: payload.jobCity || null,
+        jobZip: payload.jobZip || null,
+        technicianId: payload.technicianId || null,
+        scheduledDate: startDate || null,
+        scheduledTime: startTime ? startTime.slice(0, 5) : null,
+        startDatetime: payload.startDatetime || null,
+        endDatetime: payload.endDatetime || null,
+        customerFirstName: firstNameForNumber,
+      });
+      if (!res.ok) return res;
+      // saaJobsCreateForExistingSystem already creates the new Job's own
+      // starter Event (mirroring every other Job-creation path) -- return
+      // straight from here instead of falling through to the shared
+      // saaEventsCreateForJob call below, which would otherwise create a
+      // SECOND Event for this same brand-new Job.
+      return {
+        ok: true, jobId: res.jobId, systemId: payload.systemId, eventId: res.starterEventId,
+        hadCurrentJob: res.hadCurrentJob, convertedFromJobNumber: res.convertedFromJobNumber,
+      };
     } else {
       // New System (an office-typed name, or just "System" as a
       // placeholder to fill in later from the Job Card) -- created

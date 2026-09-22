@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260921e">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260922a">
 <script>
 if (new URLSearchParams(location.search).get('embed') === '1') {
   document.documentElement.classList.add('saa-embed');
@@ -14,9 +14,9 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260921e"></script>
-<script src="../assets/js/supabase-config.js?v=20260921e"></script>
-<script src="../assets/js/auth.js?v=20260921e"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260922a"></script>
+<script src="../assets/js/supabase-config.js?v=20260922a"></script>
+<script src="../assets/js/auth.js?v=20260922a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -113,9 +113,13 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <!-- ============ "+ Schedule" popup (Round 42, 2026-09-19: New Job /
      Existing Job tabs, per the Customer -> System -> Job -> Event model —
      "New Job" creates a Job (and, if needed, its System) with a first
-     Event; "Existing Job" finds an already-open Job and adds a new Event
-     under it, which is how a repeat visit is supposed to happen now
-     instead of creating a whole new Job every time. ============ -->
+     Event. Round 43 (2026-09-22): "Existing Job" no longer adds a 2nd
+     Event under an already-open Job (a Job is a single visit now, per the
+     "one current Job per Customer + System" rule) -- it finds a Job to
+     identify a Customer + System, then starts a brand-new current Job for
+     that same System, converting whichever Job is currently active there
+     into a historical Event (identical rule/confirmation as the New Job
+     tab's own existing-System branch). ============ -->
 <div class="modal-overlay" id="cal-newsvc-modal" hidden>
   <div class="modal-card cal-newsvc-card">
     <h3>Schedule Service</h3>
@@ -184,9 +188,17 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
         <div class="cal-cust-results" id="ns-job-results" hidden></div>
       </div>
       <div class="cal-selected-cust" id="ns-selected-job" hidden></div>
+      <!-- Round 43 (2026-09-22): this tab used to add a 2nd/3rd Event
+           under the found Job -- now that a Job is a single visit, "Existing
+           Job" instead starts a brand-new Job for that Job's Customer +
+           System (converting whichever Job is CURRENTLY current for that
+           System into a historical Event, same rule as everywhere else).
+           So this needs a Job Type, not an Event Type -- different
+           vocabularies (job_type vs event_type), hence the id rename from
+           nsx-event-type. -->
       <div class="field">
-        <label>Event type</label>
-        <select id="nsx-event-type"></select>
+        <label>Job type</label>
+        <select id="nsx-job-type"></select>
       </div>
     </div>
 
@@ -310,6 +322,16 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
     <button type="button" class="cal-drawer-close" id="jb-detail-close-btn">&times;</button>
     <h2 id="jbd-title" style="margin-bottom:2px"></h2>
     <div class="job-num" id="jbd-jobnum" style="margin-bottom:4px"></div>
+    <!-- Round 43 (2026-09-22): shown only when this Job has been converted
+         into a historical Event by a later visit (is_current = false) --
+         "never display a historical Job as if still active." Links straight
+         to the Event that now carries this Job's ongoing history. -->
+    <div id="jbd-historical-banner" class="jb-historical-banner" hidden>
+      &#128340; <strong>HISTORICAL</strong> &mdash; this Job was converted into
+      <a href="#" id="jbd-historical-event-link">Event <span id="jbd-historical-event-num"></span></a>
+      when a new Job was started for this Customer + System. It's kept as a permanent
+      read-only record; open the linked Event to see or add to current work.
+    </div>
     <div class="jb-quick-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
       <button type="button" class="btn btn-ghost btn-sm" id="jbd-quick-checklist-btn">📋 Checklist</button>
       <button type="button" class="btn btn-ghost btn-sm" id="jbd-quick-receipt-btn">🧾 Receipt</button>
@@ -371,9 +393,16 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
           <h4 style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
             Event History
           </h4>
+          <!-- Round 43 (2026-09-22): a Job is now a single visit -- there is
+               ONE current Job per Customer+System, so a follow-up visit is
+               always a brand-new Job (which converts this one into a
+               historical Event), never a second Event bolted onto this
+               still-open Job. Both buttons now drive that same "Start Next
+               Job" flow; kept as two buttons/ids since some callers still
+               distinguish "follow-up" wording, but they behave identically. -->
           <div class="jb-event-actions">
-            <button type="button" class="btn btn-ghost btn-sm" id="jbd-schedule-followup-btn">&#128222; Schedule Follow-Up</button>
-            <button type="button" class="btn btn-ghost btn-sm" id="jbd-schedule-event-btn">&#10133; Schedule New Event</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="jbd-schedule-followup-btn">&#128222; Start Next Job (Follow-Up)</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="jbd-schedule-event-btn">&#10133; Start Next Job</button>
           </div>
           <ul class="jb-event-list" id="jbd-event-list"></ul>
         </div>
@@ -810,19 +839,19 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260921e"></script>
-<script src="../assets/js/worksheet.js?v=20260921e"></script>
-<script src="../assets/js/systems-db.js?v=20260921e"></script>
-<script src="../assets/js/events-db.js?v=20260921e"></script>
-<script src="../assets/js/calendar-db.js?v=20260921e"></script>
-<script src="../assets/js/jobs-db.js?v=20260921e"></script>
-<script src="../assets/js/job-photos-db.js?v=20260921e"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260921e"></script>
-<script src="../assets/js/camera-capture.js?v=20260921e"></script>
-<script src="../assets/js/print-invoice.js?v=20260921e"></script>
-<script src="../assets/js/maps-config.js?v=20260921e"></script>
-<script src="../assets/js/mileage-db.js?v=20260921e"></script>
-<script src="../assets/js/jobs.js?v=20260921e"></script>
-<script src="../assets/js/calendar.js?v=20260921e"></script>
+<script src="../assets/js/pricing-data.js?v=20260922a"></script>
+<script src="../assets/js/worksheet.js?v=20260922a"></script>
+<script src="../assets/js/systems-db.js?v=20260922a"></script>
+<script src="../assets/js/events-db.js?v=20260922a"></script>
+<script src="../assets/js/calendar-db.js?v=20260922a"></script>
+<script src="../assets/js/jobs-db.js?v=20260922a"></script>
+<script src="../assets/js/job-photos-db.js?v=20260922a"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260922a"></script>
+<script src="../assets/js/camera-capture.js?v=20260922a"></script>
+<script src="../assets/js/print-invoice.js?v=20260922a"></script>
+<script src="../assets/js/maps-config.js?v=20260922a"></script>
+<script src="../assets/js/mileage-db.js?v=20260922a"></script>
+<script src="../assets/js/jobs.js?v=20260922a"></script>
+<script src="../assets/js/calendar.js?v=20260922a"></script>
 </body>
 </html>

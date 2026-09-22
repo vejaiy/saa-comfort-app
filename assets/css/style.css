@@ -532,6 +532,12 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .jb-status-in_progress { background: #fdf3d8; color: #8a6d1a; }
 .jb-status-completed { background: #e3f6ee; color: var(--ok); }
 .jb-status-cancelled { background: #f0f0f0; color: #7a7a7a; }
+/* Round 43 (2026-09-22): a Job converted into a historical Event -- deliberately
+   NOT part of SAA_JOBS_STATUS_OPTIONS (never manually selectable), so it's
+   special-cased in jbRenderTable's status-cell markup rather than via
+   _jbStatusLabel. Muted purple keeps it visually distinct from every
+   still-active status above (spec item 26: "clear visual distinction"). */
+.jb-status-converted_to_event { background: #ece7f6; color: #5b3fa3; }
 .jb-pay-unpaid { background: #fbe3e1; color: var(--danger); }
 .jb-pay-partial { background: #fdf3d8; color: #8a6d1a; }
 .jb-pay-paid { background: #e3f6ee; color: var(--ok); }
@@ -550,6 +556,12 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
    which is exactly what looked like "no close button" (round 7 follow-up,
    2026-09-13). */
 .jb-detail-card { max-width: 940px; position: relative; }
+/* Round 43 (2026-09-22): historical-Job banner (spec item 26 -- "never
+   display a historical Job as if still active"). Same warm-amber family as
+   .jb-flag-mismatch/.jb-status-in_progress so it reads as "pay attention"
+   without looking like an error. */
+.jb-historical-banner { background: #fdf3d8; color: #8a6d1a; border: 1px solid #f0dfa0; border-radius: 8px; padding: 10px 14px; font-size: .85rem; margin-bottom: 12px; line-height: 1.5; }
+.jb-historical-banner a { color: #6a4e00; font-weight: 700; text-decoration: underline; }
 .jb-detail-card .job-num { color: var(--muted); font-size: .82rem; }
 .jb-detail-card .drawer-section { border-top: 1px solid var(--line); padding: 12px 0; }
 .jb-detail-card .drawer-section:first-of-type { border-top: none; padding-top: 0; }

@@ -576,6 +576,7 @@ async function saaJobsCreateJob(payload) {
         linked_quote_id: payload.linkedQuoteId || null,
         quoted_amount: payload.quotedAmount || null,
         notes: payload.notes || null,
+        is_current: true, // Round 43 (2026-09-22) -- see saaSystemsCreateWithJob's identical note; this function is currently unused (superseded by saaSystemsCreateWithJob) but kept consistent
       })
       .select("id")
       .single();
