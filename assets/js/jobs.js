@@ -2510,8 +2510,6 @@ async function jbRenderSystemSection(job) {
   document.getElementById("jbd-sys-orientation").innerHTML = _jbOptionsHtml(SAA_SYSTEM_ORIENTATION_OPTION_PAIRS, _jbSystem ? _jbSystem.system_orientation : "");
   document.getElementById("jbd-sys-name").value = (_jbSystem && _jbSystem.system_name) || "";
   document.getElementById("jbd-sys-manufacturer").value = (_jbSystem && _jbSystem.manufacturer) || "";
-  document.getElementById("jbd-sys-model").value = (_jbSystem && _jbSystem.model_number) || "";
-  document.getElementById("jbd-sys-serial").value = (_jbSystem && _jbSystem.serial_number) || "";
   document.getElementById("jbd-sys-tonnage").value = (_jbSystem && _jbSystem.tonnage) || "";
   document.getElementById("jbd-sys-refrigerant").value = (_jbSystem && _jbSystem.refrigerant) || "";
   document.getElementById("jbd-sys-install-date").value = (_jbSystem && _jbSystem.install_date) || "";
@@ -2528,9 +2526,13 @@ async function jbSaveSystem() {
   const res = await saaSystemsUpdate(_jbSystem.id, {
     system_name: document.getElementById("jbd-sys-name").value.trim() || "System",
     system_type: document.getElementById("jbd-sys-type").value || null,
+    // Round 48 follow-up: model_number/serial_number are intentionally NOT
+    // sent here anymore (removed from this box -- see the field markup in
+    // templates.py) so this save can never overwrite/null out a value
+    // already sitting in a System's own DB columns from before this
+    // change; saaSystemsUpdate() only touches the keys present in this
+    // object.
     manufacturer: document.getElementById("jbd-sys-manufacturer").value.trim() || null,
-    model_number: document.getElementById("jbd-sys-model").value.trim() || null,
-    serial_number: document.getElementById("jbd-sys-serial").value.trim() || null,
     tonnage: document.getElementById("jbd-sys-tonnage").value || null,
     refrigerant: document.getElementById("jbd-sys-refrigerant").value.trim() || null,
     install_date: document.getElementById("jbd-sys-install-date").value || null,

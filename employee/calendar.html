@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260923b">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260923c">
 <script>
 if (new URLSearchParams(location.search).get('embed') === '1') {
   document.documentElement.classList.add('saa-embed');
@@ -14,9 +14,9 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260923b"></script>
-<script src="../assets/js/supabase-config.js?v=20260923b"></script>
-<script src="../assets/js/auth.js?v=20260923b"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260923c"></script>
+<script src="../assets/js/supabase-config.js?v=20260923c"></script>
+<script src="../assets/js/auth.js?v=20260923c"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -385,12 +385,20 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
             <div class="field"><label>System Name</label><input type="text" id="jbd-sys-name" placeholder="e.g. Upstairs 3-Ton"></div>
             <div class="field"><label>System Type</label><select id="jbd-sys-type"></select></div>
           </div>
+          <!-- Round 48 follow-up (2026-09-23), per Vijayan's annotated
+               screenshot (arrows at Model Number and Serial Number here):
+               those two duplicated the per-component Model/Serial fields
+               already captured more precisely down in the Bill of
+               Material's Condenser/Coil/Furnace cards below (a System can
+               be up to 3 physical units, each with its own model/serial --
+               one flat pair here never really fit). Removed from this box;
+               saaSystemsUpdate() below no longer sends these two keys at
+               all, so any value already saved in a System's own
+               model_number/serial_number columns (from before this
+               change) is left exactly as-is in the database -- just no
+               longer shown or editable from this box. -->
           <div class="field-row">
             <div class="field"><label>Manufacturer</label><input type="text" id="jbd-sys-manufacturer"></div>
-            <div class="field"><label>Model Number</label><input type="text" id="jbd-sys-model"></div>
-          </div>
-          <div class="field-row">
-            <div class="field"><label>Serial Number</label><input type="text" id="jbd-sys-serial"></div>
             <div class="field"><label>Tonnage</label><input type="number" step="0.5" id="jbd-sys-tonnage"></div>
           </div>
           <div class="field-row">
@@ -883,19 +891,19 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260923b"></script>
-<script src="../assets/js/worksheet.js?v=20260923b"></script>
-<script src="../assets/js/systems-db.js?v=20260923b"></script>
-<script src="../assets/js/events-db.js?v=20260923b"></script>
-<script src="../assets/js/calendar-db.js?v=20260923b"></script>
-<script src="../assets/js/jobs-db.js?v=20260923b"></script>
-<script src="../assets/js/job-photos-db.js?v=20260923b"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260923b"></script>
-<script src="../assets/js/camera-capture.js?v=20260923b"></script>
-<script src="../assets/js/print-invoice.js?v=20260923b"></script>
-<script src="../assets/js/maps-config.js?v=20260923b"></script>
-<script src="../assets/js/mileage-db.js?v=20260923b"></script>
-<script src="../assets/js/jobs.js?v=20260923b"></script>
-<script src="../assets/js/calendar.js?v=20260923b"></script>
+<script src="../assets/js/pricing-data.js?v=20260923c"></script>
+<script src="../assets/js/worksheet.js?v=20260923c"></script>
+<script src="../assets/js/systems-db.js?v=20260923c"></script>
+<script src="../assets/js/events-db.js?v=20260923c"></script>
+<script src="../assets/js/calendar-db.js?v=20260923c"></script>
+<script src="../assets/js/jobs-db.js?v=20260923c"></script>
+<script src="../assets/js/job-photos-db.js?v=20260923c"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260923c"></script>
+<script src="../assets/js/camera-capture.js?v=20260923c"></script>
+<script src="../assets/js/print-invoice.js?v=20260923c"></script>
+<script src="../assets/js/maps-config.js?v=20260923c"></script>
+<script src="../assets/js/mileage-db.js?v=20260923c"></script>
+<script src="../assets/js/jobs.js?v=20260923c"></script>
+<script src="../assets/js/calendar.js?v=20260923c"></script>
 </body>
 </html>
