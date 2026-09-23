@@ -371,34 +371,45 @@ function _jbUpdateFilterHeaderHighlight() {
   });
 }
 
-// Round 44: total column count of the main table (the expand toggle column
-// plus the 12 data columns) -- the nested Event row spans all of them with
-// one colspan'd cell so its content can be indented under the Job # column
-// without needing to line up under every individual column.
-const _JB_TABLE_COLSPAN = 13;
-
 function _jbEsc(s) {
   return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** One Event's label for the Jobs List expand-row: event number FIRST
- *  (per Vijayan: "show event number in before event name"), then its type,
- *  status badge, and scheduled time -- deliberately more compact than the
- *  Job Card's own Event History timeline (jbRenderEventTimeline), since
- *  this is a quick-scan/quick-jump list, not the full detail view. */
+/** One Event's row for the Jobs List expand-row: Round 47 (2026-09-23), per
+ *  Vijayan's annotated screenshot circling every Jobs List column header
+ *  ("in jobs page populate all column data for events as well") -- this used
+ *  to be a single condensed colspan'd summary line; now every column lines
+ *  up under its own Job-row header, same 13-column shape as the main row and
+ *  the same per-column sourcing already established for the Round 45 Events
+ *  CSV export (_jbEventCsvRow) so the on-screen table and the download never
+ *  disagree: Job # column shows the Event # (leading identifier for this
+ *  row, per Vijayan: "show event number ... before event name"), Date
+ *  Received/Customer/Phone/Job Type/Priority/Payment/Quote $ are Job-level
+ *  facts that repeat for every Event under the same Job, while Scheduled/
+ *  Service Address/Technician/Status come from the Event's own fields (each
+ *  visit can be at its own time, place, crew, and stage) -- Service Address
+ *  falls back to the Job's when the Event has none of its own. No expand
+ *  toggle of its own (blank in that column) -- the Quote $ cell reuses the
+ *  same _jbQuoteCellHtml button as the main row, and the existing tbody-wide
+ *  .jb-quote-link listener (which stops the click from also opening the row
+ *  underneath it) already applies to every row, this one included. */
 function _jbEventRowHtml(job, e) {
-  const techNames = [e.technician, e.technician2, e.technician3].filter(Boolean).map((t) => t.name).join(", ");
+  const eventAddress = [e.service_address, e.service_city].filter(Boolean).join(", ");
   return `
     <tr class="jb-event-subrow" data-job-id="${job.id}" data-event-id="${e.id}">
-      <td colspan="${_JB_TABLE_COLSPAN}">
-        <div class="jb-event-subrow-inner">
-          <span class="jb-event-subrow-num">${_jbEsc(e.event_number || "—")}</span>
-          <span class="jb-event-subrow-sep">&mdash;</span>
-          <span class="jb-event-subrow-type">${_jbEsc(saaEventTypeLabel(e.event_type))}</span>
-          <span class="jb-event-badge evt-${e.event_status}">${_jbEsc(saaEventStatusLabel(e.event_status))}</span>
-          <span class="jb-event-subrow-meta">${_jbEventTimeLabel(e.scheduled_start)}${techNames ? " · " + _jbEsc(techNames) : ""}</span>
-        </div>
-      </td>
+      <td class="jb-expand-cell"></td>
+      <td class="jb-event-subrow-num">${_jbEsc(e.event_number || "—")}</td>
+      <td>${_jbFormatDate(job.created_at)}</td>
+      <td>${_jbEventTimeLabel(e.scheduled_start)}</td>
+      <td>${_jbCustName(job.customer)}</td>
+      <td>${job.customer && job.customer.phone ? saaFormatPhone(job.customer.phone) : "—"}</td>
+      <td>${eventAddress || [job.job_address, job.job_city].filter(Boolean).join(", ") || "—"}</td>
+      <td>${saaJobTypeLabel(job.job_type)}</td>
+      <td><span class="jb-badge jb-pri-${job.priority}">${_jbPriorityLabel[job.priority] || job.priority}</span></td>
+      <td>${_jbEsc(_jbEventTechNames(e))}</td>
+      <td><span class="jb-event-badge evt-${e.event_status}">${_jbEsc(saaEventStatusLabel(e.event_status))}</span></td>
+      <td><span class="jb-badge jb-pay-${job.paymentStatus}">${_jbPaymentLabel[job.paymentStatus]}</span></td>
+      <td>${_jbQuoteCellHtml(job)}</td>
     </tr>`;
 }
 
