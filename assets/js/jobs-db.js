@@ -261,9 +261,56 @@ async function saaJobsFetchAll() {
     hasPaymentByInvoice[p.invoice_id] = true;
   });
 
-  // most-recent invoice per job (invoices already ordered desc by created_at)
+  // Round 48 follow-up (2026-09-23), per Vijayan's screenshot of the Jobs
+  // List showing the SAME nonzero Quote $ ($9,579.88) repeated across
+  // several unrelated Follow-Up rows for a system that had already been
+  // through a "Start Next Job" conversion or two: "quotation should
+  // display only for that job or event that is entered. others shall
+  // display 0 if none assigned or entered."
+  //
+  // Root cause -- a Job's own row and every one of its rolled-up
+  // historical Events (saa_create_job_with_conversion repoints ALL of an
+  // old Job's Events onto the new current Job's job_id, see that
+  // function's own comment) all share the same `job_id` on any invoice
+  // billed against them. The old "most recent invoice with this job_id"
+  // logic below didn't distinguish an invoice generated for the CURRENT
+  // Job's own current visit from one generated for a DIFFERENT, already-
+  // historical Event that merely happens to now roll up under the same
+  // job_id -- so a historical Event's own invoice (e.g. from the Job it
+  // was converted from) could outrank the current Job's real ($0 or no)
+  // invoice just by being the newer row.
+  //
+  // Fixed by telling a historical Event apart from a Job's own genuine
+  // Events using `original_job_id` -- saa_create_job_with_conversion
+  // stamps this (pointing at the OLD Job it snapshotted) on every
+  // historical Event it creates, and NOTHING else ever sets it (a Job's
+  // own real starter Event, or any other Event scheduled directly under
+  // it, always has it null). This is a much more reliable signal than
+  // trying to guess "the current Event" by status/schedule (which was the
+  // first fix attempted here -- but a freshly-converted Job's own
+  // brand-new starter Event and the historical Event created in that same
+  // conversion can both be "open" with an identical/null scheduled_start
+  // at that moment, so that heuristic's tie-break can go either way,
+  // occasionally picking the historical one). An invoice counts as "this
+  // Job's own" only when it has no event_id at all (a plain Job-level
+  // invoice) or its event_id points to a NON-historical Event -- never a
+  // historical one. Each Event's OWN invoice (if it has one) is tracked
+  // separately in invoiceByEvent below, regardless of historical status,
+  // so the Jobs List's per-Event expand rows can show THAT Event's own
+  // amount instead of quietly reusing the parent Job's.
+  const isHistoricalEventId = {};
+  (allEvents || []).forEach((e) => { isHistoricalEventId[e.id] = !!e.original_job_id; });
+
+  // most-recent invoice per Job that actually belongs to that Job's own
+  // current visit, and (separately) most-recent invoice per Event, for
+  // the expand rows (invoices already ordered desc by created_at).
   const invoiceByJob = {};
-  (invoices || []).forEach((inv) => { if (!invoiceByJob[inv.job_id]) invoiceByJob[inv.job_id] = inv; });
+  const invoiceByEvent = {};
+  (invoices || []).forEach((inv) => {
+    if (inv.event_id && !invoiceByEvent[inv.event_id]) invoiceByEvent[inv.event_id] = inv;
+    const belongsToJobItself = !inv.event_id || !isHistoricalEventId[inv.event_id];
+    if (belongsToJobItself && !invoiceByJob[inv.job_id]) invoiceByJob[inv.job_id] = inv;
+  });
 
   return (jobs || []).map((j) => {
     const invoice = invoiceByJob[j.id] || null;
@@ -284,11 +331,13 @@ async function saaJobsFetchAll() {
       // Round 44: this Job's own Events, newest first, each with its
       // technician(s) resolved the same way the parent Job's are above —
       // backs the Jobs List's expand-row (see jbRenderTable/_jbEventRowHtml
-      // in jobs.js).
+      // in jobs.js). Round 48 follow-up: each Event also now carries its
+      // OWN invoice (if it has one), separate from the parent Job's.
       events: (eventsByJob[j.id] || []).map((e) => Object.assign({}, e, {
         technician: techById[e.assigned_technician_id] || null,
         technician2: e.assigned_technician_id_2 ? techById[e.assigned_technician_id_2] || null : null,
         technician3: e.assigned_technician_id_3 ? techById[e.assigned_technician_id_3] || null : null,
+        invoice: invoiceByEvent[e.id] || null,
       })),
     });
   });
@@ -1147,26 +1196,64 @@ async function saaBomCreateOrder(job, supplier) {
 
 /** Fetches the job's most recent invoice, or creates a Draft one if
  *  none exists yet — amount defaults to Approved Amount, falling back
- *  to Quoted Amount, so "Generate Invoice" works with one click. */
+ *  to Quoted Amount, so "Generate Invoice" works with one click.
+ *
+ *  Round 48 follow-up (2026-09-23), per Vijayan's screenshot of the Jobs
+ *  List showing the same nonzero Quote $ bleeding across unrelated rows:
+ *  the old lookup here just grabbed the newest invoice with this job_id,
+ *  same flawed logic saaJobsFetchAll's invoiceByJob had (see that
+ *  function's own comment for the full root-cause writeup, including why
+ *  this now checks each candidate invoice's Event for `original_job_id`
+ *  rather than trying to match "the Job's current Event" -- a freshly-
+ *  converted Job's own brand-new starter Event and its own just-created
+ *  historical Event can tie on that heuristic) -- a Job that has been
+ *  through one or more "Start Next Job" conversions accumulates its old,
+ *  historical Events under its own job_id, and if the office had
+ *  separately generated a per-Event invoice for one of THOSE (via the
+ *  Event modal's own "Generate Invoice", saaEventsGetOrCreateInvoice)
+ *  that invoice also carries this job_id (for bookkeeping/joins) even
+ *  though it's really that specific historical Event's own invoice, not
+ *  this Job's. Fixed the same way: only an invoice with no event_id at
+ *  all, or one scoped to a non-historical Event of this Job, counts as
+ *  "this Job's own invoice" here -- a historical Event's own invoice is
+ *  never picked up as if it were a fresh "Generate Invoice" result for
+ *  the current Job. */
 async function saaJobsGetOrCreateInvoice(job) {
   try {
-    const { data: existing, error: findErr } = await _saaClient
-      .from("invoices")
-      .select("*")
-      .eq("job_id", job.id)
-      .order("created_at", { ascending: false })
-      .limit(1);
+    const [{ data: candidates, error: findErr }, jobEvents] = await Promise.all([
+      _saaClient.from("invoices").select("*").eq("job_id", job.id).order("created_at", { ascending: false }),
+      typeof saaEventsFetchForJob === "function" ? saaEventsFetchForJob(job.id) : Promise.resolve([]),
+    ]);
     if (findErr) throw findErr;
-    if (existing && existing.length) return { ok: true, invoice: existing[0], created: false };
+    const historicalEventIds = new Set((jobEvents || []).filter((e) => e.original_job_id).map((e) => e.id));
+    const existing = (candidates || []).find((inv) => !inv.event_id || !historicalEventIds.has(inv.event_id));
+    if (existing) return { ok: true, invoice: existing, created: false };
+
+    // Round 42 Task 118: a fresh invoice auto-attaches to the Job's
+    // current Event (see saaEventsGetDefaultEventId's own comment in
+    // events-db.js for the "auto-pick, no new UI" rule). Round 48
+    // follow-up: picked from this Job's own NON-historical Events only
+    // (same original_job_id signal as above) -- saaEventsGetDefaultEventId
+    // itself can't tell a Job's own brand-new starter Event apart from a
+    // historical Event created in that same conversion when neither has a
+    // real scheduled_start yet, and stamping a fresh invoice onto the
+    // WRONG (historical) Event would silently overwrite that Event's own
+    // real invoice the next time its amount is looked up. Every real Job
+    // always gets its own starter Event at creation (saaEventsCreateForJob,
+    // called by every Job-creation path), so the "no non-historical Event
+    // at all" fallback below is defensive, not an expected case.
+    const ownEvents = (jobEvents || []).filter((e) => !e.original_job_id);
+    let eventId = null;
+    if (ownEvents.length) {
+      const open = ownEvents.find((e) => !["completed", "cancelled"].includes(e.event_status));
+      eventId = (open || ownEvents[0]).id;
+    } else if (typeof saaEventsGetDefaultEventId === "function") {
+      eventId = await saaEventsGetDefaultEventId(job.id);
+    }
 
     const amount = Number(job.approved_amount || job.quoted_amount || 0);
     const firstNameForNumber = job.customer ? job.customer.first_name : await _saaCustomerFirstName(job.customer_id);
     const invoiceNumber = await _saaJobsNextInvoiceNumber(firstNameForNumber);
-    // Round 42 Task 118: auto-attaches to the Job's current Event (see
-    // saaEventsGetDefaultEventId's own comment in events-db.js for the
-    // "auto-pick, no new UI" rule) -- guarded since not every page that
-    // creates an invoice also loads events-db.js.
-    const eventId = typeof saaEventsGetDefaultEventId === "function" ? await saaEventsGetDefaultEventId(job.id) : null;
     const { data: created, error: createErr } = await _saaClient
       .from("invoices")
       .insert({

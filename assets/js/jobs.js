@@ -244,7 +244,10 @@ const _JB_COLUMNS = [
 /** The $ amount to show in the Jobs list's Quote $ column: the job's own
  *  quoted_amount if it has one, else the linked quote's total (covers a
  *  job that was linked to a quote before quoted_amount existed on it),
- *  else null (no quote associated at all -- renders as "—", not clickable). */
+ *  else null (no quote associated at all -- _jbQuoteCellHtml below renders
+ *  this as "$0.00", not clickable; _jbQuoteAmount itself still returns
+ *  null so the column's own sort/filter can keep treating "no quote" as
+ *  distinct from a real $0 quote -- see the `quote` column's sortVal). */
 /** Round 25 (2026-09-14) multi-technician support: the Jobs list
  *  Technician column now lists everyone assigned to the job (primary
  *  first), not just the primary -- "None" when nobody's assigned at all. */
@@ -271,7 +274,10 @@ function _jbQuoteAmount(j) {
 
 function _jbQuoteCellHtml(j) {
   const amt = _jbQuoteAmount(j);
-  if (amt == null) return "—";
+  // Round 48 follow-up (2026-09-23), per Vijayan: "others shall display 0
+  // if none assigned or entered" -- a Job with no quote/invoice at all
+  // shows a plain, non-clickable $0.00 instead of an em-dash.
+  if (amt == null) return fmtMoney(0);
   // A quoted_amount can exist with no linked_quote_id at all (typed
   // straight into the Job Card, no saved quote behind it) -- show the
   // number but don't make it a dead link. Repair-worksheet quotes save
@@ -279,6 +285,30 @@ function _jbQuoteCellHtml(j) {
   if (!j.linked_quote_id) return fmtMoney(amt);
   const page = (j.linkedQuote && j.linkedQuote.quote_type === "repair") ? "repair.html" : "quotation.html";
   return `<button type="button" class="jb-quote-link" data-quote-id="${j.linked_quote_id}" data-quote-page="${page}">${fmtMoney(amt)}</button>`;
+}
+
+/** Round 48 follow-up (2026-09-23), per Vijayan's screenshot of the Jobs
+ *  List showing the same nonzero Quote $ repeated across several
+ *  unrelated rows: "quotation should display only for that job or event
+ *  that is entered." -- the expand-row for one of a Job's own historical
+ *  Events used to just call _jbQuoteCellHtml(job) again, silently
+ *  repeating the PARENT JOB's own amount on every Event row underneath
+ *  it, rather than that specific Event's own quote/invoice (Events have
+ *  had their own Financials -- quoted_amount/approved_amount, and now
+ *  their own invoice via saaJobsFetchAll's invoiceByEvent -- since Round
+ *  42/46). Never falls back to the Job's amount -- an Event with nothing
+ *  of its own shows $0.00, per the same "0 if none entered" rule. Not a
+ *  clickable link: an Event isn't linked to a saved quote DOCUMENT the
+ *  way a Job can be (no per-event linked_quote_id column), just plain
+ *  Financials fields. */
+function _jbEventQuoteAmount(e) {
+  if (e.invoice) return saaJobsInvoiceTotalDue(e.invoice);
+  if (e.approved_amount != null && e.approved_amount !== "") return e.approved_amount;
+  if (e.quoted_amount != null && e.quoted_amount !== "") return e.quoted_amount;
+  return 0;
+}
+function _jbEventQuoteCellHtml(e) {
+  return fmtMoney(_jbEventQuoteAmount(e));
 }
 
 // Round 31 (2026-09-15), per Vijayan: "Always open the job page with
@@ -389,10 +419,12 @@ function _jbEsc(s) {
  *  Service Address/Technician/Status come from the Event's own fields (each
  *  visit can be at its own time, place, crew, and stage) -- Service Address
  *  falls back to the Job's when the Event has none of its own. No expand
- *  toggle of its own (blank in that column) -- the Quote $ cell reuses the
- *  same _jbQuoteCellHtml button as the main row, and the existing tbody-wide
- *  .jb-quote-link listener (which stops the click from also opening the row
- *  underneath it) already applies to every row, this one included. */
+ *  toggle of its own (blank in that column). Round 48 follow-up
+ *  (2026-09-23): the Quote $ cell shows THIS Event's own amount
+ *  (_jbEventQuoteCellHtml) -- it used to reuse the parent Job's
+ *  _jbQuoteCellHtml, which repeated the Job's own quote on every Event row
+ *  underneath it instead of that Event's own. Not a quote-page link (no
+ *  per-event linked_quote_id), so no .jb-quote-link click-through here. */
 function _jbEventRowHtml(job, e) {
   const eventAddress = [e.service_address, e.service_city].filter(Boolean).join(", ");
   return `
@@ -409,7 +441,7 @@ function _jbEventRowHtml(job, e) {
       <td>${_jbEsc(_jbEventTechNames(e))}</td>
       <td><span class="jb-event-badge evt-${e.event_status}">${_jbEsc(saaEventStatusLabel(e.event_status))}</span></td>
       <td><span class="jb-badge jb-pay-${job.paymentStatus}">${_jbPaymentLabel[job.paymentStatus]}</span></td>
-      <td>${_jbQuoteCellHtml(job)}</td>
+      <td>${_jbEventQuoteCellHtml(e)}</td>
     </tr>`;
 }
 
@@ -555,7 +587,9 @@ function _jbJobCsvRow(j) {
     _jbTechDisplayNames(j),
     _jbJobStatusLabel(j),
     _jbPaymentLabel[j.paymentStatus] || "",
-    amt != null ? fmtMoney(amt) : "",
+    // Round 48 follow-up (2026-09-23): matches the on-screen Quote $
+    // column -- $0.00, not blank, when this Job has no quote/invoice.
+    fmtMoney(amt != null ? amt : 0),
   ];
 }
 
@@ -574,10 +608,13 @@ function _jbBuildJobsCsvLines(rows) {
  *  not the parent Job's, since a multi-visit Job's Events can each be at a
  *  different stage). Service Address prefers the Event's own Service
  *  Address (Round 42 gave Events their own) and falls back to the Job's.
- *  Customer/Phone/Job Type/Priority/Payment/Quote $ are Job/Customer-level
- *  facts, so every Event under the same Job repeats the same value.
- *  Leads with Event # (mirroring "Job #" leading the Jobs export) plus the
- *  parent Job # so an Events export row can always be traced back. */
+ *  Customer/Phone/Job Type/Priority/Payment are Job/Customer-level facts,
+ *  so every Event under the same Job repeats the same value -- but Quote $
+ *  is that Event's OWN amount (Round 48 follow-up, 2026-09-23: it used to
+ *  repeat the parent Job's amount on every row here too, same bug as the
+ *  on-screen expand rows -- see _jbEventQuoteAmount). Leads with Event #
+ *  (mirroring "Job #" leading the Jobs export) plus the parent Job # so an
+ *  Events export row can always be traced back. */
 const _JB_EVENTS_CSV_HEADER = ["Event #", "Job #", "Date Received", "Scheduled", "Customer", "Phone", "Service Address", "Job Type", "Priority", "Technician", "Status", "Payment", "Quote $"];
 
 function _jbEventTechNames(e) {
@@ -586,7 +623,7 @@ function _jbEventTechNames(e) {
 }
 
 function _jbEventCsvRow(job, e) {
-  const amt = _jbQuoteAmount(job);
+  const amt = _jbEventQuoteAmount(e);
   const eventAddress = [e.service_address, e.service_city].filter(Boolean).join(", ");
   return [
     e.event_number || "",
@@ -601,7 +638,7 @@ function _jbEventCsvRow(job, e) {
     _jbEventTechNames(e),
     saaEventStatusLabel(e.event_status),
     _jbPaymentLabel[job.paymentStatus] || "",
-    amt != null ? fmtMoney(amt) : "",
+    fmtMoney(amt),
   ];
 }
 
