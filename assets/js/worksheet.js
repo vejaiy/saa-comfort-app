@@ -10,6 +10,24 @@ function fmtMoney(n) {
 }
 
 /**
+ * Round 48 follow-up (2026-09-23), per Vijayan's screenshots of the Job
+ * Card's Financials section showing values like "9067.005000000001" --
+ * fmtMoney() above only cleans up the on-screen TEXT via toLocaleString;
+ * it was never applied to the raw numeric totals that get saved to the
+ * quotes table (multiplying/dividing floats, e.g. a zone multiplier or an
+ * overhead percentage, accumulates binary floating-point noise past the
+ * 2nd decimal). saaRoundMoney() rounds an actual NUMBER to whole cents, so
+ * it can be applied at the point a total is computed/saved, not just where
+ * it's displayed. Shared here since worksheet.js loads on every employee
+ * page (including jobs.html) via emp_page().
+ */
+function saaRoundMoney(n) {
+  n = Number(n);
+  if (!isFinite(n)) return 0;
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+/**
  * Renders a single-priced line-item table (Qty x Unit price), with a
  * toggle switch in the last column controlling whether the row counts
  * toward the total (off = excluded, kept at $0 in the Ext. column).

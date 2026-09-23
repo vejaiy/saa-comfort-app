@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Create Quote | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260923c">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260923d">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260923c"></script>
-<script src="../assets/js/supabase-config.js?v=20260923c"></script>
-<script src="../assets/js/auth.js?v=20260923c"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260923d"></script>
+<script src="../assets/js/supabase-config.js?v=20260923d"></script>
+<script src="../assets/js/auth.js?v=20260923d"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -275,12 +275,12 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260923c"></script>
-<script src="../assets/js/worksheet.js?v=20260923c"></script>
-<script src="../assets/js/labor-widget.js?v=20260923c"></script>
-<script src="../assets/js/plenum-widget.js?v=20260923c"></script>
-<script src="../assets/js/print-quote.js?v=20260923c"></script>
-<script src="../assets/js/quotes-db.js?v=20260923c"></script>
+<script src="../assets/js/pricing-data.js?v=20260923d"></script>
+<script src="../assets/js/worksheet.js?v=20260923d"></script>
+<script src="../assets/js/labor-widget.js?v=20260923d"></script>
+<script src="../assets/js/plenum-widget.js?v=20260923d"></script>
+<script src="../assets/js/print-quote.js?v=20260923d"></script>
+<script src="../assets/js/quotes-db.js?v=20260923d"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
   saaAttachPhoneMask(document.getElementById('q-phone'));
@@ -398,7 +398,7 @@
     const overheadPct = (parseFloat(document.getElementById('overhead-pct').value) || 0) / 100;
     const overhead = laborTotal * overheadPct;
 
-    const equipTotal = (condenserOn ? condTotal : 0) + (coilOn ? coilTotal : 0) + (furnaceOn ? furnaceTotal : 0) + laborTotal + overhead;
+    const equipTotal = saaRoundMoney((condenserOn ? condTotal : 0) + (coilOn ? coilTotal : 0) + (furnaceOn ? furnaceTotal : 0) + laborTotal + overhead);
     document.getElementById('subtotal-box').textContent = fmtMoney(equipTotal);
 
     const plenumTotal = plenumWidget.getTotal();
@@ -426,6 +426,11 @@
     if (permitOn) grandTotal += permitPrice;
     if (otherOn) grandTotal += otherPrice;
     if (ductOn) grandTotal += ductPrice;
+    // Round 48 follow-up (2026-09-23): clean up binary floating-point
+    // noise (e.g. from the zone multiplier / overhead % above) before this
+    // ever reaches the screen or gets saved -- see saaRoundMoney() in
+    // worksheet.js.
+    grandTotal = saaRoundMoney(grandTotal);
 
     document.getElementById('grand-total').textContent = fmtMoney(grandTotal);
     document.getElementById('payment-terms').textContent =
@@ -452,8 +457,8 @@
       }
 
       const lineItems = [];
-      const equipOnlyTotal = (condenserOn ? condTotal : 0) + (coilOn ? coilTotal : 0) + (furnaceOn ? furnaceTotal : 0);
-      const laborLineTotal = laborTotal + overhead;
+      const equipOnlyTotal = saaRoundMoney((condenserOn ? condTotal : 0) + (coilOn ? coilTotal : 0) + (furnaceOn ? furnaceTotal : 0));
+      const laborLineTotal = saaRoundMoney(laborTotal + overhead);
       // Equipment + Labor print as ONE combined line item on the formal
       // quote (2026-09-13 follow-up: Vijayan wants a single "system,
       // installed" line rather than the cost broken into two rows) --
@@ -483,7 +488,7 @@
       // add-ons); otherCost is unused here (nothing in this worksheet
       // doesn't fall under one of those two).
       const laborCost = laborLineTotal;
-      const materialCost = grandTotal - laborLineTotal;
+      const materialCost = saaRoundMoney(grandTotal - laborLineTotal);
       return {
         jobTitle: quoteTypeLabel(),
         quoteType: quoteTypeSelect.value,

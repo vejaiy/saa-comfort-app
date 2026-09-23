@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Repair | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260923c">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260923d">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260923c"></script>
-<script src="../assets/js/supabase-config.js?v=20260923c"></script>
-<script src="../assets/js/auth.js?v=20260923c"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260923d"></script>
+<script src="../assets/js/supabase-config.js?v=20260923d"></script>
+<script src="../assets/js/auth.js?v=20260923d"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -173,10 +173,10 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260923c"></script>
-<script src="../assets/js/worksheet.js?v=20260923c"></script>
-<script src="../assets/js/print-quote.js?v=20260923c"></script>
-<script src="../assets/js/quotes-db.js?v=20260923c"></script>
+<script src="../assets/js/pricing-data.js?v=20260923d"></script>
+<script src="../assets/js/worksheet.js?v=20260923d"></script>
+<script src="../assets/js/print-quote.js?v=20260923d"></script>
+<script src="../assets/js/quotes-db.js?v=20260923d"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
   saaAttachPhoneMask(document.getElementById('q-phone'));
@@ -211,7 +211,9 @@
     document.getElementById('price-rep-fancoil').textContent = fmtMoney(fancoilOn ? fancoilTotal : 0);
     document.getElementById('price-rep-furnace').textContent = fmtMoney(furnaceOn ? furnaceTotal : 0);
 
-    const grandTotal = (condenserOn ? condenserTotal : 0) + (fancoilOn ? fancoilTotal : 0) + (furnaceOn ? furnaceTotal : 0) + (thermostatOn ? thermostatPrice : 0);
+    // Round 48 follow-up (2026-09-23): round to whole cents before this
+    // is displayed or saved -- see saaRoundMoney() in worksheet.js.
+    const grandTotal = saaRoundMoney((condenserOn ? condenserTotal : 0) + (fancoilOn ? fancoilTotal : 0) + (furnaceOn ? furnaceTotal : 0) + (thermostatOn ? thermostatPrice : 0));
     document.getElementById('grand-total').textContent = fmtMoney(grandTotal);
 
     const lineItems = [];

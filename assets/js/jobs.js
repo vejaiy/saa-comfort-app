@@ -1084,13 +1084,14 @@ async function jbeSearchCustomerQuotes(query) {
       }
       if (!res.ok) { _jbToast(res.error, true); return; }
       if (event) { event.linked_quote_id = el.dataset.id; event.linkedQuote = quote; }
-      document.getElementById("jbe-quoted").value = res.quotedAmount || 0;
+      // Round 48 follow-up (2026-09-23): saaRoundMoney() -- see worksheet.js.
+      document.getElementById("jbe-quoted").value = res.quotedAmount ? saaRoundMoney(res.quotedAmount) : 0;
       const approvedEl = document.getElementById("jbe-approved");
-      if (!parseFloat(approvedEl.value)) approvedEl.value = res.quotedAmount || 0;
+      if (!parseFloat(approvedEl.value)) approvedEl.value = res.quotedAmount ? saaRoundMoney(res.quotedAmount) : 0;
       if (res.materialCost != null || res.laborCost != null || res.otherCost != null) {
-        document.getElementById("jbe-cost-material").value = res.materialCost || 0;
-        document.getElementById("jbe-cost-labor").value = res.laborCost || 0;
-        document.getElementById("jbe-cost-other").value = res.otherCost || 0;
+        document.getElementById("jbe-cost-material").value = res.materialCost ? saaRoundMoney(res.materialCost) : 0;
+        document.getElementById("jbe-cost-labor").value = res.laborCost ? saaRoundMoney(res.laborCost) : 0;
+        document.getElementById("jbe-cost-other").value = res.otherCost ? saaRoundMoney(res.otherCost) : 0;
       }
       jbeComputeProfit();
       // Auto-populate Service Address the same as the Job Card's own
@@ -1170,7 +1171,8 @@ async function jbSearchCustomerQuotes(job, query) {
       if (res.ok) {
         job.linked_quote_id = el.dataset.id;
         job.linkedQuote = quote;
-        document.getElementById("jbd-quoted").value = res.quotedAmount || 0;
+        // Round 48 follow-up (2026-09-23): saaRoundMoney() -- see worksheet.js.
+        document.getElementById("jbd-quoted").value = res.quotedAmount ? saaRoundMoney(res.quotedAmount) : 0;
         // Keep the in-memory job object in sync immediately, not just the
         // DOM field -- saaJobsLinkQuote already wrote quoted_amount to the
         // database, but jbQuickInvoice()/"Generate Invoice" read straight
@@ -1179,15 +1181,15 @@ async function jbSearchCustomerQuotes(job, query) {
         // would build the invoice off the OLD amount. Same class of bug as
         // the "stale job after Save" fix from the original Jobs Master List
         // round -- see site-build-notes.md.
-        job.quoted_amount = res.quotedAmount || 0;
+        job.quoted_amount = res.quotedAmount ? saaRoundMoney(res.quotedAmount) : 0;
         // Approved Amount has no equivalent field on a quote, so this is a
         // reasonable default (most jobs approve at the quoted price), not a
         // real quote field -- only fills it when still blank so a real,
         // already-entered Approved Amount is never overwritten.
         const approvedEl = document.getElementById("jbd-approved");
         if (!parseFloat(approvedEl.value)) {
-          approvedEl.value = res.quotedAmount || 0;
-          job.approved_amount = res.quotedAmount || 0;
+          approvedEl.value = res.quotedAmount ? saaRoundMoney(res.quotedAmount) : 0;
+          job.approved_amount = res.quotedAmount ? saaRoundMoney(res.quotedAmount) : 0;
         }
         // Default Actual Material/Labor/Other Cost from the quote's own cost
         // breakdown, same as Quoted Amount above -- picking a (new) quote
@@ -1201,12 +1203,12 @@ async function jbSearchCustomerQuotes(job, query) {
           const materialEl = document.getElementById("jbd-cost-material");
           const laborEl = document.getElementById("jbd-cost-labor");
           const otherEl = document.getElementById("jbd-cost-other");
-          materialEl.value = res.materialCost || 0;
-          laborEl.value = res.laborCost || 0;
-          otherEl.value = res.otherCost || 0;
-          job.actual_material_cost = res.materialCost || 0;
-          job.actual_labor_cost = res.laborCost || 0;
-          job.other_cost = res.otherCost || 0;
+          materialEl.value = res.materialCost ? saaRoundMoney(res.materialCost) : 0;
+          laborEl.value = res.laborCost ? saaRoundMoney(res.laborCost) : 0;
+          otherEl.value = res.otherCost ? saaRoundMoney(res.otherCost) : 0;
+          job.actual_material_cost = res.materialCost ? saaRoundMoney(res.materialCost) : 0;
+          job.actual_labor_cost = res.laborCost ? saaRoundMoney(res.laborCost) : 0;
+          job.other_cost = res.otherCost ? saaRoundMoney(res.otherCost) : 0;
         }
         jbComputeProfit();
         // Auto-populate the job sheet from the quote, same fields the New
@@ -2678,11 +2680,15 @@ async function jbOpenEventModal(event, defaultType) {
   // (Quote/Financials/Mileage/Photos/Receipts/Invoice & Payment/
   // Inspection/BOM link), same order the Job Card's own jbOpenDetail
   // populates its jbd-* equivalents.
-  document.getElementById("jbe-quoted").value = (event && event.quoted_amount) || "";
-  document.getElementById("jbe-approved").value = (event && event.approved_amount) || "";
-  document.getElementById("jbe-cost-material").value = (event && event.actual_material_cost) || 0;
-  document.getElementById("jbe-cost-labor").value = (event && event.actual_labor_cost) || 0;
-  document.getElementById("jbe-cost-other").value = (event && event.other_cost) || 0;
+  // Round 48 follow-up (2026-09-23): saaRoundMoney() cleans up any
+  // pre-existing floating-point-noise values already saved in the DB
+  // (e.g. "9067.005000000001") so they never redisplay that way -- see
+  // saaRoundMoney() in worksheet.js.
+  document.getElementById("jbe-quoted").value = (event && event.quoted_amount) ? saaRoundMoney(event.quoted_amount) : "";
+  document.getElementById("jbe-approved").value = (event && event.approved_amount) ? saaRoundMoney(event.approved_amount) : "";
+  document.getElementById("jbe-cost-material").value = (event && event.actual_material_cost) ? saaRoundMoney(event.actual_material_cost) : 0;
+  document.getElementById("jbe-cost-labor").value = (event && event.actual_labor_cost) ? saaRoundMoney(event.actual_labor_cost) : 0;
+  document.getElementById("jbe-cost-other").value = (event && event.other_cost) ? saaRoundMoney(event.other_cost) : 0;
   jbeComputeProfit();
 
   // The Event row itself (from saaEventsFetchForJob/saaEventsFetchById)
@@ -2793,11 +2799,11 @@ async function jbSaveEventModal() {
     // here alongside Notes/Signature since they're saved the exact same
     // way either way: immediately on an edit-mode saaEventsUpdate, or as
     // this same follow-up patch right after saaEventsCreateForJob below.
-    quoted_amount: parseFloat(document.getElementById("jbe-quoted").value) || null,
-    approved_amount: parseFloat(document.getElementById("jbe-approved").value) || null,
-    actual_material_cost: parseFloat(document.getElementById("jbe-cost-material").value) || 0,
-    actual_labor_cost: parseFloat(document.getElementById("jbe-cost-labor").value) || 0,
-    other_cost: parseFloat(document.getElementById("jbe-cost-other").value) || 0,
+    quoted_amount: saaRoundMoney(parseFloat(document.getElementById("jbe-quoted").value) || 0) || null,
+    approved_amount: saaRoundMoney(parseFloat(document.getElementById("jbe-approved").value) || 0) || null,
+    actual_material_cost: saaRoundMoney(parseFloat(document.getElementById("jbe-cost-material").value) || 0),
+    actual_labor_cost: saaRoundMoney(parseFloat(document.getElementById("jbe-cost-labor").value) || 0),
+    other_cost: saaRoundMoney(parseFloat(document.getElementById("jbe-cost-other").value) || 0),
   };
 
   let res;
@@ -2986,11 +2992,15 @@ async function jbOpenDetail(jobId) {
   document.getElementById("jbd-findings").value = job.inspection_findings || "";
   document.getElementById("jbd-recommend").value = job.recommended_action || "";
 
-  document.getElementById("jbd-quoted").value = job.quoted_amount || "";
-  document.getElementById("jbd-approved").value = job.approved_amount || "";
-  document.getElementById("jbd-cost-material").value = job.actual_material_cost || 0;
-  document.getElementById("jbd-cost-labor").value = job.actual_labor_cost || 0;
-  document.getElementById("jbd-cost-other").value = job.other_cost || 0;
+  // Round 48 follow-up (2026-09-23): saaRoundMoney() cleans up any
+  // pre-existing floating-point-noise values already saved in the DB
+  // (e.g. "9067.005000000001") so they never redisplay that way -- see
+  // saaRoundMoney() in worksheet.js.
+  document.getElementById("jbd-quoted").value = job.quoted_amount ? saaRoundMoney(job.quoted_amount) : "";
+  document.getElementById("jbd-approved").value = job.approved_amount ? saaRoundMoney(job.approved_amount) : "";
+  document.getElementById("jbd-cost-material").value = job.actual_material_cost ? saaRoundMoney(job.actual_material_cost) : 0;
+  document.getElementById("jbd-cost-labor").value = job.actual_labor_cost ? saaRoundMoney(job.actual_labor_cost) : 0;
+  document.getElementById("jbd-cost-other").value = job.other_cost ? saaRoundMoney(job.other_cost) : 0;
   jbComputeProfit();
   ["jbd-quoted", "jbd-approved", "jbd-cost-material", "jbd-cost-labor", "jbd-cost-other"].forEach((id) => {
     document.getElementById(id).oninput = () => { jbComputeProfit(); jbScheduleAutosave(); };
@@ -3077,11 +3087,11 @@ async function jbSaveDetail(opts) {
     problem_description: document.getElementById("jbd-problem").value.trim() || null,
     inspection_findings: document.getElementById("jbd-findings").value.trim() || null,
     recommended_action: document.getElementById("jbd-recommend").value.trim() || null,
-    quoted_amount: parseFloat(document.getElementById("jbd-quoted").value) || null,
-    approved_amount: parseFloat(document.getElementById("jbd-approved").value) || null,
-    actual_material_cost: parseFloat(document.getElementById("jbd-cost-material").value) || 0,
-    actual_labor_cost: parseFloat(document.getElementById("jbd-cost-labor").value) || 0,
-    other_cost: parseFloat(document.getElementById("jbd-cost-other").value) || 0,
+    quoted_amount: saaRoundMoney(parseFloat(document.getElementById("jbd-quoted").value) || 0) || null,
+    approved_amount: saaRoundMoney(parseFloat(document.getElementById("jbd-approved").value) || 0) || null,
+    actual_material_cost: saaRoundMoney(parseFloat(document.getElementById("jbd-cost-material").value) || 0),
+    actual_labor_cost: saaRoundMoney(parseFloat(document.getElementById("jbd-cost-labor").value) || 0),
+    other_cost: saaRoundMoney(parseFloat(document.getElementById("jbd-cost-other").value) || 0),
     customer_signature_name: document.getElementById("jbd-sig-name").value.trim() || null,
     customer_signature_date: document.getElementById("jbd-sig-date").value || null,
     notes: document.getElementById("jbd-notes").value.trim() || null,
