@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Customers | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260923a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260923b">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260923a"></script>
-<script src="../assets/js/supabase-config.js?v=20260923a"></script>
-<script src="../assets/js/auth.js?v=20260923a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260923b"></script>
+<script src="../assets/js/supabase-config.js?v=20260923b"></script>
+<script src="../assets/js/auth.js?v=20260923b"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -88,11 +88,44 @@
 <div class="modal-overlay" id="cust-profile-modal" hidden>
   <div class="modal-card" style="max-width:640px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-      <div>
+      <div id="cp-view" style="flex:1">
         <h3 style="margin-bottom:2px" id="cp-name">&mdash;</h3>
         <p class="muted" id="cp-contact" style="margin:0;font-size:.85rem"></p>
       </div>
-      <button type="button" class="page-close-btn" id="cp-close-btn" title="Close" aria-label="Close" style="position:static">&times;</button>
+      <div style="display:flex;gap:6px;align-items:flex-start">
+        <button type="button" class="btn btn-ghost btn-sm" id="cp-edit-btn" title="Edit customer information">&#9998; Edit</button>
+        <button type="button" class="page-close-btn" id="cp-close-btn" title="Close" aria-label="Close" style="position:static">&times;</button>
+      </div>
+    </div>
+
+    <!-- Round 48 (2026-09-23), per Vijayan's annotated screenshot ("Edit"
+         circled next to this panel's Close button): this profile used to be
+         fully read-only -- same view/edit toggle pattern as the Job Card's
+         own customer box (jbRenderCustomerBox in jobs.js), but with every
+         field this panel actually shows (the Job Card's mini editor only
+         ever covers name+phone). Saves through the same
+         saaCustomersUpdateContact this whole app already uses, so an edit
+         here is visible everywhere else this customer appears too. -->
+    <div id="cp-edit-form" hidden style="margin-top:10px;padding:12px;background:#f7fafb;border-radius:8px">
+      <div class="field-row field-row-3">
+        <div class="field"><label>First Name</label><input type="text" id="cp-edit-first"></div>
+        <div class="field"><label>Last Name</label><input type="text" id="cp-edit-last"></div>
+        <div class="field"><label>Phone</label><input type="tel" id="cp-edit-phone"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Email</label><input type="email" id="cp-edit-email"></div>
+        <div class="field"><label>Billing Address</label><input type="text" id="cp-edit-address"></div>
+      </div>
+      <div class="field-row field-row-3">
+        <div class="field"><label>City</label><input type="text" id="cp-edit-city"></div>
+        <div class="field"><label>State</label><input type="text" id="cp-edit-state" maxlength="2" style="text-transform:uppercase"></div>
+        <div class="field"><label>ZIP</label><input type="text" id="cp-edit-zip"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:2px">
+        <button type="button" class="btn btn-navy btn-sm" id="cp-edit-save-btn">Save</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="cp-edit-cancel-btn">Cancel</button>
+        <span class="muted" id="cp-edit-err" style="font-size:.82rem;color:#b3261e"></span>
+      </div>
     </div>
 
     <h4 style="margin:16px 0 6px">Billing Address</h4>
@@ -111,10 +144,10 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260923a"></script>
-<script src="../assets/js/worksheet.js?v=20260923a"></script>
-<script src="../assets/js/jobs-db.js?v=20260923a"></script>
-<script src="../assets/js/customers-db.js?v=20260923a"></script>
+<script src="../assets/js/pricing-data.js?v=20260923b"></script>
+<script src="../assets/js/worksheet.js?v=20260923b"></script>
+<script src="../assets/js/jobs-db.js?v=20260923b"></script>
+<script src="../assets/js/customers-db.js?v=20260923b"></script>
 <script>
   function _custEsc(s) {
     return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -133,6 +166,7 @@
 
   let _custAll = [];
   let _custLastRows = [];
+  let _custCurrentProfile = null; // the customer object behind the currently-open Profile panel (Round 48: needed by the Edit form)
 
   function _custFilteredRows() {
     const q = (document.getElementById("cust-search").value || "").trim().toLowerCase();
@@ -174,6 +208,9 @@
     const profile = await saaCustomersFetchProfile(customerId);
     if (!profile.customer) return;
     const c = profile.customer;
+    _custCurrentProfile = c;
+    document.getElementById("cp-edit-form").hidden = true;
+    document.getElementById("cp-view").hidden = false;
     document.getElementById("cp-name").textContent = [c.first_name, c.last_name].filter(Boolean).join(" ") || "(no name)";
     document.getElementById("cp-contact").textContent = [c.phone ? saaFormatPhone(c.phone) : null, c.email].filter(Boolean).join(" · ") || "No phone or email on file";
     document.getElementById("cp-address").textContent = [c.billing_address, [c.billing_city, c.billing_state, c.billing_zip].filter(Boolean).join(", ")].filter(Boolean).join(", ") || "No address on file";
@@ -205,6 +242,69 @@
   document.getElementById("cp-close-btn-2").addEventListener("click", closeCustomerProfile);
   document.getElementById("cust-profile-modal").addEventListener("click", (e) => {
     if (e.target.id === "cust-profile-modal") closeCustomerProfile();
+  });
+
+  // Round 48 (2026-09-23): Edit toggle for the Profile panel -- same view/
+  // edit swap idea as the Job Card's own customer box.
+  document.getElementById("cp-edit-btn").addEventListener("click", () => {
+    const c = _custCurrentProfile;
+    if (!c) return;
+    document.getElementById("cp-edit-first").value = c.first_name || "";
+    document.getElementById("cp-edit-last").value = c.last_name || "";
+    document.getElementById("cp-edit-phone").value = c.phone || "";
+    document.getElementById("cp-edit-email").value = c.email || "";
+    document.getElementById("cp-edit-address").value = c.billing_address || "";
+    document.getElementById("cp-edit-city").value = c.billing_city || "";
+    document.getElementById("cp-edit-state").value = c.billing_state || "";
+    document.getElementById("cp-edit-zip").value = c.billing_zip || "";
+    document.getElementById("cp-edit-err").textContent = "";
+    document.getElementById("cp-view").hidden = true;
+    document.getElementById("cp-edit-form").hidden = false;
+    document.getElementById("cp-edit-first").focus();
+  });
+  document.getElementById("cp-edit-cancel-btn").addEventListener("click", () => {
+    document.getElementById("cp-edit-form").hidden = true;
+    document.getElementById("cp-view").hidden = false;
+  });
+  document.getElementById("cp-edit-save-btn").addEventListener("click", async () => {
+    const c = _custCurrentProfile;
+    if (!c) return;
+    const errEl = document.getElementById("cp-edit-err");
+    const saveBtn = document.getElementById("cp-edit-save-btn");
+    const fields = {
+      first_name: document.getElementById("cp-edit-first").value,
+      last_name: document.getElementById("cp-edit-last").value,
+      phone: document.getElementById("cp-edit-phone").value,
+      email: document.getElementById("cp-edit-email").value,
+      billing_address: document.getElementById("cp-edit-address").value,
+      billing_city: document.getElementById("cp-edit-city").value,
+      billing_state: document.getElementById("cp-edit-state").value,
+      billing_zip: document.getElementById("cp-edit-zip").value,
+    };
+    if (!fields.first_name.trim()) {
+      errEl.textContent = "First name is required.";
+      return;
+    }
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+    const res = await saaCustomersUpdateContact(c.id, fields);
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Save";
+    if (!res.ok) {
+      errEl.textContent = res.error;
+      return;
+    }
+    Object.assign(c, res.customer);
+    // Keep the underlying list row (and its search/download data) in sync
+    // too, so closing the panel doesn't show stale info until a reload.
+    const listRow = _custAll.find((row) => row.id === c.id);
+    if (listRow) Object.assign(listRow, res.customer);
+    renderCustomers();
+    document.getElementById("cp-edit-form").hidden = true;
+    document.getElementById("cp-view").hidden = false;
+    document.getElementById("cp-name").textContent = [c.first_name, c.last_name].filter(Boolean).join(" ") || "(no name)";
+    document.getElementById("cp-contact").textContent = [c.phone ? saaFormatPhone(c.phone) : null, c.email].filter(Boolean).join(" · ") || "No phone or email on file";
+    document.getElementById("cp-address").textContent = [c.billing_address, [c.billing_city, c.billing_state, c.billing_zip].filter(Boolean).join(", ")].filter(Boolean).join(", ") || "No address on file";
   });
 
   let _custSearchTimer = null;

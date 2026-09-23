@@ -34,8 +34,18 @@ function _saaEsc(s) {
  *   lineItems: [{ name, desc, price }]   // only the toggled-on items
  *   grandTotal: number
  * }
+ * targetWindow: Round 48 (2026-09-23) -- the manual "Print Quote" button
+ * still opens a NEW window/tab for the printable document (the default,
+ * when this is omitted), leaving the worksheet itself open underneath.
+ * The Quotes list's row click ("open in pdf format, not the webform")
+ * instead passes its own `window` here: opening a SECOND popup from script
+ * running asynchronously after that page's data finished loading (not
+ * itself a direct click) is exactly the kind of window.open real browsers'
+ * popup blockers tend to block, so autoprint reuses the tab that was
+ * already legitimately opened by the user's own click on the Quotes list,
+ * overwriting it with the printable document instead of opening another.
  */
-function printFormalQuote(opts) {
+function printFormalQuote(opts, targetWindow) {
   const info = SAA_QUOTE_INFO;
   const ref = (opts.quoteNumber || "").trim() || _saaQuoteRef();
   const deposit = (opts.grandTotal || 0) / 2;
@@ -220,6 +230,27 @@ function printFormalQuote(opts) {
 </script>
 </body>
 </html>`;
+
+  if (targetWindow) {
+    // Round 48 fix (2026-09-23): `targetWindow` here is the worksheet's own
+    // window, whose document has ALREADY fully loaded (it's the same tab the
+    // Quotes list's click legitimately opened -- see the big comment on this
+    // function's signature above). Overwriting an already-loaded document
+    // via document.open()/write()/close() turned out to be unreliable in
+    // real testing: the write appears to apply (its injected <script> even
+    // runs -- window.print() gets called) but the document reverts to its
+    // prior content shortly after, because document.open() on a page that
+    // has already finished loading aborts/rewinds navigation state in a way
+    // that plain document.write() into a brand-new, still-blank window (the
+    // manual "Print Quote" button's case below, where the window has never
+    // finished loading anything) does not hit. A real navigation avoids
+    // this entirely: build the printable HTML as a Blob and navigate the
+    // window to its object URL, which is an ordinary page load with normal
+    // script-execution semantics.
+    const blob = new Blob([html], { type: "text/html" });
+    targetWindow.location.href = URL.createObjectURL(blob);
+    return;
+  }
 
   const win = window.open("", "_blank");
   if (!win) { alert("Please allow pop-ups to print the formal quote."); return; }

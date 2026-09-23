@@ -365,6 +365,36 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
    to show that tech is busy at that time, just not the one to drag. */
 .appt-card.appt-card-helper { cursor: default; background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.35) 0 6px, rgba(255,255,255,0) 6px 12px); opacity: .85; }
 
+/* ---- Round 48 (2026-09-23), per Vijayan: "in phone view, show calendar
+   in vertical format instead of hours in horizontal axis, this would show
+   more event in a page." A phone-width mirror of the Day grid above, with
+   the hour axis running down the page instead of across it -- calendar.js
+   picks this one or the horizontal one above based on viewport width (see
+   SAA_CAL_MOBILE_BREAKPOINT). --cal-vhour-h must match the pixel height
+   calendar.js gives each hour row/the tech column bodies (saaCalRenderDay
+   GridVertical) so the hour labels and the event cards' top/height
+   percentages line up. */
+:root { --cal-vhour-h: 56px; }
+/* Round 48 fix: this must NOT set display:none itself -- show/hide is
+   driven entirely by the element's `hidden` attribute (JS toggles
+   cal-day-view-vertical-wrap.hidden), same as its horizontal-grid sibling
+   #cal-day-view-wrap, which carries no display rule of its own. A
+   class-level `display: none` here would keep this permanently hidden even
+   after JS clears the `hidden` attribute, since an explicit class rule
+   overrides the UA's default `[hidden] { display: none }` either way. */
+.cal-vgrid-wrap { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.cal-vgrid-scroll { display: flex; overflow-x: auto; }
+.cal-vhour-col { flex: 0 0 42px; border-right: 1px solid var(--line); }
+.cal-vhour-col::before { content: ""; display: block; height: 34px; border-bottom: 1px solid var(--line); background: #f7fafb; } /* aligns with the sticky tech-head row */
+.cal-vhour-label { height: var(--cal-vhour-h); font-size: .62rem; color: var(--muted); text-align: right; padding: 2px 5px 0 0; box-sizing: border-box; }
+.cal-vtech-col { flex: 0 0 116px; border-right: 1px solid #eef1f4; }
+.cal-vtech-col:last-child { border-right: none; }
+.cal-vtech-col-head { position: sticky; top: 0; z-index: 2; height: 34px; box-sizing: border-box; background: #fafbfc; border-bottom: 1px solid var(--line); padding: 4px 6px; font-size: .72rem; font-weight: 700; color: var(--navy); text-align: center; overflow: hidden; }
+.cal-vtech-col-head .tech-status { display: block; font-weight: 400; font-size: .6rem; color: var(--muted); text-transform: uppercase; letter-spacing: .2px; }
+.cal-vtech-col-body { position: relative; background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--cal-vhour-h) - 1px), #f3f5f7 calc(var(--cal-vhour-h) - 1px), #f3f5f7 var(--cal-vhour-h)); }
+.appt-card.appt-card-v { top: auto; bottom: auto; left: 3px; right: 3px; padding: 3px 5px; font-size: .66rem; }
+.appt-card.appt-card-v .appt-title { white-space: normal; line-height: 1.15; }
+
 .cal-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; font-size: .78rem; color: var(--muted); }
 .cal-legend .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 5px; }
 

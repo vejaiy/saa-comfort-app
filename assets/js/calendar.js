@@ -46,6 +46,20 @@ const SAA_CAL_DAY_END_HOUR = 19; // exclusive
 const SAA_CAL_SLOT_MINUTES = 30;
 const SAA_CAL_TOTAL_MINUTES = (SAA_CAL_DAY_END_HOUR - SAA_CAL_DAY_START_HOUR) * 60;
 
+// Round 48 (2026-09-23), per Vijayan: "in phone view, show calendar in
+// vertical format instead of hours in horizontal axis, this would show
+// more event in a page." Below this width the Day grid renders as a
+// vertical (hours-run-down-the-page) grid instead of the normal horizontal
+// one -- see saaCalRenderDayGrid's branch. SAA_CAL_VHOUR_PX must match
+// style.css's --cal-vhour-h (the pixel height each render gives one hour
+// row / the tech column bodies) so the hour labels and event cards' top/
+// height percentages line up.
+const SAA_CAL_MOBILE_BREAKPOINT = 640;
+const SAA_CAL_VHOUR_PX = 56;
+function _saaCalIsMobileDay() {
+  return window.matchMedia(`(max-width: ${SAA_CAL_MOBILE_BREAKPOINT}px)`).matches;
+}
+
 const SAA_CAL_FOLLOWUP_TYPES = [
   ["call", "Call customer"],
   ["return_visit", "Return visit"],
@@ -229,6 +243,11 @@ function saaCalSetView(mode) {
   saaCalViewMode = mode;
   document.querySelectorAll(".cal-view-btn[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === mode));
   document.getElementById("cal-day-view-wrap").hidden = mode !== "day";
+  // Round 48: the phone-width vertical grid (saaCalRenderDayGrid) is a
+  // third container alongside these two -- when leaving Day view it needs
+  // hiding too (saaCalRenderDayGrid only runs, and so only re-decides
+  // which of the two Day containers to show, while mode === "day").
+  document.getElementById("cal-day-view-vertical-wrap").hidden = true;
   document.getElementById("cal-altview-wrap").hidden = mode === "day";
   saaCalUpdateDateLabel();
   saaCalLoadAndRender();
@@ -496,7 +515,25 @@ function saaCalTechTrackHtml(tech) {
   </div>`;
 }
 
+/** Round 48 (2026-09-23): the Day grid now renders one of two layouts
+ *  depending on viewport width -- the original horizontal-timeline grid
+ *  (technician tracks, hours across the top) on a normal-width screen, or
+ *  the new vertical grid (technician columns, hours down the side) on a
+ *  phone. Both wraps always exist in the DOM (gen_calendar.py); this just
+ *  shows one and hides the other, then delegates to that layout's own
+ *  render function -- called from every place that already called
+ *  saaCalRenderDayGrid (view switch, navigate, load, drag/resize finish,
+ *  the resize listener below), so nothing else needed to change to pick up
+ *  a width change. */
 function saaCalRenderDayGrid() {
+  const mobile = _saaCalIsMobileDay();
+  document.getElementById("cal-day-view-wrap").hidden = mobile;
+  document.getElementById("cal-day-view-vertical-wrap").hidden = !mobile;
+  if (mobile) saaCalRenderDayGridVertical();
+  else saaCalRenderDayGridHorizontal();
+}
+
+function saaCalRenderDayGridHorizontal() {
   document.getElementById("cal-grid-hours-row").innerHTML = saaCalHourLabelsHtml();
   const body = document.getElementById("cal-grid-body");
   if (!saaCalTechnicians.length) {
@@ -536,6 +573,75 @@ function saaCalRenderDayGrid() {
     // A plain click (no drag) on the handle shouldn't also open the Job
     // Details drawer via the document-level .appt-card click handler below.
     handle.addEventListener("click", (e) => e.stopPropagation());
+  });
+}
+
+/* ============================== VERTICAL DAY GRID (phone view) ============================== */
+
+function saaCalHourLabelsVerticalHtml() {
+  let out = "";
+  for (let h = SAA_CAL_DAY_START_HOUR; h < SAA_CAL_DAY_END_HOUR; h++) {
+    out += `<div class="cal-vhour-label">${saaCalFormatClock(h * 60).replace(":00", "")}</div>`;
+  }
+  return out;
+}
+
+/** Same idea as saaCalApptCardHtml, transposed: top/height (percent of the
+ *  column's fixed-height body, see SAA_CAL_VHOUR_PX) carry the event's
+ *  time instead of left/width, and an overlapping lane (same technician,
+ *  two events at once -- saaCalAssignLanes) splits the column's WIDTH
+ *  instead of its height. No drag/resize handle here -- native HTML5 drag
+ *  doesn't work on touch, so the phone-width grid never offered a working
+ *  drag anyway; "Reschedule / Assign" in the Job Details drawer (tapping
+ *  the card still opens it, via the same document-level .appt-card click
+ *  handler the horizontal grid uses) covers moving an event from here. */
+function saaCalApptCardHtmlVertical(appt, lane, totalLanes, isPrimary) {
+  if (isPrimary === undefined) isPrimary = true;
+  const type = saaCalTypesByKey[appt.job.job_type] || {};
+  const startMin = saaCalMinutesFromTimeStr(appt.scheduled_start);
+  const endMin = saaCalMinutesFromTimeStr(appt.scheduled_end);
+  const top = saaCalPct(startMin);
+  const height = Math.max(saaCalPct(endMin) - top, 4);
+  const n = totalLanes || 1;
+  const horiz = n > 1
+    ? `left:calc(3px + ${lane} * ((100% - 6px) / ${n}));width:calc((100% - 6px) / ${n} - 2px);right:auto;`
+    : "";
+  const helperCls = isPrimary ? "" : " appt-card-helper";
+  const helperNote = isPrimary ? "" : " (helping)";
+  return `<div class="appt-card appt-card-v st-${appt.event_status}${helperCls}" data-event-id="${appt.id}" style="top:${top}%;height:${height}%;${horiz}" title="${_saaCalEsc(saaCalCustName(appt.customer))} — ${_saaCalEsc(appt.job.title || "")}${helperNote}">
+    <div class="appt-title">${saaCalFormatClock(startMin).replace(":00", "")} ${type.icon || ""} ${_saaCalEsc(saaCalCustName(appt.customer))}${helperNote}</div>
+  </div>`;
+}
+
+function saaCalTechColHtmlVertical(tech) {
+  const techEvents = saaCalScheduled.filter((a) => _saaCalApptHasTech(a, tech.id));
+  const cards = saaCalAssignLanes(techEvents).map(({ appt, lane, totalLanes }) => saaCalApptCardHtmlVertical(appt, lane, totalLanes, appt.assigned_technician_id === tech.id)).join("");
+  return `<div class="cal-vtech-col">
+    <div class="cal-vtech-col-head">${_saaCalEsc(tech.name)}<span class="tech-status">${saaCalTechStatusLabel(tech.id)}</span></div>
+    <div class="cal-vtech-col-body" data-tech-id="${tech.id}">${cards}</div>
+  </div>`;
+}
+
+function saaCalRenderDayGridVertical() {
+  document.getElementById("cal-vgrid-hours").innerHTML = saaCalHourLabelsVerticalHtml();
+  const body = document.getElementById("cal-vgrid-body");
+  if (!saaCalTechnicians.length) {
+    body.innerHTML = '<div class="cal-unscheduled-empty" style="padding:16px">No active technicians on file.</div>';
+    return;
+  }
+  body.innerHTML = saaCalTechnicians.map(saaCalTechColHtmlVertical).join("");
+
+  const totalHeight = (SAA_CAL_TOTAL_MINUTES / 60) * SAA_CAL_VHOUR_PX;
+  body.querySelectorAll(".cal-vtech-col-body").forEach((col) => {
+    col.style.height = totalHeight + "px";
+    col.addEventListener("click", (e) => {
+      if (e.target.closest(".appt-card")) return;
+      const rect = col.getBoundingClientRect();
+      const pct = (e.clientY - rect.top) / rect.height;
+      let minutes = SAA_CAL_DAY_START_HOUR * 60 + Math.round((pct * SAA_CAL_TOTAL_MINUTES) / SAA_CAL_SLOT_MINUTES) * SAA_CAL_SLOT_MINUTES;
+      minutes = Math.max(SAA_CAL_DAY_START_HOUR * 60, Math.min(minutes, SAA_CAL_DAY_END_HOUR * 60 - SAA_CAL_SLOT_MINUTES));
+      saaCalOpenNewServicePopup({ technicianId: col.dataset.techId, startMinutes: minutes });
+    });
   });
 }
 
@@ -746,7 +852,7 @@ function saaCalOpenNewServicePopup(ctx) {
   document.getElementById("ns-selected-cust").hidden = true;
   document.getElementById("ns-cust-results").hidden = true;
   document.getElementById("ns-newcust-form").hidden = true;
-  ["ns-newcust-first", "ns-newcust-last", "ns-newcust-phone", "ns-newcust-address", "ns-newcust-city", "ns-newcust-zip"].forEach((id) => { document.getElementById(id).value = ""; });
+  ["ns-newcust-first", "ns-newcust-last", "ns-newcust-phone", "ns-newcust-email", "ns-newcust-address", "ns-newcust-city", "ns-newcust-state", "ns-newcust-zip"].forEach((id) => { document.getElementById(id).value = ""; });
   document.getElementById("ns-system-wrap").hidden = true;
   document.getElementById("ns-system-select").innerHTML = "";
   document.getElementById("ns-sys-name").value = "";
@@ -968,10 +1074,10 @@ function saaCalSelectCustomer(result) {
   const equipLine = result.equipment ? `${result.equipment.brand || ""} ${result.equipment.tonnage ? result.equipment.tonnage + " Ton" : ""}`.trim() : "No equipment on file";
   const warrantyLine = result.equipment ? (result.equipment.warranty_status === "active" ? "Active" : result.equipment.warranty_status === "expired" ? "Expired" : "Unknown") : "—";
   const box = document.getElementById("ns-selected-cust");
-  const addrLine = [c.billing_address, [c.billing_city, c.billing_zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  const addrLine = [c.billing_address, [c.billing_city, c.billing_state, c.billing_zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
   box.innerHTML = `<div class="name">${_saaCalEsc(saaCalCustName(c))}${result.isNew ? ' <span class="muted" style="font-weight:400;font-size:.76rem">(new customer)</span>' : ""}</div>
     <div class="row">📍 ${_saaCalEsc(addrLine || "No address on file")}</div>
-    <div class="row">📞 ${_saaCalEsc(c.phone ? saaFormatPhone(c.phone) : "—")}</div>
+    <div class="row">📞 ${_saaCalEsc(c.phone ? saaFormatPhone(c.phone) : "—")}${c.email ? ` &middot; ✉️ ${_saaCalEsc(c.email)}` : ""}</div>
     <div class="row">🔧 ${_saaCalEsc(equipLine)}</div>
     <div class="row">🛡️ Warranty: ${_saaCalEsc(warrantyLine)}</div>`;
   box.hidden = false;
@@ -1001,19 +1107,28 @@ function saaCalOpenNewCustomerForm(query) {
   document.getElementById("ns-newcust-first").value = first;
   document.getElementById("ns-newcust-last").value = last;
   document.getElementById("ns-newcust-phone").value = looksLikePhone ? q : "";
+  document.getElementById("ns-newcust-email").value = "";
   document.getElementById("ns-newcust-address").value = "";
   document.getElementById("ns-newcust-city").value = "";
+  document.getElementById("ns-newcust-state").value = "";
   document.getElementById("ns-newcust-zip").value = "";
   document.getElementById("ns-newcust-form").hidden = false;
   document.getElementById("ns-newcust-first").focus();
 }
 
+// Round 48 (2026-09-23), per Vijayan: "in new customer entry form add
+// provision to enter customer email and state" -- the customers table (and
+// the Customers List's own Profile panel) has always carried email/
+// billing_state, but this quick-entry mini-form (the only way to add a
+// brand-new customer from the "+ Schedule" popup) never collected either.
 function saaCalUseNewCustomer() {
   const first = document.getElementById("ns-newcust-first").value.trim();
   const last = document.getElementById("ns-newcust-last").value.trim();
   const phone = document.getElementById("ns-newcust-phone").value.trim();
+  const email = document.getElementById("ns-newcust-email").value.trim();
   const address = document.getElementById("ns-newcust-address").value.trim();
   const city = document.getElementById("ns-newcust-city").value.trim();
+  const state = document.getElementById("ns-newcust-state").value.trim().toUpperCase();
   const zip = document.getElementById("ns-newcust-zip").value.trim();
   if (!first && !last && !phone) {
     document.getElementById("ns-status").textContent = "Enter at least a name or phone number for the new customer.";
@@ -1021,7 +1136,7 @@ function saaCalUseNewCustomer() {
   }
   saaCalSelectCustomer({
     isNew: true,
-    customer: { first_name: first || null, last_name: last || null, phone: phone || null, billing_address: address || null, billing_city: city || null, billing_zip: zip || null },
+    customer: { first_name: first || null, last_name: last || null, phone: phone || null, email: email || null, billing_address: address || null, billing_city: city || null, billing_state: state || null, billing_zip: zip || null },
     equipment: null,
     lastJob: null,
   });
@@ -1136,6 +1251,21 @@ document.addEventListener("click", (e) => {
 });
 
 /* ============================== STATIC HANDLERS (wired once) ============================== */
+
+// Round 48 (2026-09-23): re-render the Day grid when the viewport crosses
+// the mobile breakpoint (rotating a phone, or resizing a desktop browser
+// window) so the horizontal/vertical layout choice stays correct without
+// needing a full page reload. Debounced, and only actually does anything
+// while Day view is showing -- saaCalRenderDayGrid is a no-op to call
+// otherwise since nothing reads its result outside Day view, but Week/
+// Month have nothing width-dependent to redo anyway.
+let _saaCalResizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(_saaCalResizeTimer);
+  _saaCalResizeTimer = setTimeout(() => {
+    if (saaCalViewMode === "day" && document.getElementById("cal-grid-body")) saaCalRenderDayGrid();
+  }, 200);
+});
 
 function saaCalWireStaticHandlers() {
   document.getElementById("cal-prev-btn").addEventListener("click", () => saaCalNavigate(-1));
@@ -1273,7 +1403,7 @@ function saaCalWireStaticHandlers() {
     status.textContent = "Saving…";
     const res = await saaCalScheduleNewJob({
       customerId: sc.isNew ? null : sc.customer.id,
-      newCustomer: sc.isNew ? { firstName: sc.customer.first_name, lastName: sc.customer.last_name, phone: sc.customer.phone, address: sc.customer.billing_address, city: sc.customer.billing_city, zip: sc.customer.billing_zip } : null,
+      newCustomer: sc.isNew ? { firstName: sc.customer.first_name, lastName: sc.customer.last_name, phone: sc.customer.phone, email: sc.customer.email, address: sc.customer.billing_address, city: sc.customer.billing_city, state: sc.customer.billing_state, zip: sc.customer.billing_zip } : null,
       systemId,
       systemName: systemId ? null : (document.getElementById("ns-sys-name").value.trim() || null),
       manufacturer: systemId ? null : (document.getElementById("ns-sys-manufacturer").value.trim() || null),

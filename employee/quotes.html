@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quotes | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260923a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260923b">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260923a"></script>
-<script src="../assets/js/supabase-config.js?v=20260923a"></script>
-<script src="../assets/js/auth.js?v=20260923a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260923b"></script>
+<script src="../assets/js/supabase-config.js?v=20260923b"></script>
+<script src="../assets/js/auth.js?v=20260923b"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -95,10 +95,10 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260923a"></script>
-<script src="../assets/js/worksheet.js?v=20260923a"></script>
-<script src="../assets/js/jobs-db.js?v=20260923a"></script>
-<script src="../assets/js/quotes-db.js?v=20260923a"></script>
+<script src="../assets/js/pricing-data.js?v=20260923b"></script>
+<script src="../assets/js/worksheet.js?v=20260923b"></script>
+<script src="../assets/js/jobs-db.js?v=20260923b"></script>
+<script src="../assets/js/quotes-db.js?v=20260923b"></script>
 <script>
   // Round 44: quote status isn't editable from this list (same "read here,
   // edit on the worksheet" split as the Invoices list) -- a plain label
@@ -164,9 +164,15 @@
         <td><span class="jb-badge">${_qStatusLabel[q.status] || q.status || "&mdash;"}</span></td>
       </tr>`).join("");
 
+    // Round 48 (2026-09-23), per Vijayan: "when quotes clicked in quotes
+    // page, open them in pdf format, not the webform." &autoprint=1 tells
+    // the worksheet page (quotation.html/repair.html) to load this quote's
+    // data and then immediately run its own Print Quote flow instead of
+    // sitting open as an editable form -- see that flag's handling at the
+    // bottom of gen_master.py/gen_repair.py.
     tbody.querySelectorAll(".jb-row").forEach((tr) => {
       tr.addEventListener("click", () => {
-        window.open(`${tr.dataset.quotePage}?quote=${encodeURIComponent(tr.dataset.quoteId)}`, "_blank", "noopener");
+        window.open(`${tr.dataset.quotePage}?quote=${encodeURIComponent(tr.dataset.quoteId)}&autoprint=1`, "_blank", "noopener");
       });
     });
   }

@@ -88,12 +88,13 @@ function _saaCalPhoneKey(phone) {
  * worksheet lands as one row either way. Only used when the New Service
  * popup's search found no match and the dispatcher filled in the "new
  * customer" mini-form. Backfills an existing matched customer's blank
- * address/city/zip when new values are provided.
+ * email/address/city/state/zip when new values are provided (Round 48,
+ * 2026-09-23: the mini-form gained Email and State fields).
  */
-async function saaCalFindOrCreateCustomer(firstName, lastName, phone, address, city, zip) {
+async function saaCalFindOrCreateCustomer(firstName, lastName, phone, email, address, city, state, zip) {
   const { data: candidates, error: findErr } = await _saaClient
     .from("customers")
-    .select("id,phone,billing_address,billing_city,billing_zip")
+    .select("id,phone,email,billing_address,billing_city,billing_state,billing_zip")
     .eq("first_name", firstName || "")
     .eq("last_name", lastName || "");
   if (findErr) throw findErr;
@@ -101,8 +102,10 @@ async function saaCalFindOrCreateCustomer(firstName, lastName, phone, address, c
   const existing = (candidates || []).find((c) => _saaCalPhoneKey(c.phone) === phoneKey);
   if (existing) {
     const patch = {};
+    if (email && !existing.email) patch.email = email;
     if (address && !existing.billing_address) patch.billing_address = address;
     if (city && !existing.billing_city) patch.billing_city = city;
+    if (state && !existing.billing_state) patch.billing_state = state;
     if (zip && !existing.billing_zip) patch.billing_zip = zip;
     if (Object.keys(patch).length) {
       await _saaClient.from("customers").update(patch).eq("id", existing.id);
@@ -112,7 +115,7 @@ async function saaCalFindOrCreateCustomer(firstName, lastName, phone, address, c
 
   const { data: created, error: createErr } = await _saaClient
     .from("customers")
-    .insert({ first_name: firstName || null, last_name: lastName || null, phone: phone || null, billing_address: address || null, billing_city: city || null, billing_zip: zip || null })
+    .insert({ first_name: firstName || null, last_name: lastName || null, phone: phone || null, email: email || null, billing_address: address || null, billing_city: city || null, billing_state: state || null, billing_zip: zip || null })
     .select("id")
     .single();
   if (createErr) throw createErr;
@@ -220,8 +223,8 @@ async function _saaCalNextJobNumber(firstName) {
  * creates that Job's first Event via saaEventsCreateForJob (events-db.js).
  * technicianId/startDatetime/endDatetime may be null (the Event lands in
  * the Unscheduled queue). Pass either `customerId` (an existing customer
- * picked from search) or `newCustomer: {firstName, lastName, phone,
- * address, city, zip}` (search found nobody, so find-or-create one).
+ * picked from search) or `newCustomer: {firstName, lastName, phone, email,
+ * address, city, state, zip}` (search found nobody, so find-or-create one).
  */
 async function saaCalScheduleNewJob(payload) {
   try {
@@ -231,7 +234,7 @@ async function saaCalScheduleNewJob(payload) {
       if (!nc.firstName && !nc.lastName && !nc.phone) {
         return { ok: false, error: "Enter a first name, last name, or phone number for the new customer." };
       }
-      customerId = await saaCalFindOrCreateCustomer(nc.firstName, nc.lastName, nc.phone, nc.address, nc.city, nc.zip);
+      customerId = await saaCalFindOrCreateCustomer(nc.firstName, nc.lastName, nc.phone, nc.email, nc.address, nc.city, nc.state, nc.zip);
     }
     if (!customerId) return { ok: false, error: "Select or add a customer first." };
 

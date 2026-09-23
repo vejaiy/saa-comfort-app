@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260923a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260923b">
 <script>
 if (new URLSearchParams(location.search).get('embed') === '1') {
   document.documentElement.classList.add('saa-embed');
@@ -14,9 +14,9 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260923a"></script>
-<script src="../assets/js/supabase-config.js?v=20260923a"></script>
-<script src="../assets/js/auth.js?v=20260923a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260923b"></script>
+<script src="../assets/js/supabase-config.js?v=20260923b"></script>
+<script src="../assets/js/auth.js?v=20260923b"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -98,6 +98,25 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
     <div id="cal-grid-body"></div>
   </div>
 </div>
+
+<!-- Round 48 (2026-09-23), per Vijayan: "in phone view, show calendar in
+     vertical format instead of hours in horizontal axis, this would show
+     more event in a page." On a narrow (phone-width) screen, calendar.js
+     renders into THIS grid instead of the one above -- same technicians,
+     same events, same tap-to-open-drawer/tap-empty-space-to-schedule
+     behavior, but with the hour axis running down the page (so scrolling
+     down reveals more of the day, no more horizontal scrolling that hid
+     later hours off-screen) and technicians as narrow side-by-side columns
+     instead of stacked full-width tracks. Drag-and-drop reschedule isn't
+     offered here (native HTML5 drag doesn't work on touch anyway, so
+     nothing is actually lost versus the phone's existing horizontal grid --
+     "Reschedule / Assign" in the Job Details drawer covers it either way). -->
+<div class="cal-vgrid-wrap" id="cal-day-view-vertical-wrap" hidden>
+  <div class="cal-vgrid-scroll">
+    <div class="cal-vhour-col" id="cal-vgrid-hours"></div>
+    <div class="cal-vgrid-body" id="cal-vgrid-body"></div>
+  </div>
+</div>
 <div id="cal-altview-wrap" hidden></div>
 
 <div class="cal-legend">
@@ -147,10 +166,14 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
         </div>
         <div class="field-row">
           <div class="field"><label>Phone</label><input type="tel" id="ns-newcust-phone" placeholder="713-555-1234"></div>
-          <div class="field"><label>Address</label><input type="text" id="ns-newcust-address" placeholder="123 Main St"></div>
+          <div class="field"><label>Email</label><input type="email" id="ns-newcust-email" placeholder="name@example.com"></div>
         </div>
         <div class="field-row">
+          <div class="field"><label>Address</label><input type="text" id="ns-newcust-address" placeholder="123 Main St"></div>
+        </div>
+        <div class="field-row field-row-3">
           <div class="field"><label>City</label><input type="text" id="ns-newcust-city"></div>
+          <div class="field"><label>State</label><input type="text" id="ns-newcust-state" placeholder="TX" maxlength="2" style="text-transform:uppercase"></div>
           <div class="field"><label>ZIP</label><input type="text" id="ns-newcust-zip"></div>
         </div>
         <div style="display:flex;gap:8px;margin-top:2px">
@@ -860,19 +883,19 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260923a"></script>
-<script src="../assets/js/worksheet.js?v=20260923a"></script>
-<script src="../assets/js/systems-db.js?v=20260923a"></script>
-<script src="../assets/js/events-db.js?v=20260923a"></script>
-<script src="../assets/js/calendar-db.js?v=20260923a"></script>
-<script src="../assets/js/jobs-db.js?v=20260923a"></script>
-<script src="../assets/js/job-photos-db.js?v=20260923a"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260923a"></script>
-<script src="../assets/js/camera-capture.js?v=20260923a"></script>
-<script src="../assets/js/print-invoice.js?v=20260923a"></script>
-<script src="../assets/js/maps-config.js?v=20260923a"></script>
-<script src="../assets/js/mileage-db.js?v=20260923a"></script>
-<script src="../assets/js/jobs.js?v=20260923a"></script>
-<script src="../assets/js/calendar.js?v=20260923a"></script>
+<script src="../assets/js/pricing-data.js?v=20260923b"></script>
+<script src="../assets/js/worksheet.js?v=20260923b"></script>
+<script src="../assets/js/systems-db.js?v=20260923b"></script>
+<script src="../assets/js/events-db.js?v=20260923b"></script>
+<script src="../assets/js/calendar-db.js?v=20260923b"></script>
+<script src="../assets/js/jobs-db.js?v=20260923b"></script>
+<script src="../assets/js/job-photos-db.js?v=20260923b"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260923b"></script>
+<script src="../assets/js/camera-capture.js?v=20260923b"></script>
+<script src="../assets/js/print-invoice.js?v=20260923b"></script>
+<script src="../assets/js/maps-config.js?v=20260923b"></script>
+<script src="../assets/js/mileage-db.js?v=20260923b"></script>
+<script src="../assets/js/jobs.js?v=20260923b"></script>
+<script src="../assets/js/calendar.js?v=20260923b"></script>
 </body>
 </html>

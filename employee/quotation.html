@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Create Quote | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260923a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260923b">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260923a"></script>
-<script src="../assets/js/supabase-config.js?v=20260923a"></script>
-<script src="../assets/js/auth.js?v=20260923a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260923b"></script>
+<script src="../assets/js/supabase-config.js?v=20260923b"></script>
+<script src="../assets/js/auth.js?v=20260923b"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -275,12 +275,12 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260923a"></script>
-<script src="../assets/js/worksheet.js?v=20260923a"></script>
-<script src="../assets/js/labor-widget.js?v=20260923a"></script>
-<script src="../assets/js/plenum-widget.js?v=20260923a"></script>
-<script src="../assets/js/print-quote.js?v=20260923a"></script>
-<script src="../assets/js/quotes-db.js?v=20260923a"></script>
+<script src="../assets/js/pricing-data.js?v=20260923b"></script>
+<script src="../assets/js/worksheet.js?v=20260923b"></script>
+<script src="../assets/js/labor-widget.js?v=20260923b"></script>
+<script src="../assets/js/plenum-widget.js?v=20260923b"></script>
+<script src="../assets/js/print-quote.js?v=20260923b"></script>
+<script src="../assets/js/quotes-db.js?v=20260923b"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
   saaAttachPhoneMask(document.getElementById('q-phone'));
@@ -636,9 +636,26 @@
   updateAll();
 
   // Deep link from the Jobs list's Quote $ column: quotation.html?quote=<id>
+  // Round 48 (2026-09-23), per Vijayan: "when quotes clicked in quotes page,
+  // open them in pdf format, not the webform" -- the Quotes list's own row
+  // click adds &autoprint=1 to this same deep link. Once the quote's data
+  // has actually loaded into the worksheet (same load this deep link always
+  // did), it immediately triggers the same Print Quote flow the manual
+  // button already uses, but into THIS tab (see printFormalQuote's
+  // targetWindow param in print-quote.js) instead of opening a second one --
+  // so what the user actually ends up looking at, in the one tab their
+  // click opened, is the printable PDF-style document, not the editable
+  // worksheet underneath it.
   {
-    const _qId = new URLSearchParams(window.location.search).get('quote');
-    if (_qId) _saaLoadQuoteInto(_qId, document.getElementById('save-status'));
+    const _qParams = new URLSearchParams(window.location.search);
+    const _qId = _qParams.get('quote');
+    if (_qId) {
+      _saaLoadQuoteInto(_qId, document.getElementById('save-status')).then((loaded) => {
+        if (loaded && loaded.ok && _qParams.get('autoprint') === '1') {
+          printFormalQuote(window._saaGetQuote(), window);
+        }
+      });
+    }
   }
 </script>
 </body>

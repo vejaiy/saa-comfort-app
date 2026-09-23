@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Repair | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260923a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260923b">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260923a"></script>
-<script src="../assets/js/supabase-config.js?v=20260923a"></script>
-<script src="../assets/js/auth.js?v=20260923a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260923b"></script>
+<script src="../assets/js/supabase-config.js?v=20260923b"></script>
+<script src="../assets/js/auth.js?v=20260923b"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -173,10 +173,10 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260923a"></script>
-<script src="../assets/js/worksheet.js?v=20260923a"></script>
-<script src="../assets/js/print-quote.js?v=20260923a"></script>
-<script src="../assets/js/quotes-db.js?v=20260923a"></script>
+<script src="../assets/js/pricing-data.js?v=20260923b"></script>
+<script src="../assets/js/worksheet.js?v=20260923b"></script>
+<script src="../assets/js/print-quote.js?v=20260923b"></script>
+<script src="../assets/js/quotes-db.js?v=20260923b"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
   saaAttachPhoneMask(document.getElementById('q-phone'));
@@ -384,9 +384,19 @@
   updateAll();
 
   // Deep link from the Jobs list's Quote $ column: repair.html?quote=<id>
+  // Round 48 (2026-09-23), per Vijayan: "when quotes clicked in quotes page,
+  // open them in pdf format, not the webform" -- same autoprint hookup as
+  // quotation.html (gen_master.py) -- see that file's comment for the why.
   {
-    const _qId = new URLSearchParams(window.location.search).get('quote');
-    if (_qId) _saaLoadQuoteInto(_qId, document.getElementById('save-status'));
+    const _qParams = new URLSearchParams(window.location.search);
+    const _qId = _qParams.get('quote');
+    if (_qId) {
+      _saaLoadQuoteInto(_qId, document.getElementById('save-status')).then((loaded) => {
+        if (loaded && loaded.ok && _qParams.get('autoprint') === '1') {
+          printFormalQuote(window._saaGetQuote(), window);
+        }
+      });
+    }
   }
 </script>
 </body>

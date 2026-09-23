@@ -1191,7 +1191,14 @@ async function saaJobsGetOrCreateInvoice(job) {
 /** Round 22 (2026-09-14): "Add provision to change customer name and
  *  phone number" -- edits the underlying customers row directly (not
  *  just this one job's copy of it), so the change is visible everywhere
- *  else this customer shows up (other jobs, quotes, the Jobs list). */
+ *  else this customer shows up (other jobs, quotes, the Jobs list).
+ *  Round 48 (2026-09-23): the Customers List's own Profile panel (Edit
+ *  button) also uses this to save email/billing_address/city/state/zip --
+ *  the Job Card's own mini contact editor (jbRenderCustomerBox) only ever
+ *  sends first_name/last_name/phone, so these extra fields are only
+ *  touched when the caller actually supplies them (fields.email !==
+ *  undefined, etc.), never blanked out just because one caller doesn't
+ *  know about them. */
 async function saaCustomersUpdateContact(customerId, fields) {
   try {
     const firstName = (fields.first_name || "").trim();
@@ -1202,6 +1209,11 @@ async function saaCustomersUpdateContact(customerId, fields) {
       phone: (fields.phone || "").trim() || null,
       updated_at: new Date().toISOString(),
     };
+    if (fields.email !== undefined) patch.email = (fields.email || "").trim() || null;
+    if (fields.billing_address !== undefined) patch.billing_address = (fields.billing_address || "").trim() || null;
+    if (fields.billing_city !== undefined) patch.billing_city = (fields.billing_city || "").trim() || null;
+    if (fields.billing_state !== undefined) patch.billing_state = (fields.billing_state || "").trim().toUpperCase() || null;
+    if (fields.billing_zip !== undefined) patch.billing_zip = (fields.billing_zip || "").trim() || null;
     const { data, error } = await _saaClient
       .from("customers")
       .update(patch)
