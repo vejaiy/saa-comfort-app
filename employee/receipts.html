@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Receipts | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260924a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260924b">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260924a"></script>
-<script src="../assets/js/supabase-config.js?v=20260924a"></script>
-<script src="../assets/js/auth.js?v=20260924a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260924b"></script>
+<script src="../assets/js/supabase-config.js?v=20260924b"></script>
+<script src="../assets/js/auth.js?v=20260924b"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -59,17 +59,98 @@
 <main class="container" style="padding:26px 20px 60px">
 
 <div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Receipts</div>
-<h1>Receipts</h1>
-<div class="stub-note card" style="max-width:520px;margin:20px auto">
-  <div style="font-size:2rem">🚧</div>
-  <h3>Coming soon</h3>
-  <p class="muted">A receipt log isn't built yet. This is a natural place to track material purchases per job for cost reconciliation.</p>
-  <a class="btn btn-ghost" href="dashboard.html">&larr; Back to Dashboard</a>
+<div class="page-title-row">
+  <h1>Receipts</h1>
+<a class="page-close-btn" href="dashboard.html" title="Close" aria-label="Close">&times;</a>
+</div>
+<p class="muted" style="margin-top:-6px">Pulled automatically from the saacomfortair@gmail.com inbox and "Receipts" label. Anything marked <span class="rc-badge rc-badge-review">needs review</span> was auto-tagged by the sync &mdash; fix the bucket, category, amount, or project right here and the flag clears.</p>
+
+<div class="jobs-toolbar">
+  <input type="text" id="rc-search" placeholder="Search vendor, item, category, job&hellip;" style="min-width:240px">
+  <label style="display:flex;align-items:center;gap:6px;font-size:.85rem" class="muted">
+    <input type="checkbox" id="rc-needs-review-only"> Needs review only
+  </label>
+  <button type="button" class="btn btn-ghost btn-sm" id="rc-clear-btn">Clear Filters</button>
+  <span class="muted" id="rc-count" style="font-size:.85rem;margin-left:auto"></span>
+</div>
+
+<div class="rc-tabs" id="rc-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:14px 0;border-bottom:1px solid var(--border,#ddd);padding-bottom:0">
+  <button type="button" class="cal-view-btn active" data-tab="equipment">Equipment</button>
+  <button type="button" class="cal-view-btn" data-tab="tools">Tools</button>
+  <button type="button" class="cal-view-btn" data-tab="supplies">Supplies</button>
+  <button type="button" class="cal-view-btn" data-tab="summary">Summary</button>
+  <button type="button" class="cal-view-btn" data-tab="category">By Category</button>
+  <button type="button" class="cal-view-btn" data-tab="project">By Project</button>
+</div>
+
+
+<div class="rc-tab-panel" id="rc-panel-equipment" data-bucket="equipment" hidden>
+  <div id="rc-months-equipment"></div>
+  <p class="muted rc-empty" id="rc-empty-equipment" style="text-align:center;padding:30px" hidden>No equipment receipts match your filters.</p>
+</div>
+<div class="rc-tab-panel" id="rc-panel-tools" data-bucket="tools" hidden>
+  <div id="rc-months-tools"></div>
+  <p class="muted rc-empty" id="rc-empty-tools" style="text-align:center;padding:30px" hidden>No tools receipts match your filters.</p>
+</div>
+<div class="rc-tab-panel" id="rc-panel-supplies" data-bucket="supplies" hidden>
+  <div id="rc-months-supplies"></div>
+  <p class="muted rc-empty" id="rc-empty-supplies" style="text-align:center;padding:30px" hidden>No supplies receipts match your filters.</p>
+</div>
+
+<div class="rc-tab-panel" id="rc-panel-summary" hidden>
+  <div class="rc-summary-cards" id="rc-summary-cards" style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px"></div>
+</div>
+
+<div class="rc-tab-panel" id="rc-panel-category" hidden>
+  <div class="jobs-table-wrap">
+    <table class="jobs-table">
+      <thead><tr><th>Category</th><th>Receipts</th><th>Total</th></tr></thead>
+      <tbody id="rc-category-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="rc-tab-panel" id="rc-panel-project" hidden>
+  <div class="jobs-table-wrap">
+    <table class="jobs-table">
+      <thead><tr><th>Project</th><th>Receipts</th><th>Total</th><th></th></tr></thead>
+      <tbody id="rc-project-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Edit modal, shared across all three bucket tabs -->
+<div class="modal-overlay" id="rc-edit-overlay" hidden>
+  <div class="modal-card" style="max-width:480px">
+    <div class="page-title-row"><h3 style="margin:0">Edit Receipt</h3><button type="button" class="page-close-btn" id="rc-edit-close" aria-label="Close">&times;</button></div>
+    <p class="muted" id="rc-edit-subject" style="font-size:.85rem;margin-top:-4px"></p>
+    <div class="field-row">
+      <div class="field" style="max-width:160px"><label>Bucket</label>
+        <select id="rc-edit-bucket"><option value="equipment">Equipment</option><option value="tools">Tools</option><option value="supplies">Supplies</option></select>
+      </div>
+      <div class="field"><label>Category</label><input type="text" id="rc-edit-category" placeholder="e.g. HVAC Equipment"></div>
+    </div>
+    <div class="field"><label>Item / Description</label><input type="text" id="rc-edit-item"></div>
+    <div class="field-row">
+      <div class="field"><label>Vendor</label><input type="text" id="rc-edit-vendor"></div>
+      <div class="field" style="max-width:140px"><label>Amount ($)</label><input type="number" step="0.01" id="rc-edit-amount"></div>
+    </div>
+    <div class="field"><label>Project (job)</label>
+      <select id="rc-edit-job"><option value="">&mdash; Not linked to a job &mdash;</option></select>
+    </div>
+    <div class="field"><label>Notes</label><input type="text" id="rc-edit-notes"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+      <button type="button" class="btn btn-navy btn-sm" id="rc-edit-save">Save</button>
+      <a href="#" target="_blank" id="rc-edit-view-email" class="btn btn-ghost btn-sm">View Original Email &rarr;</a>
+      <span class="muted" id="rc-edit-status" style="font-size:.85rem"></span>
+    </div>
+  </div>
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260924a"></script>
-<script src="../assets/js/worksheet.js?v=20260924a"></script>
-
+<script src="../assets/js/pricing-data.js?v=20260924b"></script>
+<script src="../assets/js/worksheet.js?v=20260924b"></script>
+<script src="../assets/js/receipts-db.js?v=20260924b"></script>
+<script src="../assets/js/receipts-page.js?v=20260924b"></script>
 </body>
 </html>

@@ -834,3 +834,31 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .jb-system-box { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: #fbfcfd; margin-bottom: 10px; }
 .jb-system-box .jb-system-name { font-weight: 700; color: var(--ink); }
 .jb-system-box .jb-system-meta { color: var(--muted); font-size: .82rem; margin-top: 2px; }
+
+/* ---- Receipts page (round 49) ---- */
+.rc-tabs .cal-view-btn { border-radius: 8px 8px 0 0; }
+.rc-month-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: pointer; padding: 10px 14px; background: #f3f6f9; border: 1px solid var(--line); border-radius: 8px; margin: 16px 0 8px; font-weight: 600; }
+.rc-month-header:first-child { margin-top: 4px; }
+.rc-month-header .rc-month-arrow { font-size: .7rem; color: var(--muted); transition: transform .15s ease; }
+.rc-month-header.rc-month-collapsed .rc-month-arrow { transform: rotate(-90deg); }
+.rc-month-header .rc-month-total { color: var(--muted); font-weight: 400; font-size: .85rem; }
+.rc-month-rows.rc-month-collapsed { display: none; }
+.rc-receipt-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; background: var(--card); flex-wrap: wrap; }
+.rc-receipt-row .rc-r-date { width: 84px; color: var(--muted); font-size: .82rem; flex-shrink: 0; }
+.rc-receipt-row .rc-r-main { flex: 1; min-width: 180px; }
+.rc-receipt-row .rc-r-vendor { font-weight: 600; }
+.rc-receipt-row .rc-r-item { color: var(--muted); font-size: .85rem; }
+.rc-receipt-row .rc-r-category { font-size: .78rem; color: var(--muted); }
+.rc-receipt-row .rc-r-amount { width: 90px; text-align: right; font-weight: 600; flex-shrink: 0; }
+.rc-receipt-row .rc-r-project { font-size: .78rem; flex-shrink: 0; }
+.rc-badge { display: inline-block; font-size: .7rem; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+.rc-badge-review { background: #fff3cd; color: #8a6500; }
+.rc-summary-card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); padding: 16px 20px; min-width: 160px; box-shadow: var(--shadow); }
+.rc-summary-card .rc-sc-label { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .3px; }
+.rc-summary-card .rc-sc-value { font-size: 1.6rem; font-weight: 700; margin-top: 4px; }
+.rc-summary-card .rc-sc-sub { color: var(--muted); font-size: .8rem; margin-top: 2px; }
+
+@media (max-width: 640px) {
+  .rc-receipt-row { flex-direction: column; align-items: flex-start; }
+  .rc-receipt-row .rc-r-amount { text-align: left; }
+}
