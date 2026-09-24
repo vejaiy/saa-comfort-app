@@ -852,29 +852,94 @@ async function saaJobsFindDuplicateJobs({ customerId, phone, jobType, excludeId 
   }
 }
 
-/** Deletes a job and everything that hangs off it — its payments, invoice,
- *  photos, and calendar appointment — and clears the job_id back-link on
- *  any quote that had been converted into it. Used by the "remove a
+/** Deletes a job and everything that hangs off it -- its payments,
+ *  invoices, photos, BOM/materials, mileage logs, warranty files, reminder
+ *  log, and calendar appointment -- and clears the job_id/event_id back-
+ *  link on any quote that had been pointed at it. Used by the "remove a
  *  duplicate job" flow (New Job popup warning, and a Delete Job button on
- *  the Job Card itself). */
+ *  the Job Card itself).
+ *
+ *  Round 48 follow-up (2026-09-24), per Vijayan's screenshot of the raw
+ *  Postgres error this button used to surface verbatim ("update or delete
+ *  on table jobs violates foreign key constraint events_job_id_fkey on
+ *  table events"): every current Job has at least its own starter Event
+ *  (created alongside it, per Round 42/43), which this function never
+ *  deleted before trying to delete the Job row itself -- so ANY job with
+ *  even one Event on it (i.e. every job) hit this FK violation. Fixed by
+ *  also deleting the job's own Events (and everything scoped to them --
+ *  BOM/materials, photos, mileage logs -- via event_id) before deleting
+ *  the job.
+ *
+ *  One deliberate safety gate: a Job that has been converted into by an
+ *  earlier "Start Next Job" (Round 43) carries one or more HISTORICAL
+ *  Events on its own job_id -- real completed service history from a
+ *  previous visit, rolled onto this Job's id as part of that conversion
+ *  (identified by the Event's own original_job_id being set -- see the
+ *  Round 48 follow-up (c) Quote $ fix in jobs-db.js's saaJobsFetchAll for
+ *  the same signal used the same way). Deleting the CURRENT job would
+ *  either silently destroy that history or leave it orphaned, so this
+ *  function refuses (with a clear, specific message instead of a raw DB
+ *  error) rather than doing either. A job with no historical Events on it
+ *  -- the common "created by mistake" case this button exists for -- is
+ *  unaffected and deletes cleanly, including its own starter Event. */
 async function saaJobsDeleteJob(jobId) {
   try {
+    const { data: events, error: evFindErr } = await _saaClient.from("events").select("id,original_job_id").eq("job_id", jobId);
+    if (evFindErr) throw evFindErr;
+    const historicalCount = (events || []).filter((e) => e.original_job_id).length;
+    if (historicalCount) {
+      return {
+        ok: false,
+        error: `This job can't be deleted -- it has ${historicalCount} historical visit${historicalCount === 1 ? "" : "s"} (from an earlier "Start Next Job") attached as service history. Delete or reassign those Events first if you're sure this job itself should still go.`,
+      };
+    }
+    const eventIds = (events || []).map((e) => e.id);
+
+    // Quotes can point directly at one of this job's Events as well as at
+    // the Job itself -- unlink both so nothing dangles once the Events (and
+    // possibly the Job) are gone; the quote itself is never deleted.
+    const { error: quoteJobErr } = await _saaClient.from("quotes").update({ job_id: null }).eq("job_id", jobId);
+    if (quoteJobErr) throw quoteJobErr;
+    if (eventIds.length) {
+      const { error: quoteEvErr } = await _saaClient.from("quotes").update({ event_id: null }).in("event_id", eventIds);
+      if (quoteEvErr) throw quoteEvErr;
+    }
+
     const { data: invoices, error: invErr } = await _saaClient.from("invoices").select("id").eq("job_id", jobId);
     if (invErr) throw invErr;
     for (const inv of invoices || []) {
       const { error: payErr } = await _saaClient.from("payments").delete().eq("invoice_id", inv.id);
       if (payErr) throw payErr;
     }
+    if (eventIds.length) {
+      const { error: payEvErr } = await _saaClient.from("payments").delete().in("event_id", eventIds);
+      if (payEvErr) throw payEvErr;
+    }
     if ((invoices || []).length) {
       const { error: delInvErr } = await _saaClient.from("invoices").delete().eq("job_id", jobId);
       if (delInvErr) throw delInvErr;
     }
+
+    const { error: matErr } = await _saaClient.from("job_materials").delete().eq("job_id", jobId);
+    if (matErr) throw matErr;
     const { error: photoErr } = await _saaClient.from("job_photos").delete().eq("job_id", jobId);
     if (photoErr) throw photoErr;
+    const { error: mileErr } = await _saaClient.from("mileage_logs").delete().eq("job_id", jobId);
+    if (mileErr) throw mileErr;
+    const { error: warrErr } = await _saaClient.from("job_warranty_files").delete().eq("job_id", jobId);
+    if (warrErr) throw warrErr;
+    const { error: remErr } = await _saaClient.from("job_reminders_sent").delete().eq("job_id", jobId);
+    if (remErr) throw remErr;
+    const { error: followErr } = await _saaClient.from("follow_ups").delete().eq("job_id", jobId);
+    if (followErr) throw followErr;
     const { error: apptErr } = await _saaClient.from("appointments").delete().eq("job_id", jobId);
     if (apptErr) throw apptErr;
-    const { error: quoteErr } = await _saaClient.from("quotes").update({ job_id: null }).eq("job_id", jobId);
-    if (quoteErr) throw quoteErr;
+
+    if (eventIds.length) {
+      const { error: evDelErr } = await _saaClient.from("events").delete().in("id", eventIds);
+      if (evDelErr) throw evDelErr;
+    }
+
     const { error: jobErr } = await _saaClient.from("jobs").delete().eq("id", jobId);
     if (jobErr) throw jobErr;
     return { ok: true };

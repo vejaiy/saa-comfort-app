@@ -405,6 +405,38 @@ function _jbEsc(s) {
   return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+/** Round 48 follow-up (2026-09-24), per Vijayan: "Job card page is too
+ *  clustered and big. organize the page, show borders, highlight titles,
+ *  rearrange item so it is easy to navigate, easy to view in phone app or
+ *  tablet." Every drawer-section on the Job Card becomes its own
+ *  collapsible card (see the matching CSS in style.css) -- clicking its
+ *  title bar shows/hides everything below it. A handful of sections that
+ *  are read far less often than the core ones start collapsed so the page
+ *  opens noticeably shorter, especially on a phone; everything else starts
+ *  open. This markup is static (built once by templates.py, shared by
+ *  jobs.html and the Job Card embedded on calendar.html) so it's wired
+ *  once here, not per jbOpenDetail call. A click inside an actual control
+ *  in a title bar (the Equipment section's own "Bill of Material" link)
+ *  is left alone rather than also toggling the section. */
+const JB_SECTIONS_COLLAPSED_BY_DEFAULT = ["Equipment", "Diagnosis", "Photos", "Warranty Documents", "Inspection", "Receipts", "Customer Signature", "Notes"];
+function _jbWireSectionToggles() {
+  document.querySelectorAll(".jb-detail-card .drawer-section > h4").forEach((h4) => {
+    const title = h4.textContent.trim();
+    const arrow = document.createElement("span");
+    arrow.className = "jb-sec-arrow";
+    arrow.textContent = "▾";
+    h4.appendChild(arrow);
+    const section = h4.closest(".drawer-section");
+    if (JB_SECTIONS_COLLAPSED_BY_DEFAULT.some((t) => title.indexOf(t) === 0)) {
+      section.classList.add("jb-sec-collapsed");
+    }
+    h4.addEventListener("click", (e) => {
+      if (e.target.closest("a, button, input, select, textarea")) return;
+      section.classList.toggle("jb-sec-collapsed");
+    });
+  });
+}
+
 /** One Event's row for the Jobs List expand-row: Round 47 (2026-09-23), per
  *  Vijayan's annotated screenshot circling every Jobs List column header
  *  ("in jobs page populate all column data for events as well") -- this used
@@ -424,7 +456,15 @@ function _jbEsc(s) {
  *  (_jbEventQuoteCellHtml) -- it used to reuse the parent Job's
  *  _jbQuoteCellHtml, which repeated the Job's own quote on every Event row
  *  underneath it instead of that Event's own. Not a quote-page link (no
- *  per-event linked_quote_id), so no .jb-quote-link click-through here. */
+ *  per-event linked_quote_id), so no .jb-quote-link click-through here.
+ *  Round 48 follow-up (2026-09-24), per Vijayan: "Job type in Jobs page is
+ *  not matching with events in job card" -- the Job Type column here used
+ *  to repeat the parent Job's own job_type (e.g. always "Follow-Up") on
+ *  every Event row underneath it, same class of bug as the Quote $ bleed
+ *  above, instead of showing what kind of VISIT this particular Event was
+ *  (Estimate Visit / Installation / Follow-Up / Other, the same labels the
+ *  Job Card's own Event History timeline shows via saaEventTypeLabel).
+ *  Fixed to read the Event's own event_type. */
 function _jbEventRowHtml(job, e) {
   const eventAddress = [e.service_address, e.service_city].filter(Boolean).join(", ");
   return `
@@ -436,7 +476,7 @@ function _jbEventRowHtml(job, e) {
       <td>${_jbCustName(job.customer)}</td>
       <td>${job.customer && job.customer.phone ? saaFormatPhone(job.customer.phone) : "—"}</td>
       <td>${eventAddress || [job.job_address, job.job_city].filter(Boolean).join(", ") || "—"}</td>
-      <td>${saaJobTypeLabel(job.job_type)}</td>
+      <td>${saaEventTypeLabel(e.event_type)}</td>
       <td><span class="jb-badge jb-pri-${job.priority}">${_jbPriorityLabel[job.priority] || job.priority}</span></td>
       <td>${_jbEsc(_jbEventTechNames(e))}</td>
       <td><span class="jb-event-badge evt-${e.event_status}">${_jbEsc(saaEventStatusLabel(e.event_status))}</span></td>
@@ -608,13 +648,15 @@ function _jbBuildJobsCsvLines(rows) {
  *  not the parent Job's, since a multi-visit Job's Events can each be at a
  *  different stage). Service Address prefers the Event's own Service
  *  Address (Round 42 gave Events their own) and falls back to the Job's.
- *  Customer/Phone/Job Type/Priority/Payment are Job/Customer-level facts,
- *  so every Event under the same Job repeats the same value -- but Quote $
- *  is that Event's OWN amount (Round 48 follow-up, 2026-09-23: it used to
- *  repeat the parent Job's amount on every row here too, same bug as the
- *  on-screen expand rows -- see _jbEventQuoteAmount). Leads with Event #
- *  (mirroring "Job #" leading the Jobs export) plus the parent Job # so an
- *  Events export row can always be traced back. */
+ *  Customer/Phone/Priority/Payment are Job/Customer-level facts, so every
+ *  Event under the same Job repeats the same value -- but Job Type and
+ *  Quote $ are each Event's OWN values (Round 48 follow-up, 2026-09-23/24:
+ *  both used to repeat the parent Job's own value on every row here
+ *  instead, same bug in each case -- see _jbEventQuoteAmount for Quote $;
+ *  Job Type now reads the Event's own event_type via saaEventTypeLabel,
+ *  same as the on-screen expand rows). Leads with Event # (mirroring
+ *  "Job #" leading the Jobs export) plus the parent Job # so an Events
+ *  export row can always be traced back. */
 const _JB_EVENTS_CSV_HEADER = ["Event #", "Job #", "Date Received", "Scheduled", "Customer", "Phone", "Service Address", "Job Type", "Priority", "Technician", "Status", "Payment", "Quote $"];
 
 function _jbEventTechNames(e) {
@@ -633,7 +675,7 @@ function _jbEventCsvRow(job, e) {
     _jbCustName(job.customer),
     job.customer && job.customer.phone ? saaFormatPhone(job.customer.phone) : "",
     eventAddress || [job.job_address, job.job_city].filter(Boolean).join(", "),
-    saaJobTypeLabel(job.job_type),
+    saaEventTypeLabel(e.event_type),
     _jbPriorityLabel[job.priority] || job.priority || "",
     _jbEventTechNames(e),
     saaEventStatusLabel(e.event_status),
@@ -3353,8 +3395,10 @@ async function jbCloseDetail() {
 }
 
 /** Removes a job that turned out to be a duplicate (or was created in
- *  error) — deletes its appointment, photos, invoice/payments, and clears
- *  the job_id back-link on any quote that had been converted into it. */
+ *  error) — deletes its appointment, photos, invoice/payments, its own
+ *  Event(s), and clears the job_id/event_id back-link on any quote that had
+ *  been pointed at it (see saaJobsDeleteJob for the full list and the
+ *  historical-Event safety gate). */
 async function jbDeleteCurrentJob() {
   if (!_jbCurrentJob) return;
   const ok = await saaConfirm(`Delete job ${_jbCurrentJob.job_number || ""} for ${_jbCurrentJob.customer ? _jbCustName(_jbCurrentJob.customer) : "this customer"}? This can't be undone.`, { title: "Delete job", okLabel: "Delete", cancelLabel: "Cancel" });
@@ -3373,6 +3417,7 @@ async function jbDeleteCurrentJob() {
 
 document.addEventListener("DOMContentLoaded", async () => {
   _jbTechnicians = await saaJobsFetchTechnicians();
+  _jbWireSectionToggles();
 
   // Round 6 item 7: the Job Card (everything below this point) is now also
   // embedded on the Dispatch Calendar page so "View Full Job Record" can

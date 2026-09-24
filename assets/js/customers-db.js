@@ -46,7 +46,18 @@ async function saaCustomersFetchAll() {
 }
 
 /** Full profile for one customer -- their Systems and Jobs -- for the
- *  Customers List's row-click profile panel. */
+ *  Customers List's row-click profile panel.
+ *
+ *  Round 48 follow-up (2026-09-24), per Vijayan: "Make sure system
+ *  information is linked with customer information in customer tab view."
+ *  Each System is one physical piece of equipment permanently tied to
+ *  exactly one Job (Customer -> System -> Job -> Event, same as
+ *  systems-db.js's own saaSystemsFetchByCustomerWithJobs, which does this
+ *  same join for other callers) -- this profile's own Systems list used to
+ *  show name/manufacturer/tonnage only, with no link back to which Job it
+ *  belongs to, so there was no way to tell which System a given visit was
+ *  actually for, or jump straight to it, from this panel. Reuses the Jobs
+ *  already fetched below rather than a second query. */
 async function saaCustomersFetchProfile(customerId) {
   const [{ data: customer, error: e1 }, { data: systems, error: e2 }, { data: jobs, error: e3 }] = await Promise.all([
     _saaClient.from("customers").select("*").eq("id", customerId).maybeSingle(),
@@ -56,5 +67,7 @@ async function saaCustomersFetchProfile(customerId) {
   if (e1) throw e1;
   if (e2) throw e2;
   if (e3) throw e3;
-  return { customer, systems: systems || [], jobs: jobs || [] };
+  const jobBySystem = Object.fromEntries((jobs || []).filter((j) => j.system_id).map((j) => [j.system_id, j]));
+  const systemsWithJob = (systems || []).map((s) => Object.assign({}, s, { job: jobBySystem[s.id] || null }));
+  return { customer, systems: systemsWithJob, jobs: jobs || [] };
 }

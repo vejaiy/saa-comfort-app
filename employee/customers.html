@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Customers | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260923e">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260924a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260923e"></script>
-<script src="../assets/js/supabase-config.js?v=20260923e"></script>
-<script src="../assets/js/auth.js?v=20260923e"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260924a"></script>
+<script src="../assets/js/supabase-config.js?v=20260924a"></script>
+<script src="../assets/js/auth.js?v=20260924a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -132,7 +132,7 @@
     <p class="muted" id="cp-address" style="margin:0;font-size:.9rem">&mdash;</p>
 
     <h4 style="margin:16px 0 6px">Systems <span class="muted" id="cp-sys-count" style="font-weight:400"></span></h4>
-    <ul class="cp-list" id="cp-systems" style="margin:0;padding:0;list-style:none"></ul>
+    <ul class="cp-list cp-list-clickable" id="cp-systems" style="margin:0;padding:0;list-style:none"></ul>
 
     <h4 style="margin:16px 0 6px">Jobs <span class="muted" id="cp-job-count" style="font-weight:400"></span></h4>
     <ul class="cp-list cp-list-clickable" id="cp-jobs" style="margin:0;padding:0;list-style:none"></ul>
@@ -144,10 +144,10 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260923e"></script>
-<script src="../assets/js/worksheet.js?v=20260923e"></script>
-<script src="../assets/js/jobs-db.js?v=20260923e"></script>
-<script src="../assets/js/customers-db.js?v=20260923e"></script>
+<script src="../assets/js/pricing-data.js?v=20260924a"></script>
+<script src="../assets/js/worksheet.js?v=20260924a"></script>
+<script src="../assets/js/jobs-db.js?v=20260924a"></script>
+<script src="../assets/js/customers-db.js?v=20260924a"></script>
 <script>
   function _custEsc(s) {
     return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -216,12 +216,25 @@
     document.getElementById("cp-address").textContent = [c.billing_address, [c.billing_city, c.billing_state, c.billing_zip].filter(Boolean).join(", ")].filter(Boolean).join(", ") || "No address on file";
 
     document.getElementById("cp-sys-count").textContent = profile.systems.length ? `(${profile.systems.length})` : "";
+    // Round 48 follow-up (2026-09-24), per Vijayan: "Make sure system
+    // information is linked with customer information in customer tab
+    // view." Each System now shows the one Job it's permanently tied to
+    // (job.system_id), same "Customer -> System -> Job" chain the rest of
+    // the app already follows, and clicking it opens that Job Card --
+    // matching the Jobs list right below, which was already clickable.
     document.getElementById("cp-systems").innerHTML = profile.systems.length
-      ? profile.systems.map((s) => `<li style="padding:6px 0;border-bottom:1px solid #f0f3f6">
+      ? profile.systems.map((s) => `<li data-job-id="${s.job ? s.job.id : ""}" style="padding:6px 0;border-bottom:1px solid #f0f3f6;${s.job ? "cursor:pointer" : ""}">
           <div style="font-weight:600">${_custEsc(s.system_name || "System")}</div>
           <div class="muted" style="font-size:.8rem">${[s.manufacturer, s.tonnage ? s.tonnage + " ton" : null, s.system_location].filter(Boolean).join(" · ") || "&mdash;"}</div>
+          <div class="muted" style="font-size:.8rem">${s.job
+            ? `${_custEsc(s.job.job_number)} <span class="jb-badge">${_custJobStatusLabel[s.job.status] || s.job.status}</span>${s.job.is_current === false ? ' <span class="jb-badge">Historical</span>' : ""}`
+            : "No job linked yet"}</div>
         </li>`).join("")
       : `<li class="muted" style="padding:4px 0">No systems on file.</li>`;
+    document.getElementById("cp-systems").querySelectorAll("li[data-job-id]").forEach((li) => {
+      if (!li.dataset.jobId) return;
+      li.addEventListener("click", () => window.open(`jobs.html?job=${encodeURIComponent(li.dataset.jobId)}`, "_blank", "noopener"));
+    });
 
     document.getElementById("cp-job-count").textContent = profile.jobs.length ? `(${profile.jobs.length})` : "";
     document.getElementById("cp-jobs").innerHTML = profile.jobs.length

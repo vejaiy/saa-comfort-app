@@ -648,11 +648,36 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .jb-historical-banner { background: #fdf3d8; color: #8a6d1a; border: 1px solid #f0dfa0; border-radius: 8px; padding: 10px 14px; font-size: .85rem; margin-bottom: 12px; line-height: 1.5; }
 .jb-historical-banner a { color: #6a4e00; font-weight: 700; text-decoration: underline; }
 .jb-detail-card .job-num { color: var(--muted); font-size: .82rem; }
-.jb-detail-card .drawer-section { border-top: 1px solid var(--line); padding: 12px 0; }
-.jb-detail-card .drawer-section:first-of-type { border-top: none; padding-top: 0; }
-.jb-detail-card .drawer-section h4 { font-size: .7rem; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); margin-bottom: 6px; }
+/* Round 48 follow-up (2026-09-24), per Vijayan: "Job card page is too
+   clustered and big. organize the page, show borders, highlight titles,
+   rearrange item so it is easy to navigate, easy to view in phone app or
+   tablet." Each section used to be separated only by a thin top rule with
+   a small muted-gray label -- on a phone (single-column below 760px) that
+   read as one long undifferentiated wall of fields. Every section is now
+   its own bordered card with a colored, collapsible title bar (click to
+   show/hide -- see the jb-sec-toggle wiring in jobs.js), so the page is
+   both visually organized and, with several less-frequently-needed
+   sections starting collapsed, meaningfully shorter to scroll through. */
+.jb-detail-card .drawer-section { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); padding: 0 16px 14px; margin: 0 0 14px; }
+.jb-detail-card .drawer-section h4 {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: .78rem; text-transform: uppercase; letter-spacing: .5px; font-weight: 700; color: var(--navy);
+  margin: 0 -16px 12px; padding: 10px 16px;
+  background: #eef3f7; border-bottom: 1px solid var(--line);
+  border-radius: var(--radius) var(--radius) 0 0;
+  cursor: pointer; user-select: none;
+}
+.jb-detail-card .drawer-section h4 .jb-sec-arrow { margin-left: auto; font-size: .68rem; color: var(--muted); transition: transform .15s ease; }
+.jb-detail-card .drawer-section.jb-sec-collapsed { padding-bottom: 0; }
+.jb-detail-card .drawer-section.jb-sec-collapsed h4 { margin-bottom: 0; border-bottom: none; border-radius: var(--radius); }
+.jb-detail-card .drawer-section.jb-sec-collapsed h4 .jb-sec-arrow { transform: rotate(-90deg); }
+.jb-detail-card .drawer-section.jb-sec-collapsed > *:not(h4) { display: none; }
 .jb-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
 @media (max-width: 760px) { .jb-detail-grid { grid-template-columns: 1fr; } }
+@media (max-width: 480px) {
+  .jb-detail-card .drawer-section { padding: 0 12px 12px; }
+  .jb-detail-card .drawer-section h4 { margin: 0 -12px 10px; padding: 9px 12px; }
+}
 .jb-quick-actions .btn { font-weight: 600; }
 .jb-highlight-section { animation: jbHighlightFlash 1.2s ease-out; border-radius: 8px; }
 @keyframes jbHighlightFlash { 0% { background: #fff3cd; } 100% { background: transparent; } }
