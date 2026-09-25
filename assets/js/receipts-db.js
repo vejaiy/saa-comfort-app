@@ -1,39 +1,66 @@
 /* ============================================================
    SAA Comfort Air LLC — Receipts data layer
-   Backs the employee Receipts page (receipts.html). One table:
+   Backs the employee Receipts page (receipts.html). Two tables:
 
    - receipts: one row per receipt email pulled from Gmail
-     (saacomfortair@gmail.com — Inbox + the "Receipts" label),
-     bucketed into equipment / tools / supplies, auto-categorized
-     and auto-tagged to a job/customer where the email made that
-     clear (vendor/subject keywords, "for <customer>'s job"
-     phrasing). auto_tagged=true means nobody has confirmed the
-     bucket/category/project yet — the Receipts page lets the
-     office fix any of those fields inline, which clears the flag.
-
+     (saacomfortair@gmail.com — Inbox + the "Receipts" label) --
+     vendor, date, store, payment method, receipt #, and the
+     receipt's own total/tax (for display + reconciliation).
      Receipt files themselves are NOT stored (Gmail attachment
-     bytes aren't reachable from this pipeline) — gmail_view_url
+     bytes aren't reachable from this pipeline) -- gmail_view_url
      opens the original email so the actual receipt/photo can be
      viewed there.
+
+   - receipt_line_items: one row per line item on a receipt.
+     A single receipt can hold many lines, each independently
+     bucketed (Receipts / Tools / Supplies), categorized, and
+     job-linked -- e.g. one Daikin invoice where most lines are
+     job materials and a few are reassigned to SAA-Tools shop
+     stock. auto_tagged=true means nobody has confirmed this
+     line yet -- editing it clears the flag.
+
+   Round 50 (2026-09-24): split out of the old single-table
+   "receipts" schema so line-item detail (what Vijayan asked for)
+   can live under three bucket buttons, with Summary / By Category
+   / By Job on the page's main/landing view.
 
    Requires auth.js to have already created the shared _saaClient.
    ============================================================ */
 
-const SAA_RECEIPT_BUCKETS = ["equipment", "tools", "supplies"];
+const SAA_RECEIPT_BUCKETS = ["receipts", "tools", "supplies"];
 
 /* ---- Reads ---- */
 
-async function saaReceiptsFetchAll({ bucket, search, dateFrom, dateTo } = {}) {
-  let query = _saaClient.from("receipts").select("*");
+// Every line item, each carrying its parent receipt's fields flattened on
+// (r_vendor, r_subject, r_received_at, r_gmail_view_url, r_store_location,
+// r_payment_method, r_receipt_number, r_receipt_total, r_sales_tax_total,
+// r_notes) plus hydrated job/customer display objects.
+async function saaLineItemsFetchAll({ bucket, search } = {}) {
+  let query = _saaClient.from("receipt_line_items").select("*");
   if (bucket) query = query.eq("bucket", bucket);
-  if (dateFrom) query = query.gte("received_at", dateFrom);
-  if (dateTo) query = query.lte("received_at", dateTo);
   const { data, error } = await query;
   if (error) { console.error(error); return []; }
   let rows = data || [];
 
-  // Hydrate job/customer display labels without a heavy join —
-  // pull the small set of jobs/customers actually referenced.
+  // Hydrate the parent receipt's fields without a heavy join -- pull the
+  // small set of receipts actually referenced (same pattern as the
+  // job/customer hydration below).
+  const receiptIds = [...new Set(rows.map((r) => r.receipt_id).filter(Boolean))];
+  const receiptsRes = receiptIds.length
+    ? await _saaClient.from("receipts").select("*").in("id", receiptIds)
+    : { data: [] };
+  const receiptById = Object.fromEntries((receiptsRes.data || []).map((r) => [r.id, r]));
+  rows = rows.map((li) => {
+    const r = receiptById[li.receipt_id] || {};
+    return Object.assign({}, li, {
+      r_vendor: r.vendor, r_subject: r.subject, r_received_at: r.received_at,
+      r_gmail_view_url: r.gmail_view_url, r_store_location: r.store_location,
+      r_payment_method: r.payment_method, r_receipt_number: r.receipt_number,
+      r_receipt_total: r.receipt_total, r_sales_tax_total: r.sales_tax_total,
+      r_notes: r.notes,
+    });
+  });
+
   const jobIds = [...new Set(rows.map((r) => r.job_id).filter(Boolean))];
   const customerIds = [...new Set(rows.map((r) => r.customer_id).filter(Boolean))];
   const [jobsRes, customersRes] = await Promise.all([
@@ -50,12 +77,12 @@ async function saaReceiptsFetchAll({ bucket, search, dateFrom, dateTo } = {}) {
   const q = (search || "").trim().toLowerCase();
   if (q) {
     rows = rows.filter((r) =>
-      [r.vendor, r.subject, r.category, r.item_description, r.project_label, r.notes,
+      [r.r_vendor, r.r_subject, r.category, r.item_description, r.project_label, r.notes, r.r_receipt_number,
         r.job && r.job.job_number, r.customer && (r.customer.first_name + " " + r.customer.last_name)]
         .some((s) => (s || "").toLowerCase().includes(q))
     );
   }
-  return rows.sort((a, b) => (b.received_at || "").localeCompare(a.received_at || ""));
+  return rows.sort((a, b) => (b.r_received_at || "").localeCompare(a.r_received_at || ""));
 }
 
 async function saaReceiptsFetchJobPickerOptions() {
@@ -74,25 +101,33 @@ async function saaReceiptsFetchJobPickerOptions() {
 
 /* ---- Writes ---- */
 
-async function saaReceiptUpdate(id, patch) {
+async function saaLineItemUpdate(id, patch) {
   const clean = {};
-  ["bucket", "category", "item_description", "vendor", "notes", "project_label"].forEach((k) => {
+  ["bucket", "category", "item_description", "notes", "project_label"].forEach((k) => {
     if (k in patch) clean[k] = patch[k] === "" ? null : patch[k];
   });
-  if ("amount_total" in patch) clean.amount_total = patch.amount_total === "" || patch.amount_total == null ? null : Number(patch.amount_total);
+  if ("item_total" in patch) clean.item_total = patch.item_total === "" || patch.item_total == null ? null : Number(patch.item_total);
+  if ("sales_tax" in patch) clean.sales_tax = patch.sales_tax === "" || patch.sales_tax == null ? null : Number(patch.sales_tax);
   if ("job_id" in patch) clean.job_id = patch.job_id || null;
   if ("customer_id" in patch) clean.customer_id = patch.customer_id || null;
-  clean.auto_tagged = false; // a human touched this row — no longer just a best guess
+  clean.auto_tagged = false; // a human touched this row -- no longer just a best guess
   clean.updated_at = new Date().toISOString();
-  const { data, error } = await _saaClient.from("receipts").update(clean).eq("id", id).select().maybeSingle();
+  const { data, error } = await _saaClient.from("receipt_line_items").update(clean).eq("id", id).select().maybeSingle();
   if (error) { console.error(error); return { error: error.message || "Could not save." }; }
   return { data };
 }
 
 /* ---- Grouping / summary helpers (pure functions, no DB access) ---- */
 
-function saaReceiptMonthKey(r) {
-  return (r.received_at || "").slice(0, 7); // "YYYY-MM"
+// Tax-inclusive line total -- null when the amount hasn't been read yet
+// (a photo receipt pending manual entry).
+function saaLineTotal(li) {
+  if (li.item_total == null) return null;
+  return Number(li.item_total) + Number(li.sales_tax || 0);
+}
+
+function saaReceiptMonthKey(li) {
+  return (li.r_received_at || "").slice(0, 7); // "YYYY-MM"
 }
 
 function saaReceiptMonthLabel(key) {
@@ -101,7 +136,7 @@ function saaReceiptMonthLabel(key) {
   return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
-// { "2026-09": [rows...], "2026-08": [rows...] }, newest month first
+// { key, label, rows: [line items] }, newest month first
 function saaReceiptsGroupByMonth(rows) {
   const groups = {};
   rows.forEach((r) => {
@@ -111,15 +146,29 @@ function saaReceiptsGroupByMonth(rows) {
   return Object.keys(groups).sort().reverse().map((key) => ({ key, label: saaReceiptMonthLabel(key), rows: groups[key] }));
 }
 
+// Within one month's line items, group by parent receipt (so a 22-line
+// Daikin invoice reads as one card, not 22 flat rows). Newest receipt first.
+function saaGroupByReceipt(rows) {
+  const groups = {};
+  const order = [];
+  rows.forEach((li) => {
+    if (!groups[li.receipt_id]) { groups[li.receipt_id] = []; order.push(li.receipt_id); }
+    groups[li.receipt_id].push(li);
+  });
+  return order
+    .map((id) => ({ receipt_id: id, lines: groups[id].sort((a, b) => (a.line_number || 0) - (b.line_number || 0)) }))
+    .sort((a, b) => (b.lines[0].r_received_at || "").localeCompare(a.lines[0].r_received_at || ""));
+}
+
 function saaReceiptsSummary(rows) {
   const byBucket = {};
   SAA_RECEIPT_BUCKETS.forEach((b) => (byBucket[b] = { count: 0, total: 0 }));
   rows.forEach((r) => {
     const b = byBucket[r.bucket] || (byBucket[r.bucket] = { count: 0, total: 0 });
     b.count += 1;
-    b.total += Number(r.amount_total || 0);
+    b.total += saaLineTotal(r) || 0;
   });
-  const grandTotal = rows.reduce((sum, r) => sum + Number(r.amount_total || 0), 0);
+  const grandTotal = rows.reduce((sum, r) => sum + (saaLineTotal(r) || 0), 0);
   const needsReview = rows.filter((r) => r.auto_tagged).length;
   return { byBucket, grandTotal, count: rows.length, needsReview };
 }
@@ -131,7 +180,7 @@ function saaReceiptsByCategory(rows) {
     const key = r.category || "Uncategorized";
     const g = groups[key] || (groups[key] = { category: key, count: 0, total: 0 });
     g.count += 1;
-    g.total += Number(r.amount_total || 0);
+    g.total += saaLineTotal(r) || 0;
   });
   return Object.values(groups).sort((a, b) => b.total - a.total);
 }
@@ -146,7 +195,7 @@ function saaReceiptsByProject(rows) {
     const label = (r.job && r.job.job_number) || (r.customer && (r.customer.first_name + " " + r.customer.last_name)) || r.project_label || "Unassigned";
     const g = groups[key] || (groups[key] = { label, job_id: r.job_id || null, customer_id: r.customer_id || null, count: 0, total: 0 });
     g.count += 1;
-    g.total += Number(r.amount_total || 0);
+    g.total += saaLineTotal(r) || 0;
   });
   return Object.values(groups).sort((a, b) => b.total - a.total);
 }

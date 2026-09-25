@@ -1,8 +1,9 @@
 /* ============================================================
    SAA Comfort Air LLC — Receipts page logic (employee/receipts.html)
-   Renders the Equipment / Tools / Supplies tabs (grouped by month,
-   collapsible) plus Summary / By Category / By Project, from
-   receipts-db.js. Round 49 (2026-09-24).
+   Landing view (Summary + By Category + By Job) plus three bucket
+   buttons -- Receipts / Tools / Supplies -- that drill into that
+   bucket's line items, grouped by month then by the receipt they
+   came off. Round 50 (2026-09-24).
    ============================================================ */
 
 function _rcEsc(s) {
@@ -25,12 +26,12 @@ function _rcProjectLabel(r) {
   return r.project_label || "Unassigned";
 }
 function _rcBucketLabel(b) {
-  return b === "equipment" ? "Equipment" : b === "tools" ? "Tools" : b === "supplies" ? "Supplies" : (b || "");
+  return b === "receipts" ? "Receipts" : b === "tools" ? "Tools" : b === "supplies" ? "Supplies" : (b || "");
 }
 
-let _rcAllRows = [];
+let _rcAllRows = []; // all line items
 let _rcJobOptions = [];
-let _rcActiveTab = "equipment";
+let _rcActiveTab = "overview";
 
 function _rcFilters() {
   return {
@@ -44,25 +45,49 @@ function _rcApplyClientFilters(rows) {
 }
 
 async function _rcLoadAll() {
-  const rows = await saaReceiptsFetchAll(_rcFilters());
+  const rows = await saaLineItemsFetchAll(_rcFilters());
   _rcAllRows = rows;
-  document.getElementById("rc-count").textContent = `${rows.length} receipt${rows.length === 1 ? "" : "s"}`;
+  const receiptCount = new Set(rows.map((r) => r.receipt_id)).size;
+  document.getElementById("rc-count").textContent = `${rows.length} line item${rows.length === 1 ? "" : "s"} on ${receiptCount} receipt${receiptCount === 1 ? "" : "s"}`;
   _rcRenderActiveTab();
 }
 
-function _rcReceiptRowHtml(r) {
-  const reviewBadge = r.auto_tagged ? `<span class="rc-badge rc-badge-review">needs review</span>` : "";
+function _rcLineItemRowHtml(li) {
+  const reviewBadge = li.auto_tagged ? `<span class="rc-badge rc-badge-review">needs review</span>` : "";
+  const total = saaLineTotal(li);
   return `
-<div class="rc-receipt-row" data-id="${r.id}">
-  <div class="rc-r-date">${_rcDate(r.received_at)}</div>
+<div class="rc-receipt-row" data-id="${li.id}">
   <div class="rc-r-main">
-    <div class="rc-r-vendor">${_rcEsc(r.vendor) || "&mdash;"} ${reviewBadge}</div>
-    <div class="rc-r-item">${_rcEsc(r.item_description) || _rcEsc(r.subject)}</div>
-    <div class="rc-r-category">${_rcEsc(r.category) || "Uncategorized"}</div>
+    <div class="rc-r-vendor">${_rcEsc(li.item_description) || "&mdash;"} ${reviewBadge}</div>
+    <div class="rc-r-item">${_rcEsc(li.category) || "Uncategorized"}${li.qty ? ` &middot; qty ${li.qty}` : ""}</div>
+    ${li.notes ? `<div class="rc-r-item muted">${_rcEsc(li.notes)}</div>` : ""}
   </div>
-  <div class="rc-r-project muted">${_rcEsc(_rcProjectLabel(r))}</div>
-  <div class="rc-r-amount">${r.amount_total == null ? "&mdash;" : _rcMoney(r.amount_total)}</div>
-  <button type="button" class="btn btn-ghost btn-sm rc-edit-btn" data-id="${r.id}">Edit</button>
+  <div class="rc-r-project muted">${_rcEsc(_rcProjectLabel(li))}</div>
+  <div class="rc-r-amount">${total == null ? "&mdash;" : _rcMoney(total)}</div>
+  <button type="button" class="btn btn-ghost btn-sm rc-edit-btn" data-id="${li.id}">Edit</button>
+</div>`;
+}
+
+function _rcReceiptCardHtml(group) {
+  const first = group.lines[0];
+  const subtotal = group.lines.reduce((sum, li) => sum + (saaLineTotal(li) || 0), 0);
+  const meta = [first.r_receipt_number, first.r_store_location].filter(Boolean).join(" &middot; ");
+  return `
+<div class="rc-receipt-card" style="border:1px solid var(--line);border-radius:var(--radius);margin-bottom:14px;overflow:hidden">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;background:#f8fafb;border-bottom:1px solid var(--line);flex-wrap:wrap">
+    <div>
+      <span style="font-weight:700">${_rcEsc(first.r_vendor) || "&mdash;"}</span>
+      <span class="muted" style="font-size:.82rem;margin-left:8px">${_rcDate(first.r_received_at)}</span>
+      ${meta ? `<div class="muted" style="font-size:.78rem">${meta}</div>` : ""}
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-weight:600">${_rcMoney(subtotal)}</span>
+      <a href="#" target="_blank" class="btn btn-ghost btn-sm" onclick="this.href='${_rcEsc(first.r_gmail_view_url) || '#'}'">View Email &rarr;</a>
+    </div>
+  </div>
+  <div style="padding:8px 12px">
+    ${group.lines.map(_rcLineItemRowHtml).join("")}
+  </div>
 </div>`;
 }
 
@@ -70,16 +95,17 @@ function _rcRenderBucketTab(bucket) {
   const rows = _rcApplyClientFilters(_rcAllRows.filter((r) => r.bucket === bucket));
   const wrap = document.getElementById(`rc-months-${bucket}`);
   document.getElementById(`rc-empty-${bucket}`).hidden = rows.length > 0;
-  const groups = saaReceiptsGroupByMonth(rows);
-  wrap.innerHTML = groups.map((g) => {
-    const total = g.rows.reduce((sum, r) => sum + Number(r.amount_total || 0), 0);
+  const months = saaReceiptsGroupByMonth(rows);
+  wrap.innerHTML = months.map((m) => {
+    const total = m.rows.reduce((sum, r) => sum + (saaLineTotal(r) || 0), 0);
+    const receiptGroups = saaGroupByReceipt(m.rows);
     return `
-<div class="rc-month-header" data-month="${g.key}">
-  <span>${g.label} <span class="muted">(${g.rows.length})</span></span>
+<div class="rc-month-header" data-month="${m.key}">
+  <span>${m.label} <span class="muted">(${m.rows.length} line item${m.rows.length === 1 ? "" : "s"} / ${receiptGroups.length} receipt${receiptGroups.length === 1 ? "" : "s"})</span></span>
   <span class="rc-month-total">${_rcMoney(total)} <span class="rc-month-arrow">&#9660;</span></span>
 </div>
-<div class="rc-month-rows" data-month-rows="${g.key}">
-  ${g.rows.map(_rcReceiptRowHtml).join("")}
+<div class="rc-month-rows" data-month-rows="${m.key}">
+  ${receiptGroups.map(_rcReceiptCardHtml).join("")}
 </div>`;
   }).join("");
 
@@ -94,14 +120,14 @@ function _rcRenderBucketTab(bucket) {
   });
 }
 
-function _rcRenderSummary() {
+function _rcRenderOverview() {
   const rows = _rcApplyClientFilters(_rcAllRows);
   const s = saaReceiptsSummary(rows);
   const cards = [
-    { label: "Total Spend", value: _rcMoney(s.grandTotal), sub: `${s.count} receipt${s.count === 1 ? "" : "s"}` },
-    { label: "Equipment", value: _rcMoney(s.byBucket.equipment.total), sub: `${s.byBucket.equipment.count} receipts` },
-    { label: "Tools", value: _rcMoney(s.byBucket.tools.total), sub: `${s.byBucket.tools.count} receipts` },
-    { label: "Supplies", value: _rcMoney(s.byBucket.supplies.total), sub: `${s.byBucket.supplies.count} receipts` },
+    { label: "Total Spend", value: _rcMoney(s.grandTotal), sub: `${s.count} line item${s.count === 1 ? "" : "s"}` },
+    { label: "Receipts", value: _rcMoney(s.byBucket.receipts.total), sub: `${s.byBucket.receipts.count} line items` },
+    { label: "Tools", value: _rcMoney(s.byBucket.tools.total), sub: `${s.byBucket.tools.count} line items` },
+    { label: "Supplies", value: _rcMoney(s.byBucket.supplies.total), sub: `${s.byBucket.supplies.count} line items` },
     { label: "Needs Review", value: String(s.needsReview), sub: "auto-tagged, unconfirmed" },
   ];
   document.getElementById("rc-summary-cards").innerHTML = cards.map((c) => `
@@ -110,32 +136,24 @@ function _rcRenderSummary() {
   <div class="rc-sc-value">${c.value}</div>
   <div class="rc-sc-sub">${_rcEsc(c.sub)}</div>
 </div>`).join("");
-}
 
-function _rcRenderCategory() {
-  const rows = _rcApplyClientFilters(_rcAllRows);
-  const groups = saaReceiptsByCategory(rows);
-  document.getElementById("rc-category-tbody").innerHTML = groups.map((g) => `
+  const catGroups = saaReceiptsByCategory(rows);
+  document.getElementById("rc-category-tbody").innerHTML = catGroups.map((g) => `
 <tr><td>${_rcEsc(g.category)}</td><td>${g.count}</td><td>${_rcMoney(g.total)}</td></tr>`).join("")
-    || `<tr><td colspan="3" class="muted" style="text-align:center;padding:20px">No receipts match your filters.</td></tr>`;
-}
+    || `<tr><td colspan="3" class="muted" style="text-align:center;padding:20px">No line items match your filters.</td></tr>`;
 
-function _rcRenderProject() {
-  const rows = _rcApplyClientFilters(_rcAllRows);
-  const groups = saaReceiptsByProject(rows);
-  document.getElementById("rc-project-tbody").innerHTML = groups.map((g) => `
+  const projGroups = saaReceiptsByProject(rows);
+  document.getElementById("rc-project-tbody").innerHTML = projGroups.map((g) => `
 <tr>
   <td>${_rcEsc(g.label)}</td><td>${g.count}</td><td>${_rcMoney(g.total)}</td>
   <td>${g.job_id ? `<a class="btn btn-ghost btn-sm" href="jobs.html?job=${g.job_id}">Open Job &rarr;</a>` : ""}</td>
 </tr>`).join("")
-    || `<tr><td colspan="4" class="muted" style="text-align:center;padding:20px">No receipts match your filters.</td></tr>`;
+    || `<tr><td colspan="4" class="muted" style="text-align:center;padding:20px">No line items match your filters.</td></tr>`;
 }
 
 function _rcRenderActiveTab() {
-  if (["equipment", "tools", "supplies"].includes(_rcActiveTab)) _rcRenderBucketTab(_rcActiveTab);
-  else if (_rcActiveTab === "summary") _rcRenderSummary();
-  else if (_rcActiveTab === "category") _rcRenderCategory();
-  else if (_rcActiveTab === "project") _rcRenderProject();
+  if (_rcActiveTab === "overview") _rcRenderOverview();
+  else _rcRenderBucketTab(_rcActiveTab);
 }
 
 function _rcSwitchTab(tab) {
@@ -147,21 +165,21 @@ function _rcSwitchTab(tab) {
   _rcRenderActiveTab();
 }
 
-/* ---- Edit modal ---- */
+/* ---- Edit modal (edits one line item) ---- */
 
 function _rcOpenEdit(id) {
-  const r = _rcAllRows.find((x) => x.id === id);
-  if (!r) return;
+  const li = _rcAllRows.find((x) => x.id === id);
+  if (!li) return;
   document.getElementById("rc-edit-overlay").dataset.id = id;
-  document.getElementById("rc-edit-subject").textContent = r.subject || "";
-  document.getElementById("rc-edit-bucket").value = r.bucket || "equipment";
-  document.getElementById("rc-edit-category").value = r.category || "";
-  document.getElementById("rc-edit-item").value = r.item_description || "";
-  document.getElementById("rc-edit-vendor").value = r.vendor || "";
-  document.getElementById("rc-edit-amount").value = r.amount_total == null ? "" : r.amount_total;
-  document.getElementById("rc-edit-notes").value = r.notes || "";
-  document.getElementById("rc-edit-job").value = r.job_id || "";
-  document.getElementById("rc-edit-view-email").href = r.gmail_view_url || "#";
+  document.getElementById("rc-edit-subject").textContent = `${li.r_vendor || ""} — ${_rcDate(li.r_received_at)}${li.r_receipt_number ? " — " + li.r_receipt_number : ""}`;
+  document.getElementById("rc-edit-bucket").value = li.bucket || "receipts";
+  document.getElementById("rc-edit-category").value = li.category || "";
+  document.getElementById("rc-edit-item").value = li.item_description || "";
+  document.getElementById("rc-edit-amount").value = li.item_total == null ? "" : li.item_total;
+  document.getElementById("rc-edit-tax").value = li.sales_tax == null ? "" : li.sales_tax;
+  document.getElementById("rc-edit-notes").value = li.notes || "";
+  document.getElementById("rc-edit-job").value = li.job_id || "";
+  document.getElementById("rc-edit-view-email").href = li.r_gmail_view_url || "#";
   document.getElementById("rc-edit-status").textContent = "";
   document.getElementById("rc-edit-overlay").hidden = false;
 }
@@ -177,13 +195,14 @@ async function _rcSaveEdit() {
     bucket: document.getElementById("rc-edit-bucket").value,
     category: document.getElementById("rc-edit-category").value,
     item_description: document.getElementById("rc-edit-item").value,
-    vendor: document.getElementById("rc-edit-vendor").value,
-    amount_total: document.getElementById("rc-edit-amount").value,
+    item_total: document.getElementById("rc-edit-amount").value,
+    sales_tax: document.getElementById("rc-edit-tax").value,
     notes: document.getElementById("rc-edit-notes").value,
     job_id: jobSel.value || null,
     customer_id: jobOpt ? jobOpt.customer_id : null,
+    project_label: jobOpt ? null : undefined,
   };
-  const res = await saaReceiptUpdate(id, patch);
+  const res = await saaLineItemUpdate(id, patch);
   if (res.error) { statusEl.textContent = res.error; return; }
   overlay.hidden = true;
   await _rcLoadAll();
@@ -214,11 +233,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("rc-edit-close").addEventListener("click", () => { document.getElementById("rc-edit-overlay").hidden = true; });
   document.getElementById("rc-edit-save").addEventListener("click", _rcSaveEdit);
 
-  // The Equipment tab starts marked "active" in the generated markup, but
+  // The Overview tab starts marked "active" in the generated markup, but
   // every tab panel starts with the `hidden` attribute set (so a tab
   // button's own click handler is the only thing that clears it) --
   // _rcSwitchTab does that unhide, so it needs to run once up front for
   // the default tab, not just on a later click.
-  _rcSwitchTab("equipment");
+  _rcSwitchTab("overview");
   await _rcLoadAll();
 });
