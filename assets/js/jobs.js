@@ -1167,8 +1167,12 @@ async function jbeSearchCustomerQuotes(query) {
       document.getElementById("jbe-quoted").value = res.quotedAmount ? saaRoundMoney(res.quotedAmount) : 0;
       const approvedEl = document.getElementById("jbe-approved");
       if (!parseFloat(approvedEl.value)) approvedEl.value = res.quotedAmount ? saaRoundMoney(res.quotedAmount) : 0;
-      if (res.materialCost != null || res.laborCost != null || res.otherCost != null) {
-        document.getElementById("jbe-cost-material").value = res.materialCost ? saaRoundMoney(res.materialCost) : 0;
+      // Round 51 (2026-09-25), per Vijayan: "Don't use material cost from
+      // quote in job/events page" -- Actual Material Cost is now
+      // auto-calculated from linked receipts only (see the DB trigger on
+      // receipt_line_items), so picking a quote no longer touches it.
+      // Labor/Other Cost still default from the quote's own breakdown.
+      if (res.laborCost != null || res.otherCost != null) {
         document.getElementById("jbe-cost-labor").value = res.laborCost ? saaRoundMoney(res.laborCost) : 0;
         document.getElementById("jbe-cost-other").value = res.otherCost ? saaRoundMoney(res.otherCost) : 0;
       }
@@ -1270,22 +1274,22 @@ async function jbSearchCustomerQuotes(job, query) {
           approvedEl.value = res.quotedAmount ? saaRoundMoney(res.quotedAmount) : 0;
           job.approved_amount = res.quotedAmount ? saaRoundMoney(res.quotedAmount) : 0;
         }
-        // Default Actual Material/Labor/Other Cost from the quote's own cost
+        // Default Actual Labor/Other Cost from the quote's own cost
         // breakdown, same as Quoted Amount above -- picking a (new) quote
         // resets these to that quote's numbers every time, on the
         // assumption the office will adjust them to the real costs once
         // work is done. Quotes saved before this breakdown existed have
         // null here, not $0 -- leave the existing Actual Cost fields alone
         // in that case rather than wiping them to zero (round 6 follow-up,
-        // 2026-09-13).
-        if (res.materialCost != null || res.laborCost != null || res.otherCost != null) {
-          const materialEl = document.getElementById("jbd-cost-material");
+        // 2026-09-13). Round 51 (2026-09-25), per Vijayan: "Don't use
+        // material cost from quote in job/events page" -- Actual Material
+        // Cost no longer defaults from the quote; it's auto-calculated from
+        // linked receipts only (see the DB trigger on receipt_line_items).
+        if (res.laborCost != null || res.otherCost != null) {
           const laborEl = document.getElementById("jbd-cost-labor");
           const otherEl = document.getElementById("jbd-cost-other");
-          materialEl.value = res.materialCost ? saaRoundMoney(res.materialCost) : 0;
           laborEl.value = res.laborCost ? saaRoundMoney(res.laborCost) : 0;
           otherEl.value = res.otherCost ? saaRoundMoney(res.otherCost) : 0;
-          job.actual_material_cost = res.materialCost ? saaRoundMoney(res.materialCost) : 0;
           job.actual_labor_cost = res.laborCost ? saaRoundMoney(res.laborCost) : 0;
           job.other_cost = res.otherCost ? saaRoundMoney(res.otherCost) : 0;
         }
@@ -2880,7 +2884,11 @@ async function jbSaveEventModal() {
     // this same follow-up patch right after saaEventsCreateForJob below.
     quoted_amount: saaRoundMoney(parseFloat(document.getElementById("jbe-quoted").value) || 0) || null,
     approved_amount: saaRoundMoney(parseFloat(document.getElementById("jbe-approved").value) || 0) || null,
-    actual_material_cost: saaRoundMoney(parseFloat(document.getElementById("jbe-cost-material").value) || 0),
+    // actual_material_cost is intentionally NOT written here -- Round 51
+    // (2026-09-25) made it auto-calculated from linked receipts via a DB
+    // trigger on receipt_line_items; writing the (disabled) field's value
+    // back here could clobber a newer trigger-computed number with
+    // whatever was on screen when this Event modal happened to be opened.
     actual_labor_cost: saaRoundMoney(parseFloat(document.getElementById("jbe-cost-labor").value) || 0),
     other_cost: saaRoundMoney(parseFloat(document.getElementById("jbe-cost-other").value) || 0),
   };
@@ -3081,7 +3089,9 @@ async function jbOpenDetail(jobId) {
   document.getElementById("jbd-cost-labor").value = job.actual_labor_cost ? saaRoundMoney(job.actual_labor_cost) : 0;
   document.getElementById("jbd-cost-other").value = job.other_cost ? saaRoundMoney(job.other_cost) : 0;
   jbComputeProfit();
-  ["jbd-quoted", "jbd-approved", "jbd-cost-material", "jbd-cost-labor", "jbd-cost-other"].forEach((id) => {
+  // jbd-cost-material excluded -- it's disabled/auto-calculated (Round 51),
+  // so it never fires its own input event.
+  ["jbd-quoted", "jbd-approved", "jbd-cost-labor", "jbd-cost-other"].forEach((id) => {
     document.getElementById(id).oninput = () => { jbComputeProfit(); jbScheduleAutosave(); };
   });
 
@@ -3168,7 +3178,8 @@ async function jbSaveDetail(opts) {
     recommended_action: document.getElementById("jbd-recommend").value.trim() || null,
     quoted_amount: saaRoundMoney(parseFloat(document.getElementById("jbd-quoted").value) || 0) || null,
     approved_amount: saaRoundMoney(parseFloat(document.getElementById("jbd-approved").value) || 0) || null,
-    actual_material_cost: saaRoundMoney(parseFloat(document.getElementById("jbd-cost-material").value) || 0),
+    // actual_material_cost is intentionally NOT written here -- see the
+    // matching comment in jbSaveEventModal above.
     actual_labor_cost: saaRoundMoney(parseFloat(document.getElementById("jbd-cost-labor").value) || 0),
     other_cost: saaRoundMoney(parseFloat(document.getElementById("jbd-cost-other").value) || 0),
     customer_signature_name: document.getElementById("jbd-sig-name").value.trim() || null,
@@ -3669,7 +3680,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("jbe-quote-search").addEventListener("focus", (e) => {
     if (!e.target.value.trim()) jbeSearchCustomerQuotes("");
   });
-  ["jbe-quoted", "jbe-approved", "jbe-cost-material", "jbe-cost-labor", "jbe-cost-other"].forEach((id) => {
+  // jbe-cost-material excluded -- it's disabled/auto-calculated (Round 51),
+  // so it never fires its own input event.
+  ["jbe-quoted", "jbe-approved", "jbe-cost-labor", "jbe-cost-other"].forEach((id) => {
     document.getElementById(id).addEventListener("input", jbeComputeProfit);
   });
   document.getElementById("jbe-mileage-calc-btn").addEventListener("click", jbeCalculateMileage);

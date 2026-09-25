@@ -63,22 +63,29 @@ async function saaLineItemsFetchAll({ bucket, search } = {}) {
 
   const jobIds = [...new Set(rows.map((r) => r.job_id).filter(Boolean))];
   const customerIds = [...new Set(rows.map((r) => r.customer_id).filter(Boolean))];
-  const [jobsRes, customersRes] = await Promise.all([
+  // Round 51 (2026-09-25): event_id -- a line item can now be reassigned to
+  // the specific Event (visit) it belongs to, not just the umbrella Job.
+  const eventIds = [...new Set(rows.map((r) => r.event_id).filter(Boolean))];
+  const [jobsRes, customersRes, eventsRes] = await Promise.all([
     jobIds.length ? _saaClient.from("jobs").select("id, job_number").in("id", jobIds) : Promise.resolve({ data: [] }),
     customerIds.length ? _saaClient.from("customers").select("id, first_name, last_name").in("id", customerIds) : Promise.resolve({ data: [] }),
+    eventIds.length ? _saaClient.from("events").select("id, event_number, job_id").in("id", eventIds) : Promise.resolve({ data: [] }),
   ]);
   const jobById = Object.fromEntries((jobsRes.data || []).map((j) => [j.id, j]));
   const customerById = Object.fromEntries((customersRes.data || []).map((c) => [c.id, c]));
+  const eventById = Object.fromEntries((eventsRes.data || []).map((e) => [e.id, e]));
   rows = rows.map((r) => Object.assign({}, r, {
     job: r.job_id ? jobById[r.job_id] || null : null,
     customer: r.customer_id ? customerById[r.customer_id] || null : null,
+    event: r.event_id ? eventById[r.event_id] || null : null,
   }));
 
   const q = (search || "").trim().toLowerCase();
   if (q) {
     rows = rows.filter((r) =>
       [r.r_vendor, r.r_subject, r.category, r.item_description, r.project_label, r.notes, r.r_receipt_number,
-        r.job && r.job.job_number, r.customer && (r.customer.first_name + " " + r.customer.last_name)]
+        r.job && r.job.job_number, r.customer && (r.customer.first_name + " " + r.customer.last_name),
+        r.event && r.event.event_number]
         .some((s) => (s || "").toLowerCase().includes(q))
     );
   }
@@ -99,6 +106,24 @@ async function saaReceiptsFetchJobPickerOptions() {
   });
 }
 
+// Round 51 (2026-09-25): every Event, for the edit modal's "Event (optional)"
+// picker -- filtered client-side to the job currently selected in that same
+// modal (a receipt line can only belong to one of ITS job's own visits).
+// Sorted newest-scheduled-first so the most likely pick (the most recent
+// visit) is near the top.
+async function saaReceiptsFetchEventPickerOptions() {
+  const { data, error } = await _saaClient
+    .from("events")
+    .select("id, event_number, job_id, event_type, scheduled_start")
+    .order("scheduled_start", { ascending: false });
+  if (error) { console.error(error); return []; }
+  return (data || []).map((e) => ({
+    event_id: e.id,
+    job_id: e.job_id,
+    label: e.event_number + (e.event_type ? " — " + e.event_type : ""),
+  }));
+}
+
 /* ---- Writes ---- */
 
 async function saaLineItemUpdate(id, patch) {
@@ -110,6 +135,11 @@ async function saaLineItemUpdate(id, patch) {
   if ("sales_tax" in patch) clean.sales_tax = patch.sales_tax === "" || patch.sales_tax == null ? null : Number(patch.sales_tax);
   if ("job_id" in patch) clean.job_id = patch.job_id || null;
   if ("customer_id" in patch) clean.customer_id = patch.customer_id || null;
+  // Round 51 (2026-09-25): which specific Event (visit) this line belongs
+  // to, if any -- the Postgres trigger on this table recalculates the
+  // linked Job's AND Event's actual_material_cost automatically the moment
+  // this write lands, so the Job/Event Financials sections never go stale.
+  if ("event_id" in patch) clean.event_id = patch.event_id || null;
   clean.auto_tagged = false; // a human touched this row -- no longer just a best guess
   clean.updated_at = new Date().toISOString();
   const { data, error } = await _saaClient.from("receipt_line_items").update(clean).eq("id", id).select().maybeSingle();
@@ -186,13 +216,16 @@ function saaReceiptsByCategory(rows) {
 }
 
 // [{ label, job_id, customer_id, count, total }], highest total first.
-// "project" here means: a linked job, else a linked customer, else the
-// generic SAA - Tools/Supplies/Equipment bucket project_label.
+// "project" here means: a linked Event (grouped separately from other
+// Events/unassigned lines on the same Job -- Round 51), else a linked Job
+// with no specific Event, else a linked customer, else the generic
+// SAA - Tools/Supplies/Equipment bucket project_label.
 function saaReceiptsByProject(rows) {
   const groups = {};
   rows.forEach((r) => {
-    const key = r.job_id || r.customer_id || r.project_label || "Unassigned";
-    const label = (r.job && r.job.job_number) || (r.customer && (r.customer.first_name + " " + r.customer.last_name)) || r.project_label || "Unassigned";
+    const key = r.event_id || r.job_id || r.customer_id || r.project_label || "Unassigned";
+    let label = (r.job && r.job.job_number) || (r.customer && (r.customer.first_name + " " + r.customer.last_name)) || r.project_label || "Unassigned";
+    if (r.job && r.event) label += " — " + r.event.event_number;
     const g = groups[key] || (groups[key] = { label, job_id: r.job_id || null, customer_id: r.customer_id || null, count: 0, total: 0 });
     g.count += 1;
     g.total += saaLineTotal(r) || 0;
