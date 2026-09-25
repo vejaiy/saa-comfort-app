@@ -843,6 +843,15 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .rc-month-header.rc-month-collapsed .rc-month-arrow { transform: rotate(-90deg); }
 .rc-month-header .rc-month-total { color: var(--muted); font-weight: 400; font-size: .85rem; }
 .rc-month-rows.rc-month-collapsed { display: none; }
+/* Round 50 follow-up (2026-09-25), per Vijayan's annotated screenshot: the
+   14-column line-item table is wide enough to need horizontal scrolling,
+   but a plain overflow-x:auto wrap puts that scrollbar at the bottom of
+   the *whole* table -- invisible below the fold once a month has more than
+   a handful of rows. Capping the wrap's height (with its own vertical
+   scroll too) keeps the horizontal scrollbar right at the bottom of the
+   visible box, and the header row stays pinned while scrolling down. */
+.rc-table-scroll { max-height: 60vh; overflow-y: auto; }
+.rc-table-scroll thead tr th { position: sticky; top: 0; z-index: 2; }
 .rc-receipt-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; background: var(--card); flex-wrap: wrap; }
 .rc-receipt-row .rc-r-date { width: 84px; color: var(--muted); font-size: .82rem; flex-shrink: 0; }
 .rc-receipt-row .rc-r-main { flex: 1; min-width: 180px; }

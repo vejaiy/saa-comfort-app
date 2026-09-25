@@ -83,8 +83,12 @@ function _rcLineItemTableRowHtml(li) {
 }
 
 function _rcLineItemsTableHtml(rows) {
+  // "jobs-table-wrap rc-table-scroll" -- a capped-height, scroll-both-ways
+  // box so the horizontal scrollbar for this wide (14-column) table stays
+  // reachable at the bottom of the visible table instead of the bottom of
+  // the whole (possibly very long) month group. See style.css.
   return `
-<div class="jobs-table-wrap">
+<div class="jobs-table-wrap rc-table-scroll">
   <table class="jobs-table">
     <thead><tr>
       <th>Date</th><th>Vendor</th><th>Store Location</th><th>Item Description</th><th>Category</th>
