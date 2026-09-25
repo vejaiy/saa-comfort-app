@@ -52,42 +52,47 @@ async function _rcLoadAll() {
   _rcRenderActiveTab();
 }
 
-function _rcLineItemRowHtml(li) {
-  const reviewBadge = li.auto_tagged ? `<span class="rc-badge rc-badge-review">needs review</span>` : "";
-  const total = saaLineTotal(li);
+// Full-detail table row -- matches Vijayan's own tracking-sheet columns:
+// Date / Vendor / Store Location / Item Description / Category / Job-Project /
+// Specification / Qty / Unit Price / Item Total / Sales Tax / Subtotal /
+// Payment Method / Receipt-Order Number, plus Email + Edit actions.
+function _rcLineItemTableRowHtml(li) {
+  const reviewBadge = li.auto_tagged ? ` <span class="rc-badge rc-badge-review">needs review</span>` : "";
+  const subtotal = saaLineTotal(li);
   return `
-<div class="rc-receipt-row" data-id="${li.id}">
-  <div class="rc-r-main">
-    <div class="rc-r-vendor">${_rcEsc(li.item_description) || "&mdash;"} ${reviewBadge}</div>
-    <div class="rc-r-item">${_rcEsc(li.category) || "Uncategorized"}${li.qty ? ` &middot; qty ${li.qty}` : ""}</div>
-    ${li.notes ? `<div class="rc-r-item muted">${_rcEsc(li.notes)}</div>` : ""}
-  </div>
-  <div class="rc-r-project muted">${_rcEsc(_rcProjectLabel(li))}</div>
-  <div class="rc-r-amount">${total == null ? "&mdash;" : _rcMoney(total)}</div>
-  <button type="button" class="btn btn-ghost btn-sm rc-edit-btn" data-id="${li.id}">Edit</button>
-</div>`;
+<tr class="jb-row" data-id="${li.id}">
+  <td>${_rcDate(li.r_received_at)}</td>
+  <td>${_rcEsc(li.r_vendor) || "&mdash;"}</td>
+  <td>${_rcEsc(li.r_store_location)}</td>
+  <td>${_rcEsc(li.item_description)}${reviewBadge}${li.notes ? `<div class="muted" style="font-size:.78rem;white-space:normal">${_rcEsc(li.notes)}</div>` : ""}</td>
+  <td>${_rcEsc(li.category) || "Uncategorized"}</td>
+  <td>${_rcEsc(_rcProjectLabel(li))}</td>
+  <td>${_rcEsc(li.specification)}</td>
+  <td>${li.qty == null ? "" : li.qty}</td>
+  <td>${li.unit_price == null ? "" : _rcMoney(li.unit_price)}</td>
+  <td>${li.item_total == null ? "&mdash;" : _rcMoney(li.item_total)}</td>
+  <td>${li.sales_tax == null ? "" : _rcMoney(li.sales_tax)}</td>
+  <td>${subtotal == null ? "&mdash;" : _rcMoney(subtotal)}</td>
+  <td>${_rcEsc(li.r_payment_method)}</td>
+  <td>${_rcEsc(li.r_receipt_number)}</td>
+  <td style="white-space:nowrap">
+    <a href="${_rcEsc(li.r_gmail_view_url) || '#'}" target="_blank" class="btn btn-ghost btn-sm"${li.r_gmail_view_url ? "" : " style=\"visibility:hidden\""}>Email</a>
+    <button type="button" class="btn btn-ghost btn-sm rc-edit-btn" data-id="${li.id}">Edit</button>
+  </td>
+</tr>`;
 }
 
-function _rcReceiptCardHtml(group) {
-  const first = group.lines[0];
-  const subtotal = group.lines.reduce((sum, li) => sum + (saaLineTotal(li) || 0), 0);
-  const meta = [first.r_receipt_number, first.r_store_location].filter(Boolean).join(" &middot; ");
+function _rcLineItemsTableHtml(rows) {
   return `
-<div class="rc-receipt-card" style="border:1px solid var(--line);border-radius:var(--radius);margin-bottom:14px;overflow:hidden">
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;background:#f8fafb;border-bottom:1px solid var(--line);flex-wrap:wrap">
-    <div>
-      <span style="font-weight:700">${_rcEsc(first.r_vendor) || "&mdash;"}</span>
-      <span class="muted" style="font-size:.82rem;margin-left:8px">${_rcDate(first.r_received_at)}</span>
-      ${meta ? `<div class="muted" style="font-size:.78rem">${meta}</div>` : ""}
-    </div>
-    <div style="display:flex;align-items:center;gap:10px">
-      <span style="font-weight:600">${_rcMoney(subtotal)}</span>
-      <a href="#" target="_blank" class="btn btn-ghost btn-sm" onclick="this.href='${_rcEsc(first.r_gmail_view_url) || '#'}'">View Email &rarr;</a>
-    </div>
-  </div>
-  <div style="padding:8px 12px">
-    ${group.lines.map(_rcLineItemRowHtml).join("")}
-  </div>
+<div class="jobs-table-wrap">
+  <table class="jobs-table">
+    <thead><tr>
+      <th>Date</th><th>Vendor</th><th>Store Location</th><th>Item Description</th><th>Category</th>
+      <th>Job / Project</th><th>Specification</th><th>Qty</th><th>Unit Price</th><th>Item Total</th>
+      <th>Sales Tax</th><th>Subtotal</th><th>Payment Method</th><th>Receipt / Order Number</th><th></th>
+    </tr></thead>
+    <tbody>${rows.map(_rcLineItemTableRowHtml).join("")}</tbody>
+  </table>
 </div>`;
 }
 
@@ -98,14 +103,17 @@ function _rcRenderBucketTab(bucket) {
   const months = saaReceiptsGroupByMonth(rows);
   wrap.innerHTML = months.map((m) => {
     const total = m.rows.reduce((sum, r) => sum + (saaLineTotal(r) || 0), 0);
-    const receiptGroups = saaGroupByReceipt(m.rows);
+    const receiptCount = new Set(m.rows.map((r) => r.receipt_id)).size;
+    // Flat, spreadsheet-style rows sorted oldest-to-newest within the month
+    // (matches Vijayan's own tracking sheet), not grouped by receipt.
+    const sortedRows = m.rows.slice().sort((a, b) => (a.r_received_at || "").localeCompare(b.r_received_at || ""));
     return `
 <div class="rc-month-header" data-month="${m.key}">
-  <span>${m.label} <span class="muted">(${m.rows.length} line item${m.rows.length === 1 ? "" : "s"} / ${receiptGroups.length} receipt${receiptGroups.length === 1 ? "" : "s"})</span></span>
+  <span>${m.label} <span class="muted">(${m.rows.length} line item${m.rows.length === 1 ? "" : "s"} / ${receiptCount} receipt${receiptCount === 1 ? "" : "s"})</span></span>
   <span class="rc-month-total">${_rcMoney(total)} <span class="rc-month-arrow">&#9660;</span></span>
 </div>
 <div class="rc-month-rows" data-month-rows="${m.key}">
-  ${receiptGroups.map(_rcReceiptCardHtml).join("")}
+  ${_rcLineItemsTableHtml(sortedRows)}
 </div>`;
   }).join("");
 
@@ -175,6 +183,7 @@ function _rcOpenEdit(id) {
   document.getElementById("rc-edit-bucket").value = li.bucket || "receipts";
   document.getElementById("rc-edit-category").value = li.category || "";
   document.getElementById("rc-edit-item").value = li.item_description || "";
+  document.getElementById("rc-edit-spec").value = li.specification || "";
   document.getElementById("rc-edit-amount").value = li.item_total == null ? "" : li.item_total;
   document.getElementById("rc-edit-tax").value = li.sales_tax == null ? "" : li.sales_tax;
   document.getElementById("rc-edit-notes").value = li.notes || "";
@@ -195,6 +204,7 @@ async function _rcSaveEdit() {
     bucket: document.getElementById("rc-edit-bucket").value,
     category: document.getElementById("rc-edit-category").value,
     item_description: document.getElementById("rc-edit-item").value,
+    specification: document.getElementById("rc-edit-spec").value,
     item_total: document.getElementById("rc-edit-amount").value,
     sales_tax: document.getElementById("rc-edit-tax").value,
     notes: document.getElementById("rc-edit-notes").value,

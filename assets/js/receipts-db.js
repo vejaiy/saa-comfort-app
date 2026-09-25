@@ -103,7 +103,7 @@ async function saaReceiptsFetchJobPickerOptions() {
 
 async function saaLineItemUpdate(id, patch) {
   const clean = {};
-  ["bucket", "category", "item_description", "notes", "project_label"].forEach((k) => {
+  ["bucket", "category", "item_description", "specification", "notes", "project_label"].forEach((k) => {
     if (k in patch) clean[k] = patch[k] === "" ? null : patch[k];
   });
   if ("item_total" in patch) clean.item_total = patch.item_total === "" || patch.item_total == null ? null : Number(patch.item_total);
