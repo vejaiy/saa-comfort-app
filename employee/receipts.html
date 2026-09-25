@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Receipts | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260925b">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260925d">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260925b"></script>
-<script src="../assets/js/supabase-config.js?v=20260925b"></script>
-<script src="../assets/js/auth.js?v=20260925b"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260925d"></script>
+<script src="../assets/js/supabase-config.js?v=20260925d"></script>
+<script src="../assets/js/auth.js?v=20260925d"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -124,7 +124,10 @@
       <div class="field" style="max-width:160px"><label>Bucket</label>
         <select id="rc-edit-bucket"><option value="receipts">Receipts</option><option value="tools">Tools</option><option value="supplies">Supplies</option></select>
       </div>
-      <div class="field"><label>Category</label><input type="text" id="rc-edit-category" placeholder="e.g. HVAC Equipment"></div>
+      <div class="field"><label>Category</label>
+        <select id="rc-edit-category-select"></select>
+        <input type="text" id="rc-edit-category-new" placeholder="Type new category name" style="margin-top:6px" hidden>
+      </div>
     </div>
     <div class="field"><label>Item / Description</label><input type="text" id="rc-edit-item"></div>
     <div class="field"><label>Specification</label><input type="text" id="rc-edit-spec" placeholder="e.g. Item # / Model #"></div>
@@ -145,9 +148,9 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260925b"></script>
-<script src="../assets/js/worksheet.js?v=20260925b"></script>
-<script src="../assets/js/receipts-db.js?v=20260925b"></script>
-<script src="../assets/js/receipts-page.js?v=20260925b"></script>
+<script src="../assets/js/pricing-data.js?v=20260925d"></script>
+<script src="../assets/js/worksheet.js?v=20260925d"></script>
+<script src="../assets/js/receipts-db.js?v=20260925d"></script>
+<script src="../assets/js/receipts-page.js?v=20260925d"></script>
 </body>
 </html>

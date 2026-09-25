@@ -49,7 +49,33 @@ async function _rcLoadAll() {
   _rcAllRows = rows;
   const receiptCount = new Set(rows.map((r) => r.receipt_id)).size;
   document.getElementById("rc-count").textContent = `${rows.length} line item${rows.length === 1 ? "" : "s"} on ${receiptCount} receipt${receiptCount === 1 ? "" : "s"}`;
+  _rcRefreshCategoryOptions();
   _rcRenderActiveTab();
+}
+
+// Category field in the edit modal is a <select> of every category already
+// in use, plus a "+ Add new category" option that reveals a text input --
+// lets Vijayan pick an existing category (kept consistent across receipts)
+// or assign a brand new one. (A <datalist> combo-box was tried first, but
+// doesn't render as a usable dropdown on iPhone/mobile Safari.)
+const RC_NEW_CATEGORY_VALUE = "__new__";
+function _rcRefreshCategoryOptions() {
+  const cats = [...new Set(_rcAllRows.map((r) => r.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const sel = document.getElementById("rc-edit-category-select");
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML =
+    `<option value="">&mdash; Select category &mdash;</option>` +
+    cats.map((c) => `<option value="${_rcEsc(c)}">${_rcEsc(c)}</option>`).join("") +
+    `<option value="${RC_NEW_CATEGORY_VALUE}">+ Add new category&hellip;</option>`;
+  if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
+}
+function _rcOnCategorySelectChange() {
+  const sel = document.getElementById("rc-edit-category-select");
+  const newInput = document.getElementById("rc-edit-category-new");
+  const isNew = sel.value === RC_NEW_CATEGORY_VALUE;
+  newInput.hidden = !isNew;
+  if (isNew) { newInput.value = ""; newInput.focus(); }
 }
 
 // Full-detail table row -- matches Vijayan's own tracking-sheet columns:
@@ -185,7 +211,20 @@ function _rcOpenEdit(id) {
   document.getElementById("rc-edit-overlay").dataset.id = id;
   document.getElementById("rc-edit-subject").textContent = `${li.r_vendor || ""} — ${_rcDate(li.r_received_at)}${li.r_receipt_number ? " — " + li.r_receipt_number : ""}`;
   document.getElementById("rc-edit-bucket").value = li.bucket || "receipts";
-  document.getElementById("rc-edit-category").value = li.category || "";
+  const catSel = document.getElementById("rc-edit-category-select");
+  const catNew = document.getElementById("rc-edit-category-new");
+  const hasOption = li.category && [...catSel.options].some((o) => o.value === li.category);
+  if (li.category && !hasOption) {
+    // Category isn't in the current option list (e.g. freshly typed on another
+    // row before this modal's dropdown last refreshed) -- fall back to "new".
+    catSel.value = RC_NEW_CATEGORY_VALUE;
+    catNew.hidden = false;
+    catNew.value = li.category;
+  } else {
+    catSel.value = li.category || "";
+    catNew.hidden = true;
+    catNew.value = "";
+  }
   document.getElementById("rc-edit-item").value = li.item_description || "";
   document.getElementById("rc-edit-spec").value = li.specification || "";
   document.getElementById("rc-edit-amount").value = li.item_total == null ? "" : li.item_total;
@@ -204,9 +243,13 @@ async function _rcSaveEdit() {
   statusEl.textContent = "Saving…";
   const jobSel = document.getElementById("rc-edit-job");
   const jobOpt = _rcJobOptions.find((o) => o.job_id === jobSel.value);
+  const catSelVal = document.getElementById("rc-edit-category-select").value;
+  const category = catSelVal === RC_NEW_CATEGORY_VALUE
+    ? document.getElementById("rc-edit-category-new").value.trim()
+    : catSelVal;
   const patch = {
     bucket: document.getElementById("rc-edit-bucket").value,
-    category: document.getElementById("rc-edit-category").value,
+    category: category,
     item_description: document.getElementById("rc-edit-item").value,
     specification: document.getElementById("rc-edit-spec").value,
     item_total: document.getElementById("rc-edit-amount").value,
@@ -239,6 +282,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   document.getElementById("rc-search").addEventListener("input", () => { clearTimeout(window._rcSearchT); window._rcSearchT = setTimeout(_rcLoadAll, 250); });
   document.getElementById("rc-needs-review-only").addEventListener("change", _rcRenderActiveTab);
+  document.getElementById("rc-edit-category-select").addEventListener("change", _rcOnCategorySelectChange);
   document.getElementById("rc-clear-btn").addEventListener("click", () => {
     document.getElementById("rc-search").value = "";
     document.getElementById("rc-needs-review-only").checked = false;
