@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260925e">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260925f">
 <script>
 if (new URLSearchParams(location.search).get('embed') === '1') {
   document.documentElement.classList.add('saa-embed');
@@ -14,9 +14,9 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260925e"></script>
-<script src="../assets/js/supabase-config.js?v=20260925e"></script>
-<script src="../assets/js/auth.js?v=20260925e"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260925f"></script>
+<script src="../assets/js/supabase-config.js?v=20260925f"></script>
+<script src="../assets/js/auth.js?v=20260925f"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -687,39 +687,54 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 <!-- ============ Event detail / create modal (Round 42, 2026-09-19) ============ -->
 <div class="modal-overlay" id="jb-event-modal" hidden>
-  <div class="modal-card" style="max-width:640px">
+  <div class="modal-card jb-detail-card" style="max-width:680px">
     <h3 id="jb-event-modal-title">Event</h3>
     <div class="muted" id="jb-event-modal-number" style="font-size:.82rem;margin-bottom:10px"></div>
-    <div class="field-row">
-      <div class="field"><label>Event Type</label><select id="jbe-type"></select></div>
-      <div class="field"><label>Status</label><select id="jbe-status"></select></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>Scheduled Date</label><input type="date" id="jbe-date"></div>
-      <div class="field"><label>Scheduled Time</label><input type="time" id="jbe-time"></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>Technician</label><select id="jbe-tech"></select></div>
-      <div class="field"><label>Technician 2 <span class="muted" style="font-weight:400">(optional)</span></label><select id="jbe-tech2"></select></div>
-    </div>
-    <!-- Round 42 Task 120, per Vijayan: "include all fields and logic in
-         event cards similar to job cards." -- Technician 3, Priority,
-         Completed Date/Time, and Service Address/City/State/ZIP mirror the
-         Job Card's own "Job Info" section (jbd-tech3/jbd-priority/
-         jbd-completed*/jbd-address/city/state/zip) field-for-field. -->
-    <div class="field-row">
-      <div class="field"><label>Technician 3 <span class="muted" style="font-weight:400">(optional)</span></label><select id="jbe-tech3"></select></div>
-      <div class="field"><label>Priority</label><select id="jbe-priority"></select></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>Completed Date</label><input type="date" id="jbe-completed-date"></div>
-      <div class="field"><label>Completed Time <span class="muted" id="jbe-completed-time-note" style="font-weight:400;font-size:.78rem"></span></label><input type="time" id="jbe-completed-time"></div>
-    </div>
-    <div class="field"><label>Service Address</label><input type="text" id="jbe-address"></div>
-    <div class="field-row field-row-3">
-      <div class="field"><label>City</label><input type="text" id="jbe-city"></div>
-      <div class="field"><label>State</label><input type="text" id="jbe-state" maxlength="2" style="text-transform:uppercase"></div>
-      <div class="field"><label>ZIP</label><input type="text" id="jbe-zip"></div>
+
+    <!-- Round 51 (2026-09-25), per Vijayan: "event card looks clustered and
+         hard to read... highlight the titles, make it in a logic flow" --
+         this used to be one big unsectioned block of fields sitting above
+         the (already-sectioned) Quote/Financials/etc below it, which is
+         exactly what made it read as cluttered next to them. Reusing the
+         Job Card's own "jb-detail-card" bordered/collapsible drawer-section
+         styling (see style.css and _jbWireSectionToggles in jobs.js -- both
+         are class-driven, so the Event modal picks up the identical boxed
+         headers/collapse behavior for free just by carrying this class) and
+         grouping fields in reading order: what this visit is -> when ->
+         where -> who's assigned/how urgent -> how it wrapped up. -->
+    <div class="drawer-section">
+      <h4>Event Info</h4>
+      <div class="field-row">
+        <div class="field"><label>Event Type</label><select id="jbe-type"></select></div>
+        <div class="field"><label>Status</label><select id="jbe-status"></select></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Scheduled Date</label><input type="date" id="jbe-date"></div>
+        <div class="field"><label>Scheduled Time</label><input type="time" id="jbe-time"></div>
+      </div>
+      <div class="field"><label>Service Address</label><input type="text" id="jbe-address"></div>
+      <div class="field-row field-row-3">
+        <div class="field"><label>City</label><input type="text" id="jbe-city"></div>
+        <div class="field"><label>State</label><input type="text" id="jbe-state" maxlength="2" style="text-transform:uppercase"></div>
+        <div class="field"><label>ZIP</label><input type="text" id="jbe-zip"></div>
+      </div>
+      <!-- Round 42 Task 120, per Vijayan: "include all fields and logic in
+           event cards similar to job cards." -- Technician 3, Priority,
+           Completed Date/Time, and Service Address/City/State/ZIP mirror the
+           Job Card's own "Job Info" section (jbd-tech3/jbd-priority/
+           jbd-completed*/jbd-address/city/state/zip) field-for-field. -->
+      <div class="field-row">
+        <div class="field"><label>Technician</label><select id="jbe-tech"></select></div>
+        <div class="field"><label>Technician 2 <span class="muted" style="font-weight:400">(optional)</span></label><select id="jbe-tech2"></select></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Technician 3 <span class="muted" style="font-weight:400">(optional)</span></label><select id="jbe-tech3"></select></div>
+        <div class="field"><label>Priority</label><select id="jbe-priority"></select></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Completed Date</label><input type="date" id="jbe-completed-date"></div>
+        <div class="field"><label>Completed Time <span class="muted" id="jbe-completed-time-note" style="font-weight:400;font-size:.78rem"></span></label><input type="time" id="jbe-completed-time"></div>
+      </div>
     </div>
 
     <!-- Round 42 Task 121-123, per Vijayan: "event is once a full job...
@@ -820,16 +835,27 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
       <a class="btn btn-ghost btn-sm" id="jbe-bom-btn" href="#" target="_blank" rel="noopener">🧰 Bill of Material</a>
     </div>
 
-    <div class="field"><label>Reason for Visit</label><input type="text" id="jbe-reason"></div>
-    <div class="field"><label>Description</label><textarea id="jbe-description" rows="2"></textarea></div>
-    <div class="field"><label>Technician Notes</label><textarea id="jbe-tech-notes" rows="2"></textarea></div>
-    <div class="field"><label>Customer Notes</label><textarea id="jbe-cust-notes" rows="2"></textarea></div>
-    <div class="field"><label>Work Performed</label><textarea id="jbe-work" rows="2"></textarea></div>
-    <div class="field"><label>Parts Used</label><textarea id="jbe-parts" rows="2"></textarea></div>
-    <div class="field-row">
-      <div class="field"><label>Customer Signature Name</label><input type="text" id="jbe-sig-name"></div>
-      <div class="field"><label>Signature Date</label><input type="date" id="jbe-sig-date"></div>
+    <div class="drawer-section">
+      <h4>Visit Notes</h4>
+      <div class="field"><label>Reason for Visit</label><input type="text" id="jbe-reason"></div>
+      <div class="field"><label>Description</label><textarea id="jbe-description" rows="2"></textarea></div>
+      <div class="field"><label>Technician Notes</label><textarea id="jbe-tech-notes" rows="2"></textarea></div>
+      <div class="field"><label>Customer Notes</label><textarea id="jbe-cust-notes" rows="2"></textarea></div>
+      <div class="field"><label>Work Performed</label><textarea id="jbe-work" rows="2"></textarea></div>
+      <div class="field"><label>Parts Used</label><textarea id="jbe-parts" rows="2"></textarea></div>
     </div>
+
+    <!-- "Customer Signature" title-matches JB_SECTIONS_COLLAPSED_BY_DEFAULT
+         in jobs.js, same as the Job Card's own "Customer Signature /
+         Approval" section -- starts collapsed here too, for consistency. -->
+    <div class="drawer-section">
+      <h4>Customer Signature</h4>
+      <div class="field-row">
+        <div class="field"><label>Customer Signature Name</label><input type="text" id="jbe-sig-name"></div>
+        <div class="field"><label>Signature Date</label><input type="date" id="jbe-sig-date"></div>
+      </div>
+    </div>
+
     <div class="modal-close-row">
       <button type="button" class="btn btn-navy btn-sm" id="jb-event-save-btn">Save Event</button>
       <button type="button" class="btn btn-ghost btn-sm" id="jb-event-close-btn">Close</button>
@@ -889,19 +915,19 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260925e"></script>
-<script src="../assets/js/worksheet.js?v=20260925e"></script>
-<script src="../assets/js/systems-db.js?v=20260925e"></script>
-<script src="../assets/js/events-db.js?v=20260925e"></script>
-<script src="../assets/js/calendar-db.js?v=20260925e"></script>
-<script src="../assets/js/jobs-db.js?v=20260925e"></script>
-<script src="../assets/js/job-photos-db.js?v=20260925e"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260925e"></script>
-<script src="../assets/js/camera-capture.js?v=20260925e"></script>
-<script src="../assets/js/print-invoice.js?v=20260925e"></script>
-<script src="../assets/js/maps-config.js?v=20260925e"></script>
-<script src="../assets/js/mileage-db.js?v=20260925e"></script>
-<script src="../assets/js/jobs.js?v=20260925e"></script>
-<script src="../assets/js/calendar.js?v=20260925e"></script>
+<script src="../assets/js/pricing-data.js?v=20260925f"></script>
+<script src="../assets/js/worksheet.js?v=20260925f"></script>
+<script src="../assets/js/systems-db.js?v=20260925f"></script>
+<script src="../assets/js/events-db.js?v=20260925f"></script>
+<script src="../assets/js/calendar-db.js?v=20260925f"></script>
+<script src="../assets/js/jobs-db.js?v=20260925f"></script>
+<script src="../assets/js/job-photos-db.js?v=20260925f"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260925f"></script>
+<script src="../assets/js/camera-capture.js?v=20260925f"></script>
+<script src="../assets/js/print-invoice.js?v=20260925f"></script>
+<script src="../assets/js/maps-config.js?v=20260925f"></script>
+<script src="../assets/js/mileage-db.js?v=20260925f"></script>
+<script src="../assets/js/jobs.js?v=20260925f"></script>
+<script src="../assets/js/calendar.js?v=20260925f"></script>
 </body>
 </html>
