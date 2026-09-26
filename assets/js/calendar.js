@@ -54,10 +54,20 @@ const SAA_CAL_TOTAL_MINUTES = (SAA_CAL_DAY_END_HOUR - SAA_CAL_DAY_START_HOUR) * 
 // style.css's --cal-vhour-h (the pixel height each render gives one hour
 // row / the tech column bodies) so the hour labels and event cards' top/
 // height percentages line up.
+//
+// Round 59 (2026-09-26), per Vijayan: "i want this view in phone calendar
+// only when the phone is in portrait or vertical. leave the horizontal view
+// as it is." -- the vertical grid now also requires portrait orientation, so
+// a phone turned sideways always gets the normal horizontal grid. Checked
+// against the TOP window when possible (same origin): the Dashboard embeds
+// this page in a short iframe, and that iframe's own box can be wider than
+// it is tall even while the phone itself is upright.
 const SAA_CAL_MOBILE_BREAKPOINT = 640;
 const SAA_CAL_VHOUR_PX = 56;
 function _saaCalIsMobileDay() {
-  return window.matchMedia(`(max-width: ${SAA_CAL_MOBILE_BREAKPOINT}px)`).matches;
+  let w = window;
+  try { if (window.top && window.top !== window && window.top.matchMedia) w = window.top; } catch (e) { /* cross-origin parent: use our own viewport */ }
+  return w.matchMedia(`(max-width: ${SAA_CAL_MOBILE_BREAKPOINT}px) and (orientation: portrait)`).matches;
 }
 
 const SAA_CAL_FOLLOWUP_TYPES = [
@@ -533,7 +543,8 @@ function saaCalTechTrackHtml(tech) {
  *  restores the original breakpoint switch rather than rebuilding it:
  *  phone width (<= SAA_CAL_MOBILE_BREAKPOINT) renders the vertical grid,
  *  everything above it keeps the horizontal grid Round 53 preferred for
- *  desktop. */
+ *  desktop. Round 59: portrait only -- a phone held sideways gets the
+ *  horizontal grid too (see _saaCalIsMobileDay). */
 function saaCalRenderDayGrid() {
   if (_saaCalIsMobileDay()) {
     document.getElementById("cal-day-view-wrap").hidden = true;
