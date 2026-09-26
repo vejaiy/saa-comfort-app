@@ -470,13 +470,24 @@ async function saaEventsSetCompletedTime(eventId, dateStr, hhmm) {
 async function saaEventsUpdate(eventId, fields) {
   try {
     const patch = Object.assign({}, fields, { updated_at: new Date().toISOString() });
-    if (patch.event_status === "completed" && !patch.completed_at) {
-      patch.completed_at = new Date().toISOString();
-    }
-    if (patch.event_status && patch.event_status !== "completed") {
-      // Leaving Completed (e.g. correcting a mis-click) clears the stamp
-      // rather than leaving a stale completed_at behind on a re-opened event.
-      patch.completed_at = patch.completed_at || null;
+    // Round 60 fix: completed_at is only touched when the status actually
+    // CHANGES into or out of Completed. The Event card sends event_status on
+    // every save, and this used to (a) re-stamp completed_at with "now" on
+    // every save of an already-Completed event, wiping the real completion
+    // time, and (b) blank it on every save of a non-Completed one, wiping a
+    // completion time the office had just entered on an In Progress event.
+    let before = null;
+    if (patch.event_status && !("completed_at" in fields)) {
+      const { data } = await _saaClient.from("events").select("event_status,job_id").eq("id", eventId).maybeSingle();
+      before = data || null;
+      const wasCompleted = before && before.event_status === "completed";
+      if (patch.event_status === "completed" && !wasCompleted) {
+        patch.completed_at = new Date().toISOString();
+      } else if (patch.event_status !== "completed" && wasCompleted) {
+        // Leaving Completed (e.g. correcting a mis-click) clears the stamp
+        // rather than leaving a stale completed_at behind on a re-opened event.
+        patch.completed_at = null;
+      }
     }
     const { error } = await _saaClient.from("events").update(patch).eq("id", eventId);
     if (error) throw error;

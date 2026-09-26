@@ -12,6 +12,7 @@ let _jbTechnicians = [];
 let _jbSelectedCust = null; // { id } or { isNew, customer: {...} } — New Job popup
 let _jbCurrentJob = null; // the job object currently open in the detail modal
 let _jbAutosaveTimer = null; // Round 26 (2026-09-14) autosave debounce -- see jbScheduleAutosave
+let _jbSaveChain = Promise.resolve(); // Round 60: Job Card saves run one at a time (autosave vs Save/Close)
 let _jbEquipByType = { condenser: null, coil: null, furnace: null };
 let _jbCurrentInvoice = null;
 let _jbCurrentPayments = [];
@@ -1286,6 +1287,7 @@ async function jbeSearchCustomerQuotes(query) {
       if (!zipEl.value.trim() && job.customer && job.customer.billing_zip) zipEl.value = job.customer.billing_zip;
       jbeRenderQuoteSection(event);
       box.hidden = true;
+      if (event && event.id) _jbeScheduleAutosave(150); // Round 60: save the amounts/address just filled in
     });
   });
 }
@@ -2803,6 +2805,9 @@ function _jbEventTechOptionsHtml(selectedId) {
  *  "+ Schedule New Event" -- the only difference between them is the
  *  Event Type the form starts pre-set to). */
 async function jbOpenEventModal(event, defaultType) {
+  // Round 60: finish saving whatever Event was open before reusing the modal.
+  await _jbeFlushAutosave();
+  _jbeLastSaved = null; // no autosave while the fields are being filled in
   _jbEventModalMode = event ? "edit" : "create";
   _jbEventModalTarget = event || null;
   _jbePendingQuote = null; // scratch var from a previous create-mode session -- never carries across opens
@@ -2909,10 +2914,23 @@ async function jbOpenEventModal(event, defaultType) {
 
   jbeWireBomLink(event);
 
+  // Round 60: autosave baseline + mode-specific button label/indicator.
+  _jbeCancelAutosave();
+  _jbeLastSaved = _jbeSnapshotFields();
+  const saveBtn = document.getElementById("jb-event-save-btn");
+  if (event && event.id) {
+    saveBtn.textContent = "Done";
+    _jbeSetSaveState("saved", "Changes save automatically");
+  } else {
+    saveBtn.textContent = "Create Event";
+    _jbeSetSaveState("", "");
+  }
+
   document.getElementById("jb-event-modal").hidden = false;
 }
 
 function jbCloseEventModal() {
+  _jbeCancelAutosave();
   document.getElementById("jb-event-modal").hidden = true;
   _jbEventModalTarget = null;
   _jbePendingQuote = null;
@@ -2928,6 +2946,7 @@ function jbCloseEventModal() {
  *  picked the Checklist option. A brand-new, never-saved Event (no id yet)
  *  has nothing to delete -- just closes the modal. */
 async function jbeDeleteCurrentEvent() {
+  await _jbeFlushAutosave(); // Round 60: save pending edits before the status flips to Cancelled
   const event = _jbEventModalTarget;
   if (!event || !event.id) { jbCloseEventModal(); return; }
   const ok = await saaConfirm(
@@ -2954,6 +2973,8 @@ async function jbeDeleteCurrentEvent() {
  *  all. saaEventsHardDelete (events-db.js) does the actual guard-checking
  *  and re-scoping; this handler just surfaces whatever it returns. */
 async function jbeHardDeleteCurrentEvent() {
+  _jbeCancelAutosave(); // Round 60: nothing pending should write to a row that's about to be deleted
+  await _jbeSaveChain;
   const event = _jbEventModalTarget;
   if (!event || !event.id) { jbCloseEventModal(); return; }
   const ok = await saaConfirm(
@@ -2971,8 +2992,295 @@ async function jbeHardDeleteCurrentEvent() {
   }
 }
 
+/* ============================== Event card autosave (Round 60) ==============================
+ * Round 60 (2026-09-26), per Vijayan: "whenever anything changed in event
+ * card or job card save automatically after every action instead of
+ * scrolling down and hitting save button. this will be very helpful
+ * especially when technician updating event cards in field."
+ *
+ * An EXISTING Event now saves itself: a dropdown/date/time pick saves
+ * almost immediately, typing saves ~1s after the tech stops. Only fields
+ * that actually changed since the last save are written (a diff against
+ * _jbeLastSaved), for three reasons:
+ *   - a notes edit must not rewrite the schedule, status or technician (the
+ *     old full-form save wrote everything, and wiped scheduled_end, the
+ *     Calendar's drag-to-resize end time, on every Save);
+ *   - event_status is only sent when something that feeds the Job
+ *     (status/date/time/technician/type) changed, so typing notes doesn't
+ *     re-run the Job sync and its mileage recalculation every second;
+ *   - mileage auto-calc only re-runs when a trip-relevant field changed.
+ * Saves are chained (_jbeSaveChain) so two can never overlap, and closing
+ * the card flushes any pending save first. A brand-new Event still has an
+ * explicit "Create Event" button -- nothing exists to autosave into until
+ * the row is created. */
+let _jbeAutosaveTimer = null;
+let _jbeSaveChain = Promise.resolve();
+let _jbeLastSaved = null;
+
+const JBE_AUTOSAVE_FIELD_IDS = [
+  "jbe-type", "jbe-status", "jbe-date", "jbe-time", "jbe-priority",
+  "jbe-tech", "jbe-tech2", "jbe-tech3",
+  "jbe-address", "jbe-city", "jbe-state", "jbe-zip",
+  "jbe-completed-date", "jbe-completed-time",
+  "jbe-quoted", "jbe-approved", "jbe-cost-labor", "jbe-cost-other",
+  "jbe-reason", "jbe-description", "jbe-tech-notes", "jbe-cust-notes", "jbe-work", "jbe-parts",
+  "jbe-sig-name", "jbe-sig-date",
+];
+// Fields whose change must re-run the Job read-through sync (status,
+// schedule, technicians -- see _saaEventsSyncJobFromCurrentEvent).
+const JBE_SYNC_FIELD_IDS = ["jbe-type", "jbe-status", "jbe-date", "jbe-time", "jbe-tech", "jbe-tech2", "jbe-tech3"];
+// Fields that change this Event's trip (and so its auto-calculated mileage).
+const JBE_TRIP_FIELD_IDS = ["jbe-tech", "jbe-date", "jbe-time", "jbe-address", "jbe-city", "jbe-state", "jbe-zip"];
+const JBE_MILEAGE_MILES_IDS = ["jbe-mileage-miles", "jbe-mileage2-miles", "jbe-mileage3-miles"];
+
+function _jbeSnapshotFields() {
+  const snap = {};
+  JBE_AUTOSAVE_FIELD_IDS.forEach((id) => { const el = document.getElementById(id); snap[id] = el ? el.value : ""; });
+  return snap;
+}
+
+function _jbeIsAutosaving() {
+  const modal = document.getElementById("jb-event-modal");
+  return !!(modal && !modal.hidden && _jbEventModalMode === "edit" && _jbEventModalTarget && _jbEventModalTarget.id);
+}
+
+/** Small "Saving… / All changes saved" indicator under the Event number,
+ *  so a tech in the field can see the save happened without scrolling to
+ *  the bottom of the card. */
+function _jbeSetSaveState(state, text) {
+  const el = document.getElementById("jb-event-autosave-state");
+  if (!el) return;
+  el.className = "jb-autosave-state" + (state ? " is-" + state : "");
+  el.textContent = text || "";
+}
+
+function _jbeCancelAutosave() {
+  clearTimeout(_jbeAutosaveTimer);
+  _jbeAutosaveTimer = null;
+}
+
+function _jbeScheduleAutosave(delayMs) {
+  if (!_jbeIsAutosaving()) return;
+  clearTimeout(_jbeAutosaveTimer);
+  _jbeSetSaveState("pending", "Unsaved changes…");
+  _jbeAutosaveTimer = setTimeout(() => { _jbeAutosaveTimer = null; _jbeQueueAutosave(); }, delayMs == null ? 1000 : delayMs);
+}
+
+function _jbeQueueAutosave() {
+  _jbeSaveChain = _jbeSaveChain.then(() => _jbeAutosaveNow()).catch(() => {});
+  return _jbeSaveChain;
+}
+
+/** Saves any pending change right now and waits for it (used on Close /
+ *  Done, so nothing typed in the last second is lost). */
+async function _jbeFlushAutosave() {
+  if (_jbeAutosaveTimer) _jbeCancelAutosave();
+  if (_jbEventModalMode === "edit" && _jbEventModalTarget && _jbEventModalTarget.id) await _jbeQueueAutosave();
+  else await _jbeSaveChain;
+}
+
+async function _jbeAutosaveNow() {
+  const event = _jbEventModalTarget;
+  if (!event || !event.id || !_jbeLastSaved) return;
+  const eventId = event.id;
+  const now = _jbeSnapshotFields();
+  const changed = JBE_AUTOSAVE_FIELD_IDS.filter((id) => now[id] !== _jbeLastSaved[id]);
+  const milesChanged = JBE_MILEAGE_MILES_IDS.some((id) => {
+    const el = document.getElementById(id);
+    if (!el) return false;
+    const key = id === "jbe-mileage-miles" ? "primary" : (id === "jbe-mileage2-miles" ? 2 : 3);
+    return el.value !== (_jbeMileageAtOpen[key] || "");
+  });
+  if (!changed.length && !milesChanged) { _jbeSetSaveState("saved", "All changes saved"); return; }
+  const has = (id) => changed.includes(id);
+  const txt = (id) => now[id].trim() || null;
+  const money = (id) => saaRoundMoney(parseFloat(now[id]) || 0);
+
+  // Duplicate-technician guard (same rule as the change handlers): never
+  // save one technician into two slots.
+  const techs = [now["jbe-tech"], now["jbe-tech2"], now["jbe-tech3"]].filter(Boolean);
+  if (new Set(techs).size !== techs.length) {
+    _jbeSetSaveState("error", "Not saved: the same technician is in two slots.");
+    return;
+  }
+
+  _jbeSetSaveState("saving", "Saving…");
+  const patch = {};
+  if (has("jbe-type")) patch.event_type = now["jbe-type"];
+  if (has("jbe-priority")) patch.priority = now["jbe-priority"];
+  if (has("jbe-tech")) patch.assigned_technician_id = now["jbe-tech"] || null;
+  if (has("jbe-tech2")) patch.assigned_technician_id_2 = now["jbe-tech2"] || null;
+  if (has("jbe-tech3")) patch.assigned_technician_id_3 = now["jbe-tech3"] || null;
+  if (has("jbe-address")) patch.service_address = txt("jbe-address");
+  if (has("jbe-city")) patch.service_city = txt("jbe-city");
+  if (has("jbe-state")) patch.service_state = (now["jbe-state"].trim().toUpperCase()) || null;
+  if (has("jbe-zip")) patch.service_zip = txt("jbe-zip");
+  if (has("jbe-reason")) patch.reason = txt("jbe-reason");
+  if (has("jbe-description")) patch.description = txt("jbe-description");
+  if (has("jbe-tech-notes")) patch.technician_notes = txt("jbe-tech-notes");
+  if (has("jbe-cust-notes")) patch.customer_notes = txt("jbe-cust-notes");
+  if (has("jbe-work")) patch.work_performed = txt("jbe-work");
+  if (has("jbe-parts")) patch.parts_used = txt("jbe-parts");
+  if (has("jbe-sig-name")) patch.customer_signature_name = txt("jbe-sig-name");
+  if (has("jbe-sig-date")) patch.customer_signature_date = now["jbe-sig-date"] || null;
+  if (has("jbe-quoted")) patch.quoted_amount = money("jbe-quoted") || null;
+  if (has("jbe-approved")) patch.approved_amount = money("jbe-approved") || null;
+  if (has("jbe-cost-labor")) patch.actual_labor_cost = money("jbe-cost-labor");
+  if (has("jbe-cost-other")) patch.other_cost = money("jbe-cost-other");
+  if (has("jbe-date") || has("jbe-time")) {
+    const dateVal = now["jbe-date"];
+    const timeVal = now["jbe-time"] || "09:00";
+    const newStart = dateVal ? `${dateVal}T${timeVal}:00` : null;
+    patch.scheduled_start = newStart;
+    // Keep the Calendar's own event length (drag-to-resize end time) by
+    // moving scheduled_end along with the start, rather than wiping it.
+    const oldStart = saaEventsWallClock(event.scheduled_start);
+    const oldEnd = saaEventsWallClock(event.scheduled_end);
+    const newWc = saaEventsWallClock(newStart);
+    if (newWc && oldStart && oldEnd) {
+      const durMin = Math.round((oldEnd.local - oldStart.local) / 60000);
+      const end = new Date(newWc.local.getTime() + Math.max(durMin, 0) * 60000);
+      const p2 = (n) => String(n).padStart(2, "0");
+      patch.scheduled_end = durMin > 0 ? `${end.getFullYear()}-${p2(end.getMonth() + 1)}-${p2(end.getDate())}T${p2(end.getHours())}:${p2(end.getMinutes())}:00` : null;
+    } else if (!newWc) {
+      patch.scheduled_end = null;
+    }
+  }
+  const syncNeeded = JBE_SYNC_FIELD_IDS.some(has);
+  if (syncNeeded) patch.event_status = now["jbe-status"]; // present => saaEventsUpdate re-syncs the Job
+
+  let ok = true;
+  if (Object.keys(patch).length) {
+    const res = await saaEventsUpdate(eventId, patch);
+    if (!res.ok) {
+      ok = false;
+      _jbeSetSaveState("error", "Not saved: " + res.error);
+      return; // leave _jbeLastSaved alone so the next change retries these fields too
+    }
+  }
+
+  // Completed Date/Time: an explicit edit of either field writes it.
+  if (has("jbe-completed-date") || has("jbe-completed-time")) {
+    const cd = now["jbe-completed-date"], ct = now["jbe-completed-time"];
+    if (cd && ct) {
+      const ctRes = await saaEventsSetCompletedTime(eventId, cd, ct);
+      if (!ctRes.ok) { ok = false; _jbToast(ctRes.error, true); }
+    }
+  }
+
+  // Manually-entered miles (primary + Technician 2/3 slots) -- same rules as
+  // the old Save: blank deletes the row, a number stores it as manual.
+  if (milesChanged) {
+    const slots = [["primary", "jbe-mileage-miles", "jbe-mileage-note", null], [2, "jbe-mileage2-miles", "jbe-mileage2-note", "jbe-tech2"], [3, "jbe-mileage3-miles", "jbe-mileage3-note", "jbe-tech3"]];
+    for (const [key, milesId, noteId, techFieldId] of slots) {
+      const milesEl = document.getElementById(milesId);
+      if (!milesEl || milesEl.value === (_jbeMileageAtOpen[key] || "")) continue;
+      const techId = techFieldId ? (document.getElementById(techFieldId).value || null) : undefined;
+      if (techFieldId && !techId) continue;
+      const snap = _jbeMileageEventSnapshot();
+      if (milesEl.value.trim() === "") {
+        await (techId ? saaMileageDeleteForEvent(eventId, techId) : saaMileageDeleteForEvent(eventId));
+        _jbeMileageAtOpen[key] = "";
+        document.getElementById(noteId).textContent = "";
+      } else {
+        const mRes = await (techId ? saaMileageSetManualForEvent(snap, parseFloat(milesEl.value), techId) : saaMileageSetManualForEvent(snap, parseFloat(milesEl.value)));
+        if (mRes.ok) { _jbeMileageAtOpen[key] = milesEl.value; document.getElementById(noteId).textContent = "Entered manually."; }
+        else { ok = false; _jbToast(mRes.error, true); }
+      }
+    }
+  } else if (JBE_TRIP_FIELD_IDS.some(has)) {
+    // Trip changed and no manual override typed -- refresh the auto miles.
+    saaMileageEnsureForEvent(_jbeMileageEventSnapshot());
+  }
+
+  _jbeLastSaved = now;
+
+  // Keep the in-memory Event current (the next date/time diff, the delete
+  // buttons and the timeline all read it), and pick up anything the DB set
+  // itself -- e.g. completed_at stamped the moment Status became Completed.
+  let fresh = null;
+  try { fresh = await saaEventsFetchById(eventId); } catch (e) { /* display refresh only -- the save itself already succeeded */ }
+  if (fresh && _jbEventModalTarget && _jbEventModalTarget.id === eventId) {
+    Object.assign(_jbEventModalTarget, fresh);
+    if (has("jbe-status") || has("jbe-date") || has("jbe-time") || has("jbe-type")) {
+      const cdEl = document.getElementById("jbe-completed-date");
+      const ctEl = document.getElementById("jbe-completed-time");
+      if (document.activeElement !== cdEl && document.activeElement !== ctEl) {
+        const info = await saaEventsGetCompletedTime(_jbEventModalTarget);
+        cdEl.value = info.date;
+        ctEl.value = info.time;
+        document.getElementById("jbe-completed-time-note").textContent = info.isEstimate ? "(estimated from schedule — confirm or edit)" : "";
+        _jbeLastSaved["jbe-completed-date"] = info.date;
+        _jbeLastSaved["jbe-completed-time"] = info.time;
+        _jbEventCompletedAtOpen = { date: info.date, time: info.time };
+      }
+    }
+  }
+
+  if (ok) _jbeSetSaveState("saved", "All changes saved");
+
+  // Refresh what's showing behind the Event card: the Job Card's Event
+  // History list and its Event-derived Status/Schedule/Technician fields.
+  if (syncNeeded && _jbCurrentJob) {
+    await jbRenderEventTimeline(_jbCurrentJob);
+    await _jbRefreshJobDerivedFields();
+  }
+}
+
+/** After an Event change re-synced the Job (status/schedule/technician),
+ *  pull the Job row again and update the Job Card fields that mirror it,
+ *  so the card behind the Event shows the new values -- and so a later
+ *  Job Card autosave doesn't write the old technician back. Skips any
+ *  field the user is currently in. */
+async function _jbRefreshJobDerivedFields() {
+  const job = _jbCurrentJob;
+  if (!job || !job.id) return;
+  const { data: fresh } = await _saaClient.from("jobs").select("*").eq("id", job.id).maybeSingle();
+  if (!fresh || !_jbCurrentJob || _jbCurrentJob.id !== fresh.id) return;
+  Object.assign(_jbCurrentJob, fresh);
+  const setIfIdle = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && document.activeElement !== el) el.value = val == null ? "" : val;
+  };
+  setIfIdle("jbd-status", fresh.status);
+  setIfIdle("jbd-scheduled", fresh.scheduled_date || "");
+  setIfIdle("jbd-time", fresh.scheduled_time || "");
+  setIfIdle("jbd-completed", fresh.completed_date || "");
+  setIfIdle("jbd-tech", fresh.assigned_technician_id || "");
+  setIfIdle("jbd-tech2", fresh.assigned_technician_id_2 || "");
+  setIfIdle("jbd-tech3", fresh.assigned_technician_id_3 || "");
+  const b2 = document.getElementById("jbd-mileage2-block");
+  const b3 = document.getElementById("jbd-mileage3-block");
+  if (b2) b2.hidden = !fresh.assigned_technician_id_2;
+  if (b3) b3.hidden = !fresh.assigned_technician_id_3;
+  if (typeof saaJobsGetCompletedTime === "function") {
+    const ct = await saaJobsGetCompletedTime(fresh);
+    setIfIdle("jbd-completed-time", ct.time);
+    const note = document.getElementById("jbd-completed-time-note");
+    if (note) note.textContent = ct.isEstimate ? "(estimated from schedule — edit from the Event)" : "";
+  }
+}
+
+/** Close / backdrop / "Done": save anything pending, then close and
+ *  refresh the Event History list behind it. */
+async function jbCloseEventModalWithSave() {
+  const modal = document.getElementById("jb-event-modal");
+  if (!modal || modal.hidden) return;
+  const wasEdit = _jbEventModalMode === "edit" && _jbEventModalTarget && _jbEventModalTarget.id;
+  if (wasEdit) await _jbeFlushAutosave();
+  jbCloseEventModal();
+  if (wasEdit && _jbCurrentJob) await jbRenderEventTimeline(_jbCurrentJob);
+  if (wasEdit && typeof saaCalLoadAndRender === "function") await saaCalLoadAndRender();
+}
+
 async function jbSaveEventModal() {
   if (!_jbCurrentJob) return;
+  // Round 60: an existing Event autosaves -- the button is "Done" there, and
+  // just makes sure the last change is saved before closing.
+  if (_jbEventModalMode === "edit" && _jbEventModalTarget && _jbEventModalTarget.id) {
+    await jbCloseEventModalWithSave();
+    return;
+  }
   const btn = document.getElementById("jb-event-save-btn");
   const msg = document.getElementById("jb-event-status-msg");
   btn.disabled = true;
@@ -3452,7 +3760,8 @@ async function jbSaveDetail(opts) {
  *  after every field. Guarded on the modal actually being open so a timer
  *  can't outlive it (jbCloseDetail flushes with a real save first anyway,
  *  and jbSaveDetail clears any pending timer the instant it runs). */
-function jbScheduleAutosave() {
+function jbScheduleAutosave(delayMs) {
+  if (typeof delayMs !== "number") delayMs = 1000; // called directly as an event listener -> the Event object arrives here
   const modal = document.getElementById("jb-detail-modal");
   if (!_jbCurrentJob || !modal || modal.hidden) return;
   clearTimeout(_jbAutosaveTimer);
@@ -3466,7 +3775,9 @@ function jbScheduleAutosave() {
     return;
   }
   if (statusMsg) statusMsg.textContent = "Unsaved changes…";
-  _jbAutosaveTimer = setTimeout(() => { jbSaveDetail({ silent: true }); }, 1200);
+  // Round 60: faster (was a flat 1.2s) and serialized, so a quick pick
+  // right after typing can't start a second save on top of the first.
+  _jbAutosaveTimer = setTimeout(() => { _jbSaveChain = _jbSaveChain.then(() => jbSaveDetail({ silent: true })).catch(() => {}); }, delayMs);
 }
 
 /** Round 43 (2026-09-22): replaces the retired "+ Schedule Follow-Up" /
@@ -3527,6 +3838,8 @@ async function jbStartNextJob() {
 async function jbCloseDetail() {
   const modal = document.getElementById("jb-detail-modal");
   if (modal.hidden) return;
+  clearTimeout(_jbAutosaveTimer);
+  await _jbSaveChain; // Round 60: let an in-flight autosave finish first
   if (_jbCurrentJob) await jbSaveDetail();
   modal.hidden = true;
   // Round 6 item 7: when the Job Card is an overlay on top of the Dispatch
@@ -3663,7 +3976,25 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("jbd-quote-search").addEventListener("focus", (e) => {
     if (_jbCurrentJob && !e.target.value.trim()) jbSearchCustomerQuotes(_jbCurrentJob, "");
   });
-  document.getElementById("jbd-save-btn").addEventListener("click", jbSaveDetail);
+  document.getElementById("jbd-save-btn").addEventListener("click", async () => { clearTimeout(_jbAutosaveTimer); await _jbSaveChain; await jbSaveDetail(); });
+  // Round 60: mirror the bottom status line into the indicator under the
+  // Job number, so it's visible without scrolling to the bottom.
+  (function () {
+    const src = document.getElementById("jbd-status-msg");
+    const dst = document.getElementById("jbd-autosave-state");
+    if (!src || !dst) return;
+    const sync = () => {
+      const t = src.textContent || "";
+      let st = "";
+      if (/^Saving/.test(t)) st = "saving";
+      else if (/^Saved/.test(t)) st = "saved";
+      else if (/^Unsaved/.test(t)) st = "pending";
+      else if (/error|couldn|failed|not saved/i.test(t)) st = "error";
+      dst.className = "jb-autosave-state" + (st ? " is-" + st : "");
+      dst.textContent = st === "saved" ? "All changes saved" : t;
+    };
+    new MutationObserver(sync).observe(src, { childList: true, characterData: true, subtree: true });
+  })();
   document.getElementById("jbd-close-btn").addEventListener("click", jbCloseDetail);
   document.getElementById("jbd-delete-btn").addEventListener("click", jbDeleteCurrentJob);
   document.getElementById("jb-detail-close-btn").addEventListener("click", jbCloseDetail);
@@ -3686,15 +4017,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     // jbd-cost-material just above.
     "jbd-type", "jbd-priority", "jbd-tech", "jbd-address", "jbd-city", "jbd-state", "jbd-zip",
     "jbd-problem", "jbd-findings", "jbd-recommend", "jbd-sig-name", "jbd-sig-date", "jbd-notes",
-    "jbd-mileage-miles",
+    "jbd-mileage-miles", "jbd-mileage2-miles", "jbd-mileage3-miles", // Round 60: Technician 2/3 miles autosave too
   ].forEach((id) => {
     const el = document.getElementById(id);
-    el.addEventListener("input", jbScheduleAutosave);
-    el.addEventListener("change", jbScheduleAutosave);
+    // Round 60: picks save almost immediately, typing ~1s after a pause.
+    const isPick = el.tagName === "SELECT" || el.type === "date" || el.type === "time";
+    el.addEventListener("input", () => jbScheduleAutosave(isPick ? 400 : 1000));
+    el.addEventListener("change", () => jbScheduleAutosave(isPick ? 250 : 150));
   });
   document.querySelectorAll(".jb-eq-fields input, .jb-eq-fields select").forEach((el) => {
-    el.addEventListener("input", jbScheduleAutosave);
-    el.addEventListener("change", jbScheduleAutosave);
+    const isPick = el.tagName === "SELECT" || el.type === "date";
+    el.addEventListener("input", () => jbScheduleAutosave(isPick ? 400 : 1000));
+    el.addEventListener("change", () => jbScheduleAutosave(isPick ? 250 : 150));
   });
 
   // Same duplicate-technician guard as the tech2/3 handler below, for the
@@ -3774,9 +4108,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("jbd-schedule-followup-btn").addEventListener("click", jbStartNextJob);
   document.getElementById("jbd-schedule-event-btn").addEventListener("click", jbStartNextJob);
   document.getElementById("jb-event-save-btn").addEventListener("click", jbSaveEventModal);
-  document.getElementById("jb-event-close-btn").addEventListener("click", jbCloseEventModal);
+  document.getElementById("jb-event-close-btn").addEventListener("click", jbCloseEventModalWithSave);
   document.getElementById("jb-event-modal").addEventListener("click", (e) => {
-    if (e.target.id === "jb-event-modal") jbCloseEventModal(); // clicked the backdrop, not the card
+    if (e.target.id === "jb-event-modal") jbCloseEventModalWithSave(); // clicked the backdrop, not the card
+  });
+
+  // Round 60: Event card autosave wiring. Dropdowns/dates save almost
+  // immediately; typed text ~1s after the tech stops typing (and right
+  // away when they leave the field). Registered after the duplicate-
+  // technician guards above so a rejected pick is already cleared by the
+  // time the save reads the field.
+  [...JBE_AUTOSAVE_FIELD_IDS, ...JBE_MILEAGE_MILES_IDS].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const isPick = el.tagName === "SELECT" || el.type === "date" || el.type === "time";
+    el.addEventListener("input", () => _jbeScheduleAutosave(isPick ? 400 : 1000));
+    el.addEventListener("change", () => _jbeScheduleAutosave(isPick ? 250 : 150));
   });
 
   // Round 42 Task 120: same duplicate-technician guard as the Job Card's

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260926g">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260926h">
 <script>
 if (new URLSearchParams(location.search).get('embed') === '1') {
   document.documentElement.classList.add('saa-embed');
@@ -14,9 +14,9 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260926g"></script>
-<script src="../assets/js/supabase-config.js?v=20260926g"></script>
-<script src="../assets/js/auth.js?v=20260926g"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260926h"></script>
+<script src="../assets/js/supabase-config.js?v=20260926h"></script>
+<script src="../assets/js/auth.js?v=20260926h"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -347,6 +347,8 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
     <button type="button" class="cal-drawer-close" id="jb-detail-close-btn">&times;</button>
     <h2 id="jbd-title" style="margin-bottom:2px"></h2>
     <div class="job-num" id="jbd-jobnum" style="margin-bottom:4px"></div>
+    <!-- Round 60: autosave indicator, mirrored from jbd-status-msg (jobs.js) -->
+    <div class="jb-autosave-state" id="jbd-autosave-state" aria-live="polite"></div>
     <!-- Round 43 (2026-09-22): shown only when this Job has been converted
          into a historical Event by a later visit (is_current = false) --
          "never display a historical Job as if still active." Links straight
@@ -701,7 +703,11 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <div class="modal-overlay" id="jb-event-modal" hidden>
   <div class="modal-card jb-detail-card" style="max-width:680px">
     <h3 id="jb-event-modal-title">Event</h3>
-    <div class="muted" id="jb-event-modal-number" style="font-size:.82rem;margin-bottom:10px"></div>
+    <div class="muted" id="jb-event-modal-number" style="font-size:.82rem;margin-bottom:2px"></div>
+    <!-- Round 60, per Vijayan: an existing Event saves itself after every
+         change (see the Event card autosave block in jobs.js) -- this line
+         shows "Saving… / All changes saved" without scrolling down. -->
+    <div class="jb-autosave-state" id="jb-event-autosave-state" aria-live="polite" style="margin-bottom:10px"></div>
 
     <!-- Round 51 (2026-09-25), per Vijayan: "event card looks clustered and
          hard to read... highlight the titles, make it in a logic flow" --
@@ -869,7 +875,7 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
     </div>
 
     <div class="modal-close-row">
-      <button type="button" class="btn btn-navy btn-sm" id="jb-event-save-btn">Save Event</button>
+      <button type="button" class="btn btn-navy btn-sm" id="jb-event-save-btn">Save Event</button><!-- label set per mode in jbOpenEventModal: "Done" (existing, autosaved) / "Create Event" (new) -->
       <button type="button" class="btn btn-ghost btn-sm" id="jb-event-close-btn">Close</button>
       <!-- Round 42 Task 121-124: soft-delete (marks the Event Cancelled --
            see saaEventsDelete's own comment in events-db.js) rather than a
@@ -937,19 +943,19 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260926g"></script>
-<script src="../assets/js/worksheet.js?v=20260926g"></script>
-<script src="../assets/js/systems-db.js?v=20260926g"></script>
-<script src="../assets/js/events-db.js?v=20260926g"></script>
-<script src="../assets/js/calendar-db.js?v=20260926g"></script>
-<script src="../assets/js/jobs-db.js?v=20260926g"></script>
-<script src="../assets/js/job-photos-db.js?v=20260926g"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260926g"></script>
-<script src="../assets/js/camera-capture.js?v=20260926g"></script>
-<script src="../assets/js/print-invoice.js?v=20260926g"></script>
-<script src="../assets/js/maps-config.js?v=20260926g"></script>
-<script src="../assets/js/mileage-db.js?v=20260926g"></script>
-<script src="../assets/js/jobs.js?v=20260926g"></script>
-<script src="../assets/js/calendar.js?v=20260926g"></script>
+<script src="../assets/js/pricing-data.js?v=20260926h"></script>
+<script src="../assets/js/worksheet.js?v=20260926h"></script>
+<script src="../assets/js/systems-db.js?v=20260926h"></script>
+<script src="../assets/js/events-db.js?v=20260926h"></script>
+<script src="../assets/js/calendar-db.js?v=20260926h"></script>
+<script src="../assets/js/jobs-db.js?v=20260926h"></script>
+<script src="../assets/js/job-photos-db.js?v=20260926h"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260926h"></script>
+<script src="../assets/js/camera-capture.js?v=20260926h"></script>
+<script src="../assets/js/print-invoice.js?v=20260926h"></script>
+<script src="../assets/js/maps-config.js?v=20260926h"></script>
+<script src="../assets/js/mileage-db.js?v=20260926h"></script>
+<script src="../assets/js/jobs.js?v=20260926h"></script>
+<script src="../assets/js/calendar.js?v=20260926h"></script>
 </body>
 </html>

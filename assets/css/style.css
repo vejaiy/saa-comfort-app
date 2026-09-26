@@ -915,3 +915,12 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
   .rc-receipt-row { flex-direction: column; align-items: flex-start; }
   .rc-receipt-row .rc-r-amount { text-align: left; }
 }
+
+/* Round 60 (2026-09-26): autosave indicator shown under the Job/Event
+   number on the Job Card and Event card. */
+.jb-autosave-state { font-size: .78rem; min-height: 1.1em; color: var(--muted); margin-bottom: 8px; }
+.jb-autosave-state.is-pending { color: #8a6d1d; }
+.jb-autosave-state.is-saving { color: var(--muted); }
+.jb-autosave-state.is-saved { color: #1e7a3c; }
+.jb-autosave-state.is-saved::before { content: "\2713  "; }
+.jb-autosave-state.is-error { color: #b3261e; font-weight: 600; }
