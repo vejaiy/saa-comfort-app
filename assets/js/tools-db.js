@@ -1,6 +1,6 @@
 /* ============================================================
    SAA Comfort Air LLC — SAA-Tools / SAA-Supplies data layer
-   Backs the employee Tool List page (tool-list.html). Two tables:
+   Backs the employee Tool List page (tool-list.html). Three tables:
 
    - tool_supply_purchases: a historical ledger, one row per line
      item ever bought for the shop's own tools/supplies (NOT billed
@@ -14,6 +14,11 @@
      quantity_on_hand is the source of truth going forward — it is
      NOT recomputed live from the ledger, so using a tool/supply up
      or restocking it means editing the number here by hand.
+   - tool_shopping_list (Round 53, 2026-09-25): tools/supplies still
+     NEEDED but not yet bought — a manual wishlist, separate from the
+     two tables above. Marking an item purchased just flips its
+     status; the actual purchase (vendor, price, receipt #) still
+     gets entered separately in tool_supply_purchases once it happens.
 
    Requires auth.js to have already created the shared _saaClient.
    ============================================================ */
@@ -113,5 +118,60 @@ async function saaToolInventoryUpdateQty(id, quantityOnHand) {
 
 async function saaToolInventoryDelete(id) {
   const { error } = await _saaClient.from("tool_inventory").delete().eq("id", id);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+/* ---- Tools to Buy (shopping list): reads ---- */
+
+async function saaToolShoppingListFetchAll({ type, search, includePurchased } = {}) {
+  let query = _saaClient.from("tool_shopping_list").select("*");
+  if (type) query = query.eq("type", type);
+  if (!includePurchased) query = query.eq("status", "to_buy");
+  const { data, error } = await query;
+  if (error) { console.error(error); return []; }
+  let rows = data || [];
+  const q = (search || "").trim().toLowerCase();
+  if (q) {
+    rows = rows.filter((r) =>
+      [r.item_name, r.specification, r.brand, r.category, r.notes].some((s) => (s || "").toLowerCase().includes(q))
+    );
+  }
+  return rows.sort((a, b) => {
+    // To-buy items first (newest-added first within each group), purchased
+    // items (when shown) trail behind, most-recently-purchased first.
+    if (a.status !== b.status) return a.status === "to_buy" ? -1 : 1;
+    return (b.created_at || "").localeCompare(a.created_at || "");
+  });
+}
+
+/* ---- Tools to Buy: writes ---- */
+
+async function saaToolShoppingListAdd(patch) {
+  const { data, error } = await _saaClient.from("tool_shopping_list").insert({
+    item_name: patch.item_name,
+    specification: patch.specification || null,
+    brand: patch.brand || null,
+    qty: patch.qty === "" || patch.qty == null ? 1 : Number(patch.qty),
+    category: patch.category || null,
+    type: patch.type || "tools",
+    estimated_price: patch.estimated_price === "" || patch.estimated_price == null ? null : Number(patch.estimated_price),
+    priority: patch.priority || null,
+    status: "to_buy",
+    notes: patch.notes || null,
+  }).select("*").single();
+  return error ? { ok: false, error: error.message } : { ok: true, row: data };
+}
+
+async function saaToolShoppingListMarkPurchased(id, purchased) {
+  const { data, error } = await _saaClient.from("tool_shopping_list").update({
+    status: purchased ? "purchased" : "to_buy",
+    purchased_date: purchased ? new Date().toISOString().slice(0, 10) : null,
+    updated_at: new Date().toISOString(),
+  }).eq("id", id).select("*").single();
+  return error ? { ok: false, error: error.message } : { ok: true, row: data };
+}
+
+async function saaToolShoppingListDelete(id) {
+  const { error } = await _saaClient.from("tool_shopping_list").delete().eq("id", id);
   return error ? { ok: false, error: error.message } : { ok: true };
 }

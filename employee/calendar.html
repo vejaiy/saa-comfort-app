@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260925f">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260926e">
 <script>
 if (new URLSearchParams(location.search).get('embed') === '1') {
   document.documentElement.classList.add('saa-embed');
@@ -14,9 +14,9 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260925f"></script>
-<script src="../assets/js/supabase-config.js?v=20260925f"></script>
-<script src="../assets/js/auth.js?v=20260925f"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260926e"></script>
+<script src="../assets/js/supabase-config.js?v=20260926e"></script>
+<script src="../assets/js/auth.js?v=20260926e"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -445,7 +445,7 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
             <div class="field"><label>Priority</label><select id="jbd-priority"></select></div>
           </div>
           <div class="field-row">
-            <div class="field"><label>Status</label><select id="jbd-status"></select></div>
+            <div class="field"><label>Status</label><select id="jbd-status" disabled title="Auto-derived from this Job's current Event status -- change it from the Event instead"></select><span class="muted" style="font-size:.72rem">Auto-derived from current Event</span></div>
             <div class="field"><label>Technician</label><select id="jbd-tech"></select></div>
           </div>
           <!-- Round 25 (2026-09-14), per Vijayan: "Support multiple
@@ -459,13 +459,25 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
             <div class="field"><label>Technician 2 <span class="muted" style="font-weight:400">(optional)</span></label><select id="jbd-tech2"></select></div>
             <div class="field"><label>Technician 3 <span class="muted" style="font-weight:400">(optional)</span></label><select id="jbd-tech3"></select></div>
           </div>
+          <!-- Round 55 follow-up, per Vijayan ("schedule time and completion
+               time is update it is not updating in Jobs and Events"):
+               these four used to be plain editable fields that wrote
+               straight to the Job row via jbSaveDetail -- an ordinary Job
+               Card save (even one just touching Notes) would silently
+               overwrite whatever _saaEventsSyncJobFromCurrentEvent had
+               just synced in from the current Event with whatever stale
+               value happened to still be sitting in these DOM fields from
+               when the card was opened. Same disabled/auto-derived
+               treatment Round 54 already gave jbd-status -- change the
+               schedule or completion time from the Event (Job Card's
+               event modal or the Calendar drawer) instead. -->
           <div class="field-row">
-            <div class="field"><label>Scheduled Date</label><input type="date" id="jbd-scheduled"></div>
-            <div class="field"><label>Scheduled Time</label><input type="time" id="jbd-time"></div>
+            <div class="field"><label>Scheduled Date</label><input type="date" id="jbd-scheduled" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"><span class="muted" style="font-size:.72rem">Auto-derived from current Event</span></div>
+            <div class="field"><label>Scheduled Time</label><input type="time" id="jbd-time" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"></div>
           </div>
           <div class="field-row">
-            <div class="field"><label>Completion Date</label><input type="date" id="jbd-completed"></div>
-            <div class="field"><label>Completed Time <span class="muted" id="jbd-completed-time-note" style="font-weight:400;font-size:.78rem"></span></label><input type="time" id="jbd-completed-time"></div>
+            <div class="field"><label>Completion Date</label><input type="date" id="jbd-completed" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"><span class="muted" style="font-size:.72rem">Auto-derived from current Event</span></div>
+            <div class="field"><label>Completed Time <span class="muted" id="jbd-completed-time-note" style="font-weight:400;font-size:.78rem"></span></label><input type="time" id="jbd-completed-time" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"></div>
           </div>
           <div class="field"><label>Service Address</label><input type="text" id="jbd-address"></div>
           <div class="field-row field-row-3">
@@ -866,6 +878,16 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
            leg-chaining, etc.) -- flagged to Vijayan as the assumed behavior
            since his multiSelect answer on this didn't pick either option. -->
       <button type="button" class="btn btn-outline btn-sm" id="jb-event-delete-btn" style="margin-left:auto;color:#b42318;border-color:#b42318">Delete Event</button>
+      <!-- Round 55: per Vijayan's explicit choice ("add a separate true
+           hard-delete option alongside Cancel") after "allow provisions to
+           delete events" -- the Cancel-based soft delete above is left
+           untouched; this is a distinct, harder-to-reach action for an
+           Event that was created by outright mistake and should be gone
+           entirely, not just hidden. saaEventsHardDelete (events-db.js)
+           blocks it for a Job's only Event or a Round-43 conversion record,
+           and re-scopes any linked Invoice/Payment/Photo/Mileage/Quote/BOM
+           record back to the Job rather than losing it. -->
+      <button type="button" class="btn btn-outline btn-sm" id="jb-event-harddelete-btn" style="color:#b42318;border-color:#b42318">Permanently Delete&hellip;</button>
       <span id="jb-event-status-msg" class="muted" style="font-size:.85rem"></span>
     </div>
   </div>
@@ -915,19 +937,19 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260925f"></script>
-<script src="../assets/js/worksheet.js?v=20260925f"></script>
-<script src="../assets/js/systems-db.js?v=20260925f"></script>
-<script src="../assets/js/events-db.js?v=20260925f"></script>
-<script src="../assets/js/calendar-db.js?v=20260925f"></script>
-<script src="../assets/js/jobs-db.js?v=20260925f"></script>
-<script src="../assets/js/job-photos-db.js?v=20260925f"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260925f"></script>
-<script src="../assets/js/camera-capture.js?v=20260925f"></script>
-<script src="../assets/js/print-invoice.js?v=20260925f"></script>
-<script src="../assets/js/maps-config.js?v=20260925f"></script>
-<script src="../assets/js/mileage-db.js?v=20260925f"></script>
-<script src="../assets/js/jobs.js?v=20260925f"></script>
-<script src="../assets/js/calendar.js?v=20260925f"></script>
+<script src="../assets/js/pricing-data.js?v=20260926e"></script>
+<script src="../assets/js/worksheet.js?v=20260926e"></script>
+<script src="../assets/js/systems-db.js?v=20260926e"></script>
+<script src="../assets/js/events-db.js?v=20260926e"></script>
+<script src="../assets/js/calendar-db.js?v=20260926e"></script>
+<script src="../assets/js/jobs-db.js?v=20260926e"></script>
+<script src="../assets/js/job-photos-db.js?v=20260926e"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260926e"></script>
+<script src="../assets/js/camera-capture.js?v=20260926e"></script>
+<script src="../assets/js/print-invoice.js?v=20260926e"></script>
+<script src="../assets/js/maps-config.js?v=20260926e"></script>
+<script src="../assets/js/mileage-db.js?v=20260926e"></script>
+<script src="../assets/js/jobs.js?v=20260926e"></script>
+<script src="../assets/js/calendar.js?v=20260926e"></script>
 </body>
 </html>

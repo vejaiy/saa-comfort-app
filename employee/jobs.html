@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jobs | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260925f">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260926e">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260925f"></script>
-<script src="../assets/js/supabase-config.js?v=20260925f"></script>
-<script src="../assets/js/auth.js?v=20260925f"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260926e"></script>
+<script src="../assets/js/supabase-config.js?v=20260926e"></script>
+<script src="../assets/js/auth.js?v=20260926e"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -169,6 +169,30 @@
       <div class="cal-cust-results" id="jbn-cust-results" hidden></div>
     </div>
     <div class="cal-selected-cust" id="jbn-selected-cust" hidden></div>
+
+    <!-- Round 54 (2026-09-26), per Vijayan: "automatically transfer system
+         information across all job and events in that particular job" --
+         this form used to always create a brand-new, blank System no
+         matter what (see the old comment on jbSaveNewJob in jobs.js),
+         which is why an existing customer's System info entered on one Job
+         never showed up on another Job for the very same equipment.
+         Mirrors the Calendar's own "+ Schedule -> New Job" tab's System
+         picker exactly (ns-system-wrap/ns-system-select in gen_calendar.py)
+         -- defaults to "+ Add New System" for a brand-new customer, else
+         lists every System already on file so the office can attach this
+         new Job to the SAME equipment instead of forking off a duplicate. -->
+    <div class="field" id="jbn-system-wrap" hidden>
+      <label>System</label>
+      <select id="jbn-system-select"></select>
+      <div class="cal-newcust-form" id="jbn-newsystem-fields" style="margin-top:8px">
+        <p class="muted" style="font-size:.8rem;margin:0 0 6px">New system — name/manufacturer optional, can be filled in later from the Job Card:</p>
+        <div class="field-row">
+          <div class="field"><label>System Name</label><input type="text" id="jbn-sys-name" placeholder="e.g. Upstairs 3-Ton"></div>
+          <div class="field"><label>Manufacturer</label><input type="text" id="jbn-sys-manufacturer"></div>
+        </div>
+      </div>
+      <div class="muted" id="jbn-system-warning" style="font-size:.8rem;color:#b3261e;margin-top:6px"></div>
+    </div>
 
     <div class="cal-newcust-form" id="jbn-newcust-form" hidden>
       <p class="muted" style="font-size:.8rem;margin:0 0 6px">New customer &mdash; not yet in the system:</p>
@@ -329,7 +353,7 @@
             <div class="field"><label>Priority</label><select id="jbd-priority"></select></div>
           </div>
           <div class="field-row">
-            <div class="field"><label>Status</label><select id="jbd-status"></select></div>
+            <div class="field"><label>Status</label><select id="jbd-status" disabled title="Auto-derived from this Job's current Event status -- change it from the Event instead"></select><span class="muted" style="font-size:.72rem">Auto-derived from current Event</span></div>
             <div class="field"><label>Technician</label><select id="jbd-tech"></select></div>
           </div>
           <!-- Round 25 (2026-09-14), per Vijayan: "Support multiple
@@ -343,13 +367,25 @@
             <div class="field"><label>Technician 2 <span class="muted" style="font-weight:400">(optional)</span></label><select id="jbd-tech2"></select></div>
             <div class="field"><label>Technician 3 <span class="muted" style="font-weight:400">(optional)</span></label><select id="jbd-tech3"></select></div>
           </div>
+          <!-- Round 55 follow-up, per Vijayan ("schedule time and completion
+               time is update it is not updating in Jobs and Events"):
+               these four used to be plain editable fields that wrote
+               straight to the Job row via jbSaveDetail -- an ordinary Job
+               Card save (even one just touching Notes) would silently
+               overwrite whatever _saaEventsSyncJobFromCurrentEvent had
+               just synced in from the current Event with whatever stale
+               value happened to still be sitting in these DOM fields from
+               when the card was opened. Same disabled/auto-derived
+               treatment Round 54 already gave jbd-status -- change the
+               schedule or completion time from the Event (Job Card's
+               event modal or the Calendar drawer) instead. -->
           <div class="field-row">
-            <div class="field"><label>Scheduled Date</label><input type="date" id="jbd-scheduled"></div>
-            <div class="field"><label>Scheduled Time</label><input type="time" id="jbd-time"></div>
+            <div class="field"><label>Scheduled Date</label><input type="date" id="jbd-scheduled" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"><span class="muted" style="font-size:.72rem">Auto-derived from current Event</span></div>
+            <div class="field"><label>Scheduled Time</label><input type="time" id="jbd-time" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"></div>
           </div>
           <div class="field-row">
-            <div class="field"><label>Completion Date</label><input type="date" id="jbd-completed"></div>
-            <div class="field"><label>Completed Time <span class="muted" id="jbd-completed-time-note" style="font-weight:400;font-size:.78rem"></span></label><input type="time" id="jbd-completed-time"></div>
+            <div class="field"><label>Completion Date</label><input type="date" id="jbd-completed" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"><span class="muted" style="font-size:.72rem">Auto-derived from current Event</span></div>
+            <div class="field"><label>Completed Time <span class="muted" id="jbd-completed-time-note" style="font-weight:400;font-size:.78rem"></span></label><input type="time" id="jbd-completed-time" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"></div>
           </div>
           <div class="field"><label>Service Address</label><input type="text" id="jbd-address"></div>
           <div class="field-row field-row-3">
@@ -750,6 +786,16 @@
            leg-chaining, etc.) -- flagged to Vijayan as the assumed behavior
            since his multiSelect answer on this didn't pick either option. -->
       <button type="button" class="btn btn-outline btn-sm" id="jb-event-delete-btn" style="margin-left:auto;color:#b42318;border-color:#b42318">Delete Event</button>
+      <!-- Round 55: per Vijayan's explicit choice ("add a separate true
+           hard-delete option alongside Cancel") after "allow provisions to
+           delete events" -- the Cancel-based soft delete above is left
+           untouched; this is a distinct, harder-to-reach action for an
+           Event that was created by outright mistake and should be gone
+           entirely, not just hidden. saaEventsHardDelete (events-db.js)
+           blocks it for a Job's only Event or a Round-43 conversion record,
+           and re-scopes any linked Invoice/Payment/Photo/Mileage/Quote/BOM
+           record back to the Job rather than losing it. -->
+      <button type="button" class="btn btn-outline btn-sm" id="jb-event-harddelete-btn" style="color:#b42318;border-color:#b42318">Permanently Delete&hellip;</button>
       <span id="jb-event-status-msg" class="muted" style="font-size:.85rem"></span>
     </div>
   </div>
@@ -798,17 +844,17 @@
 <div id="jb-toast" class="cal-toast" hidden></div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260925f"></script>
-<script src="../assets/js/worksheet.js?v=20260925f"></script>
-<script src="../assets/js/systems-db.js?v=20260925f"></script>
-<script src="../assets/js/events-db.js?v=20260925f"></script>
-<script src="../assets/js/jobs-db.js?v=20260925f"></script>
-<script src="../assets/js/job-photos-db.js?v=20260925f"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260925f"></script>
-<script src="../assets/js/camera-capture.js?v=20260925f"></script>
-<script src="../assets/js/print-invoice.js?v=20260925f"></script>
-<script src="../assets/js/maps-config.js?v=20260925f"></script>
-<script src="../assets/js/mileage-db.js?v=20260925f"></script>
-<script src="../assets/js/jobs.js?v=20260925f"></script>
+<script src="../assets/js/pricing-data.js?v=20260926e"></script>
+<script src="../assets/js/worksheet.js?v=20260926e"></script>
+<script src="../assets/js/systems-db.js?v=20260926e"></script>
+<script src="../assets/js/events-db.js?v=20260926e"></script>
+<script src="../assets/js/jobs-db.js?v=20260926e"></script>
+<script src="../assets/js/job-photos-db.js?v=20260926e"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260926e"></script>
+<script src="../assets/js/camera-capture.js?v=20260926e"></script>
+<script src="../assets/js/print-invoice.js?v=20260926e"></script>
+<script src="../assets/js/maps-config.js?v=20260926e"></script>
+<script src="../assets/js/mileage-db.js?v=20260926e"></script>
+<script src="../assets/js/jobs.js?v=20260926e"></script>
 </body>
 </html>

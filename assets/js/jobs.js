@@ -17,6 +17,7 @@ let _jbCurrentInvoice = null;
 let _jbCurrentPayments = [];
 let _jbNewPriority = "normal";
 let _jbConvertingQuote = null; // the quote object picked via "Start from a Quote" in the New Job popup
+let _jbNewJobCustomerSystems = []; // Round 54: the selected customer's existing Systems, for the New Job popup's System picker (mirrors saaCalCustomerSystems in calendar.js)
 let _jbQuoteSearchTimer = null;
 let _jbPhotos = []; // every job_photos row for the open job (general + inspection-linked)
 let _jbInspectionResults = []; // [{index, item, checked}] — synced with INSPECTION_ITEMS by index
@@ -762,7 +763,63 @@ function jbSelectCustomer(sel) {
   document.getElementById("jbn-change-cust-btn").addEventListener("click", () => {
     _jbSelectedCust = null;
     box.hidden = true;
+    document.getElementById("jbn-system-wrap").hidden = true;
   });
+  jbRenderSystemPicker(sel.isNew ? null : sel.id);
+}
+
+/** Round 54: populates the New Job popup's System picker for the just-
+ *  selected/created customer -- exact same idea as calendar.js's own
+ *  saaCalRenderSystemPicker (Round 42 Task 117) for the Calendar's "+
+ *  Schedule -> New Job" tab, which already got this right; this popup
+ *  (Jobs List's own "+ New Job" button) never had a picker at all and
+ *  always forked off a brand-new blank System (see the old comment on
+ *  jbSaveNewJob below), which is the root cause of System info not
+ *  showing up consistently across a customer's other jobs/events. "+ Add
+ *  New System" is the default (a brand-new customer only ever has that
+ *  one option); picking an existing System instead attaches this new Job
+ *  directly to it. */
+async function jbRenderSystemPicker(customerId) {
+  document.getElementById("jbn-system-wrap").hidden = false;
+  document.getElementById("jbn-system-warning").textContent = "";
+  _jbNewJobCustomerSystems = customerId ? await saaSystemsFetchByCustomerWithJobs(customerId) : [];
+  const select = document.getElementById("jbn-system-select");
+  select.innerHTML = `<option value="">+ Add New System</option>` + _jbNewJobCustomerSystems.map((s) => {
+    const jobBit = s.job ? ` — Job ${s.job.job_number} (${s.job.status})` : "";
+    return `<option value="${s.id}">${_jbEsc(s.system_name || "System")}${_jbEsc(jobBit)}</option>`;
+  }).join("");
+  // Round 55: "current customer with one system will have only one job" --
+  // a customer with exactly one existing System is now auto-selected here
+  // instead of defaulting to blank "+ Add New System", so the office no
+  // longer has to remember to pick it manually (this is what let Srinivas's
+  // equipment fork into 4 separate Systems in Round 54). 2+ systems still
+  // needs an explicit pick -- which one this Job belongs to isn't
+  // obvious -- and 0 systems leaves "+ Add New System" as the only option.
+  if (_jbNewJobCustomerSystems.length === 1) {
+    select.value = _jbNewJobCustomerSystems[0].id;
+    await jbOnSystemChange();
+  } else {
+    select.value = "";
+    document.getElementById("jbn-newsystem-fields").hidden = false;
+  }
+}
+
+/** New Job popup's System <select> change handler -- mirrors
+ *  saaCalOnSystemChange in calendar.js. Reveals the "+ Add New System"
+ *  fields only when that option is picked, and otherwise warns (same
+ *  Round 43 "one current Job per Customer+System" rule) that picking a
+ *  System that already has a current Job will convert that Job into a
+ *  historical Event when this popup is saved. */
+async function jbOnSystemChange() {
+  const systemId = document.getElementById("jbn-system-select").value;
+  const warn = document.getElementById("jbn-system-warning");
+  document.getElementById("jbn-newsystem-fields").hidden = !!systemId;
+  warn.textContent = "";
+  if (!systemId || !_jbSelectedCust || _jbSelectedCust.isNew) return;
+  const cur = await saaSystemsFindCurrentJobForSystem(_jbSelectedCust.id, systemId);
+  if (cur.ok && cur.job) {
+    warn.textContent = `⚠️ This system's current job is ${cur.job.job_number} (${(Object.fromEntries(SAA_JOBS_STATUS_OPTIONS)[cur.job.status]) || cur.job.status}). Creating a new job here will convert it into a historical Event.`;
+  }
 }
 
 function jbUseNewCustomer() {
@@ -789,11 +846,15 @@ function jbOpenNewJobModal() {
   document.getElementById("jbn-cust-results").hidden = true;
   document.getElementById("jbn-newcust-form").hidden = true;
   document.getElementById("jbn-selected-cust").hidden = true;
+  document.getElementById("jbn-system-wrap").hidden = true;
+  document.getElementById("jbn-system-select").innerHTML = "";
+  document.getElementById("jbn-system-warning").textContent = "";
+  _jbNewJobCustomerSystems = [];
   document.getElementById("jbn-quote-search-wrap").hidden = true;
   document.getElementById("jbn-quote-search").value = "";
   document.getElementById("jbn-quote-results").hidden = true;
   document.getElementById("jbn-quote-linked").hidden = true;
-  ["jbn-newcust-first", "jbn-newcust-last", "jbn-newcust-phone", "jbn-newcust-address", "jbn-newcust-city", "jbn-newcust-zip", "jbn-title", "jbn-address", "jbn-city", "jbn-zip", "jbn-date", "jbn-time", "jbn-notes"].forEach((id) => { document.getElementById(id).value = ""; });
+  ["jbn-newcust-first", "jbn-newcust-last", "jbn-newcust-phone", "jbn-newcust-address", "jbn-newcust-city", "jbn-newcust-zip", "jbn-title", "jbn-address", "jbn-city", "jbn-zip", "jbn-date", "jbn-time", "jbn-notes", "jbn-sys-name", "jbn-sys-manufacturer"].forEach((id) => { document.getElementById(id).value = ""; });
   document.getElementById("jbn-state").value = "TX";
   document.getElementById("jbn-type").selectedIndex = 0;
   document.getElementById("jbn-tech").value = "";
@@ -869,13 +930,12 @@ function jbRenderPriorityRow(mountId, selected, onPick) {
  *  created an Event (so the Job Card's Event History was empty, AND the
  *  job never showed up on the Dispatch Calendar at all, since the
  *  Calendar reads from `events`, not `jobs`/the old `appointments`
- *  table). Now mirrors the Calendar's own "+ Schedule" New Job tab:
- *  saaSystemsCreateWithJob creates a fresh System (name "System",
- *  fillable later from the Job Card — this form has no System picker of
- *  its own) together with the Job, then saaEventsCreateForJob gives it
- *  its first Event, mapped from the picked Job Type via
- *  SAA_JOBTYPE_TO_EVENTTYPE (events-db.js) — same mapping the Calendar
- *  uses, so a job created either way ends up with an equivalent Event. */
+ *  table). Now mirrors the Calendar's own "+ Schedule" New Job tab in
+ *  full, including its System picker (Round 54, see jbRenderSystemPicker
+ *  above): picking an existing System routes through
+ *  saaJobsCreateForExistingSystem (events-db.js) — same as
+ *  saaCalScheduleNewJob's own existing-System branch — instead of always
+ *  forking off a brand-new, blank System via saaSystemsCreateWithJob. */
 async function jbSaveNewJob() {
   const statusEl = document.getElementById("jbn-status");
   if (!_jbSelectedCust) { statusEl.textContent = "Select or add a customer first."; return; }
@@ -897,6 +957,7 @@ async function jbSaveNewJob() {
   const scheduledDate = document.getElementById("jbn-date").value || null;
   const scheduledTime = document.getElementById("jbn-time").value || null;
   const title = document.getElementById("jbn-title").value.trim();
+  const systemId = document.getElementById("jbn-system-select").value || null;
 
   let customerId;
   try {
@@ -917,25 +978,21 @@ async function jbSaveNewJob() {
     return;
   }
 
-  let status = "new";
-  if (technicianId && scheduledDate) status = "scheduled";
-  else if (technicianId) status = "assigned";
-
-  statusEl.textContent = "Saving…";
-  const sysRes = await saaSystemsCreateWithJob(
-    customerId,
-    {},
-    {
-      jobType, status, title, jobAddress, jobCity, jobState, jobZip,
-      priority: _jbNewPriority,
-      technicianId, technicianId2, technicianId3,
-      scheduledDate, scheduledTime,
-      notes: document.getElementById("jbn-notes").value.trim(),
-      linkedQuoteId: _jbConvertingQuote ? _jbConvertingQuote.id : null,
-      quotedAmount: _jbConvertingQuote ? _jbConvertingQuote.total || 0 : null,
+  // Round 43 "one current Job per Customer+System" -- picking an EXISTING
+  // System that already has a current Job means saving here will convert
+  // it into a historical Event (saaJobsCreateForExistingSystem below).
+  // Confirm before doing that, same as the Calendar's own New Job tab.
+  if (systemId && !_jbSelectedCust.isNew) {
+    const cur = await saaSystemsFindCurrentJobForSystem(customerId, systemId);
+    if (cur.ok && cur.job) {
+      const statusLabel = (Object.fromEntries(SAA_JOBS_STATUS_OPTIONS)[cur.job.status]) || cur.job.status;
+      const proceed = await saaConfirm(
+        `CURRENT JOB FOUND\n\n${cur.job.job_number}\nStatus: ${statusLabel}\n\nCreating this new Job will convert the current Job into a historical Event. Continue?`,
+        { title: "New Job", okLabel: "Create New Job & Convert Previous Job", cancelLabel: "Cancel" }
+      );
+      if (!proceed) { statusEl.textContent = "Not created."; return; }
     }
-  );
-  if (!sysRes.ok) { statusEl.textContent = sysRes.error; return; }
+  }
 
   let startDatetime = null, endDatetime = null;
   if (technicianId && scheduledDate) {
@@ -945,15 +1002,57 @@ async function jbSaveNewJob() {
     startDatetime = _saaJobsTimeStr(scheduledDate, time);
     endDatetime = _saaJobsTimeStr(scheduledDate, _saaJobsAddMinutes(time, duration));
   }
-  const evRes = await saaEventsCreateForJob(sysRes.jobId, {
-    eventType: SAA_JOBTYPE_TO_EVENTTYPE[jobType] || "service_call",
-    eventStatus: "scheduled",
-    scheduledStart: startDatetime,
-    scheduledEnd: endDatetime,
-    technicianId, technicianId2, technicianId3,
-    reason: title || null,
-  });
-  if (!evRes.ok) { statusEl.textContent = "Job created, but its first Event couldn't be scheduled: " + evRes.error; return; }
+
+  statusEl.textContent = "Saving…";
+
+  let newJobId;
+  if (systemId) {
+    // Existing System picked -- attach this new Job directly to it
+    // instead of forking off a duplicate blank System (Round 54).
+    const jobRes = await saaJobsCreateForExistingSystem(customerId, systemId, {
+      jobType, status: "new", title, jobAddress, jobCity, jobState, jobZip,
+      priority: _jbNewPriority,
+      technicianId, technicianId2, technicianId3,
+      scheduledDate, scheduledTime, startDatetime, endDatetime,
+      notes: document.getElementById("jbn-notes").value.trim(),
+      linkedQuoteId: _jbConvertingQuote ? _jbConvertingQuote.id : null,
+      quotedAmount: _jbConvertingQuote ? _jbConvertingQuote.total || 0 : null,
+    });
+    if (!jobRes.ok) { statusEl.textContent = jobRes.error; return; }
+    newJobId = jobRes.jobId;
+    // saaJobsCreateForExistingSystem already creates the new Job's own
+    // starter Event -- nothing more to do here.
+  } else {
+    let status = "new";
+    if (technicianId && scheduledDate) status = "scheduled";
+    else if (technicianId) status = "assigned";
+
+    const sysRes = await saaSystemsCreateWithJob(
+      customerId,
+      { systemName: document.getElementById("jbn-sys-name").value.trim() || null, manufacturer: document.getElementById("jbn-sys-manufacturer").value.trim() || null },
+      {
+        jobType, status, title, jobAddress, jobCity, jobState, jobZip,
+        priority: _jbNewPriority,
+        technicianId, technicianId2, technicianId3,
+        scheduledDate, scheduledTime,
+        notes: document.getElementById("jbn-notes").value.trim(),
+        linkedQuoteId: _jbConvertingQuote ? _jbConvertingQuote.id : null,
+        quotedAmount: _jbConvertingQuote ? _jbConvertingQuote.total || 0 : null,
+      }
+    );
+    if (!sysRes.ok) { statusEl.textContent = sysRes.error; return; }
+    newJobId = sysRes.jobId;
+
+    const evRes = await saaEventsCreateForJob(newJobId, {
+      eventType: SAA_JOBTYPE_TO_EVENTTYPE[jobType] || "service_call",
+      eventStatus: "scheduled",
+      scheduledStart: startDatetime,
+      scheduledEnd: endDatetime,
+      technicianId, technicianId2, technicianId3,
+      reason: title || null,
+    });
+    if (!evRes.ok) { statusEl.textContent = "Job created, but its first Event couldn't be scheduled: " + evRes.error; return; }
+  }
 
   document.getElementById("jb-new-modal").hidden = true;
   await jbLoadAll();
@@ -2845,6 +2944,32 @@ async function jbeDeleteCurrentEvent() {
   }
 }
 
+/** Round 55: the distinct hard-delete Vijayan chose alongside the soft
+ *  delete above ("add a separate true hard-delete option alongside
+ *  Cancel") -- for an Event that was created by outright mistake and
+ *  should be gone entirely, not just marked Cancelled. Confirmation
+ *  wording is deliberately stronger/different from jbeDeleteCurrentEvent's
+ *  (no "marks it Cancelled" softening) since this one can't be undone at
+ *  all. saaEventsHardDelete (events-db.js) does the actual guard-checking
+ *  and re-scoping; this handler just surfaces whatever it returns. */
+async function jbeHardDeleteCurrentEvent() {
+  const event = _jbEventModalTarget;
+  if (!event || !event.id) { jbCloseEventModal(); return; }
+  const ok = await saaConfirm(
+    `Permanently delete event ${event.event_number || ""}? This removes it entirely -- unlike "Delete Event" above, it will NOT appear in Event History afterward, and this cannot be undone. Its own Mileage/Photos/Invoice/Quote/BOM records are kept but unlinked from this event.`,
+    { title: "Permanently Delete Event", okLabel: "Permanently Delete", cancelLabel: "Cancel" }
+  );
+  if (!ok) return;
+  const res = await saaEventsHardDelete(event.id);
+  if (res.ok) {
+    jbCloseEventModal();
+    if (_jbCurrentJob) await jbRenderEventTimeline(_jbCurrentJob);
+    _jbToast("Event permanently deleted.");
+  } else {
+    document.getElementById("jb-event-status-msg").textContent = res.error;
+  }
+}
+
 async function jbSaveEventModal() {
   if (!_jbCurrentJob) return;
   const btn = document.getElementById("jb-event-save-btn");
@@ -2942,12 +3067,21 @@ async function jbSaveEventModal() {
   // BOTH fields are present and at least one actually changed from what was
   // loaded, so an untouched (possibly estimated) value never overwrites a
   // precise auto-set timestamp on every ordinary Save.
+  //
+  // Round 55 follow-up, per Vijayan: editing Completed Date/Time used to
+  // require Status already being set to Completed on the SAME save -- so
+  // correcting/pre-filling that field on an In Progress (or any other
+  // non-Completed) event was silently discarded, which is exactly what
+  // "completion time... is not updating" looked like. Now it saves
+  // whenever the office actually changed it, regardless of the event's
+  // current Status -- the field's own estimate note already makes clear
+  // it isn't the confirmed time until this is done.
   const eventIdForCompleted = res.ok ? (_jbEventModalTarget ? _jbEventModalTarget.id : res.eventId) : null;
   if (res.ok && eventIdForCompleted) {
     const completedDateVal = document.getElementById("jbe-completed-date").value;
     const completedTimeVal = document.getElementById("jbe-completed-time").value;
     const changed = completedDateVal !== _jbEventCompletedAtOpen.date || completedTimeVal !== _jbEventCompletedAtOpen.time;
-    if (eventStatus === "completed" && completedDateVal && completedTimeVal && changed) {
+    if (completedDateVal && completedTimeVal && changed) {
       const ctRes = await saaEventsSetCompletedTime(eventIdForCompleted, completedDateVal, completedTimeVal);
       if (!ctRes.ok) _jbToast(ctRes.error, true);
     }
@@ -3068,8 +3202,10 @@ async function jbOpenDetail(jobId) {
   document.getElementById("jbd-completed").value = job.completed_date || "";
   const _jbCompletedTime = await saaJobsGetCompletedTime(job);
   document.getElementById("jbd-completed-time").value = _jbCompletedTime.time;
-  document.getElementById("jbd-completed-time-note").textContent = _jbCompletedTime.isEstimate ? "(estimated from schedule — confirm or edit)" : "";
-  job._jbCompletedTimeAtOpen = _jbCompletedTime.time; // change-detection so Save doesn't re-stamp an unedited time
+  // Round 55 follow-up: "confirm or edit" used to point back at this same
+  // (now disabled, auto-derived) field -- edit it from the current Event's
+  // own modal instead, same as Status just above.
+  document.getElementById("jbd-completed-time-note").textContent = _jbCompletedTime.isEstimate ? "(estimated from schedule — edit from the Event)" : "";
   document.getElementById("jbd-address").value = job.job_address || "";
   document.getElementById("jbd-city").value = job.job_city || "";
   document.getElementById("jbd-state").value = job.job_state || "TX";
@@ -3161,14 +3297,25 @@ async function jbSaveDetail(opts) {
   const patch = {
     job_type: document.getElementById("jbd-type").value,
     priority: document.getElementById("jbd-priority").value,
-    status: document.getElementById("jbd-status").value,
+    // status is intentionally NOT written here (Round 54) -- jbd-status is
+    // now a disabled, auto-derived display of the Job's current Event's
+    // status (see SAA_EVENTSTATUS_TO_JOBSTATUS / _saaEventsSyncJobFromCurrentEvent
+    // in events-db.js). Change status from the Event (Job Card's event
+    // modal or the Calendar drawer) instead, same idea as the
+    // actual_material_cost field just above.
     assigned_technician_id: document.getElementById("jbd-tech").value || null,
     // Round 25 (2026-09-14): optional 2nd/3rd technician.
     assigned_technician_id_2: document.getElementById("jbd-tech2").value || null,
     assigned_technician_id_3: document.getElementById("jbd-tech3").value || null,
-    scheduled_date: document.getElementById("jbd-scheduled").value || null,
-    scheduled_time: document.getElementById("jbd-time").value || null,
-    completed_date: document.getElementById("jbd-completed").value || null,
+    // scheduled_date/scheduled_time/completed_date are intentionally NOT
+    // written here (Round 55 follow-up) -- same reasoning as status just
+    // above: jbd-scheduled/jbd-time/jbd-completed are now disabled,
+    // auto-derived displays of the Job's current Event (see
+    // _saaEventsSyncJobFromCurrentEvent in events-db.js). Writing them
+    // from this form's (possibly stale) DOM values on every ordinary Save
+    // was silently overwriting whatever an Event edit elsewhere had just
+    // synced in -- reported by Vijayan as "schedule time and completion
+    // time... not updating in Jobs and Events."
     job_address: document.getElementById("jbd-address").value.trim() || null,
     job_city: document.getElementById("jbd-city").value.trim() || null,
     job_state: document.getElementById("jbd-state").value.trim().toUpperCase() || null,
@@ -3191,34 +3338,17 @@ async function jbSaveDetail(opts) {
   if (!res.ok) { statusMsg.textContent = res.error; return; }
   Object.assign(job, patch); // keep the open Job Card's in-memory copy in sync (e.g. so "Generate Invoice" right after Save sees the just-saved Approved Amount)
 
-  // Completed Time (Round 6 item 6): saaJobsUpdateJob above only stamps
-  // status_history.completed automatically when Status just CHANGED to
-  // Completed. This covers the other case — the tech directly editing the
-  // Completed Time field (correcting an auto-set or estimated time) without
-  // touching Status — by only writing when the field actually changed from
-  // what was loaded, so an untouched field never overwrites a precise
-  // auto-set timestamp with a rounded HH:MM on every ordinary Save.
-  const completedTimeVal = document.getElementById("jbd-completed-time").value;
-  if (patch.status === "completed" && completedTimeVal && completedTimeVal !== job._jbCompletedTimeAtOpen) {
-    const ctRes = await saaJobsSetCompletedTime(job.id, completedTimeVal);
-    if (ctRes.ok) {
-      job._jbCompletedTimeAtOpen = completedTimeVal;
-      document.getElementById("jbd-completed-time-note").textContent = "";
-    } else {
-      _jbToast(ctRes.error, true);
-    }
-  }
-
-  // Push Scheduled Date/Time/Technician onto the job's calendar appointment —
-  // this is what makes saving here place (or move) it on the Dispatch Calendar grid.
-  await saaJobsSyncAppointmentSchedule(job.id, {
-    technicianId: patch.assigned_technician_id,
-    technicianId2: patch.assigned_technician_id_2,
-    technicianId3: patch.assigned_technician_id_3,
-    scheduledDate: patch.scheduled_date,
-    scheduledTime: patch.scheduled_time,
-    jobType: patch.job_type,
-  });
+  // Round 55 follow-up: the direct "Completed Time" correction block that
+  // used to live here (saaJobsSetCompletedTime from jbd-completed-time) is
+  // gone along with the field's disabling above -- correct an Event's
+  // Completed Date/Time from its own Event modal now (jbeCompletedTime
+  // handling in jbSaveEventModal), which is the one place that ever
+  // determines what reads through to this Job. Same for the old
+  // saaJobsSyncAppointmentSchedule call that used to push
+  // Scheduled Date/Time/Technician onto the legacy `appointments` table --
+  // that table hasn't backed anything visible since the Round 42 Calendar
+  // migration to `events` (nothing in the app ever reads it back), so
+  // there's nothing left here for it to keep in sync.
 
   // Save each unlocked equipment type's fields; a locked type is left
   // untouched so it can't be overwritten by accident.
@@ -3494,6 +3624,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("jbn-cancel-btn").addEventListener("click", () => { document.getElementById("jb-new-modal").hidden = true; });
     document.getElementById("jbn-save-btn").addEventListener("click", jbSaveNewJob);
     document.getElementById("jbn-newcust-use-btn").addEventListener("click", jbUseNewCustomer);
+    document.getElementById("jbn-system-select").addEventListener("change", jbOnSystemChange);
     document.getElementById("jbn-newcust-cancel-btn").addEventListener("click", () => {
       document.getElementById("jbn-newcust-form").hidden = true;
       document.getElementById("jbn-cust-results").hidden = false;
@@ -3548,8 +3679,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Invoice/Payment (their own Update Invoice/Record Payment buttons) --
   // none of those fields are part of jbSaveDetail's patch anyway.
   [
-    "jbd-type", "jbd-priority", "jbd-status", "jbd-tech", "jbd-scheduled", "jbd-time",
-    "jbd-completed", "jbd-completed-time", "jbd-address", "jbd-city", "jbd-state", "jbd-zip",
+    // jbd-status excluded (Round 54), and jbd-scheduled/jbd-time/
+    // jbd-completed/jbd-completed-time excluded (Round 55 follow-up) --
+    // all disabled/auto-derived from the Job's current Event, same as
+    // jbd-cost-material just above.
+    "jbd-type", "jbd-priority", "jbd-tech", "jbd-address", "jbd-city", "jbd-state", "jbd-zip",
     "jbd-problem", "jbd-findings", "jbd-recommend", "jbd-sig-name", "jbd-sig-date", "jbd-notes",
     "jbd-mileage-miles",
   ].forEach((id) => {
@@ -3707,6 +3841,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
   document.getElementById("jb-event-delete-btn").addEventListener("click", jbeDeleteCurrentEvent);
+  document.getElementById("jb-event-harddelete-btn").addEventListener("click", jbeHardDeleteCurrentEvent);
 
   if (_jbIsFullPage) {
     // Legacy deep link, kept for any bookmarked/saved jobs.html?job=<id>

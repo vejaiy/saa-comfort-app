@@ -25,6 +25,22 @@ function _tlFilters() {
   };
 }
 
+function _tlPriorityLabel(p) {
+  return p === "low" ? "Low" : p === "medium" ? "Medium" : p === "high" ? "High" : "";
+}
+
+/* ---- Tabs (Stock Counts / Purchase Ledger / Tools to Buy) ---- */
+
+let _tlActiveTab = "stock";
+
+function _tlSwitchTab(tab) {
+  _tlActiveTab = tab;
+  document.querySelectorAll("#tl-tabs .cal-view-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  document.querySelectorAll(".rc-tab-panel").forEach((p) => { p.hidden = true; });
+  const panel = document.getElementById(`tl-panel-${tab}`);
+  if (panel) panel.hidden = false;
+}
+
 /* ---- Stock Counts ---- */
 
 // Round 37 (2026-09-17), per Vijayan's annotated screenshot ("Add 'print
@@ -224,11 +240,88 @@ document.getElementById("tl-purch-add-btn").addEventListener("click", async () =
   renderPurchases();
 });
 
+/* ---- Tools to Buy (shopping list) ---- */
+
+async function renderShoppingList() {
+  const filters = _tlFilters();
+  filters.includePurchased = document.getElementById("tl-shop-show-purchased").checked;
+  const rows = await saaToolShoppingListFetchAll(filters);
+  const tbody = document.getElementById("tl-shop-tbody");
+  document.getElementById("tl-shop-empty").hidden = rows.length > 0;
+
+  tbody.innerHTML = rows.map((r) => `
+    <tr data-id="${r.id}"${r.status === "purchased" ? ' style="opacity:.6"' : ""}>
+      <td>${_tlEsc(r.item_name)}</td>
+      <td>${_tlEsc(r.specification)}</td>
+      <td>${_tlEsc(r.brand)}</td>
+      <td>${r.qty == null ? "" : r.qty}</td>
+      <td>${_tlEsc(r.category)}</td>
+      <td>${_tlTypeLabel(r.type)}</td>
+      <td>${_tlMoney(r.estimated_price)}</td>
+      <td>${_tlEsc(_tlPriorityLabel(r.priority))}</td>
+      <td class="muted" style="font-size:.82rem">${_tlEsc(r.notes)}</td>
+      <td style="white-space:nowrap">
+        <button type="button" class="btn btn-ghost btn-sm tl-shop-toggle" data-id="${r.id}" data-purchased="${r.status === "purchased" ? "1" : "0"}">${r.status === "purchased" ? "Mark To Buy" : "Mark Purchased"}</button>
+        <button type="button" class="btn btn-ghost btn-sm tl-shop-del" data-id="${r.id}">Delete</button>
+      </td>
+    </tr>`).join("");
+
+  tbody.querySelectorAll(".tl-shop-toggle").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const nowPurchased = btn.dataset.purchased !== "1";
+      const res = await saaToolShoppingListMarkPurchased(btn.dataset.id, nowPurchased);
+      if (!res.ok) { alert("Couldn't update: " + res.error); return; }
+      renderShoppingList();
+    });
+  });
+
+  tbody.querySelectorAll(".tl-shop-del").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Remove this item from the shopping list?")) return;
+      const res = await saaToolShoppingListDelete(btn.dataset.id);
+      if (!res.ok) { alert("Couldn't delete: " + res.error); return; }
+      renderShoppingList();
+    });
+  });
+}
+
+document.getElementById("tl-shop-add-btn").addEventListener("click", async () => {
+  const status = document.getElementById("tl-shop-add-status");
+  const itemName = document.getElementById("tl-shop-add-name").value.trim();
+  if (!itemName) { status.textContent = "Item name is required."; return; }
+  const res = await saaToolShoppingListAdd({
+    item_name: itemName,
+    specification: document.getElementById("tl-shop-add-spec").value.trim(),
+    brand: document.getElementById("tl-shop-add-brand").value.trim(),
+    qty: document.getElementById("tl-shop-add-qty").value,
+    category: document.getElementById("tl-shop-add-category").value.trim(),
+    type: document.getElementById("tl-shop-add-type").value,
+    estimated_price: document.getElementById("tl-shop-add-price").value,
+    priority: document.getElementById("tl-shop-add-priority").value,
+    notes: document.getElementById("tl-shop-add-notes").value.trim(),
+  });
+  if (!res.ok) { status.textContent = "Error: " + res.error; return; }
+  ["name", "spec", "brand", "qty", "category", "price", "notes"].forEach((f) => {
+    const el = document.getElementById(`tl-shop-add-${f}`);
+    if (el) el.value = f === "qty" ? "1" : "";
+  });
+  document.getElementById("tl-shop-add-priority").value = "";
+  status.textContent = "Added to shopping list.";
+  renderShoppingList();
+});
+
+document.getElementById("tl-shop-show-purchased").addEventListener("change", renderShoppingList);
+
+document.querySelectorAll("#tl-tabs .cal-view-btn").forEach((b) => {
+  b.addEventListener("click", () => _tlSwitchTab(b.dataset.tab));
+});
+
 /* ---- Shared filter bar ---- */
 
 function renderAll() {
   renderInventory();
   renderPurchases();
+  renderShoppingList();
 }
 
 let _tlSearchTimer = null;
@@ -247,4 +340,9 @@ document.getElementById("tl-clear-btn").addEventListener("click", () => {
   renderAll();
 });
 
+// The Stock Counts tab starts marked "active" in the generated markup, but
+// every tab panel starts hidden except it (see gen_tools.py) -- _tlSwitchTab
+// keeps the button/panel state in sync going forward, so run it once up
+// front to match the default markup rather than assuming they never drift.
+_tlSwitchTab("stock");
 renderAll();

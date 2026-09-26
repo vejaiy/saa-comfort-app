@@ -129,9 +129,21 @@ function _rcLineItemsTableHtml(rows) {
   // box so the horizontal scrollbar for this wide (14-column) table stays
   // reachable at the bottom of the visible table instead of the bottom of
   // the whole (possibly very long) month group. See style.css.
+  //
+  // "rc-lineitems-table" (2026-09-26, per Vijayan: "make columns straight
+  // for items in receipt, tools, supplies tab") -- each month renders its
+  // OWN <table>, and plain auto table layout sizes every table's columns
+  // independently from that table's own content, so one month's columns
+  // drift out of alignment with the next month's (or with Tools'/Supplies'
+  // own month tables) whenever their content widths differ. The <colgroup>
+  // below gives every one of these tables, in every bucket, the exact same
+  // fixed column widths (see style.css), so they always line up.
   return `
 <div class="jobs-table-wrap rc-table-scroll">
-  <table class="jobs-table">
+  <table class="jobs-table rc-lineitems-table">
+    <colgroup>
+      <col><col><col><col><col><col><col><col><col><col><col><col><col><col><col>
+    </colgroup>
     <thead><tr>
       <th>Date</th><th>Vendor</th><th>Store Location</th><th>Item Description</th><th>Category</th>
       <th>Job / Project</th><th>Specification</th><th>Qty</th><th>Unit Price</th><th>Item Total</th>
@@ -144,6 +156,7 @@ function _rcLineItemsTableHtml(rows) {
 
 function _rcRenderBucketTab(bucket) {
   const rows = _rcApplyClientFilters(_rcAllRows.filter((r) => r.bucket === bucket));
+  _rcPopulateDownloadPeriod(bucket);
   const wrap = document.getElementById(`rc-months-${bucket}`);
   document.getElementById(`rc-empty-${bucket}`).hidden = rows.length > 0;
   const months = saaReceiptsGroupByMonth(rows);
@@ -171,6 +184,134 @@ function _rcRenderBucketTab(bucket) {
   });
   wrap.querySelectorAll(".rc-edit-btn").forEach((b) => {
     b.addEventListener("click", () => _rcOpenEdit(b.dataset.id));
+  });
+}
+
+/* ---- Download (Excel/PDF, by month or year) ---- */
+
+// A receipt line's own date, formatted for a spreadsheet/print row --
+// distinct from the on-screen table's abbreviated _rcDate (no year) since
+// an export can span many years and needs to disambiguate them.
+function _rcFullDate(s) {
+  if (!s) return "";
+  const d = new Date(s);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function _rcBucketRowsForDownload(bucket) {
+  return _rcApplyClientFilters(_rcAllRows.filter((r) => r.bucket === bucket));
+}
+
+// Repopulates the "By month"/"By year" value dropdown from whatever's
+// currently in that bucket (respecting the page's own search/needs-review
+// filters, same data the on-screen month groups are built from), keeping
+// the previously chosen period selected if it's still on the list.
+function _rcPopulateDownloadPeriod(bucket) {
+  const typeSel = document.getElementById(`rc-dl-period-type-${bucket}`);
+  const valueSel = document.getElementById(`rc-dl-period-value-${bucket}`);
+  if (!typeSel || !valueSel) return;
+  const mode = typeSel.value;
+  valueSel.style.display = mode === "all" ? "none" : "";
+  if (mode === "all") return;
+  const rows = _rcBucketRowsForDownload(bucket);
+  const prev = valueSel.value;
+  let keys, labelFor;
+  if (mode === "month") {
+    keys = [...new Set(rows.map(saaReceiptMonthKey).filter(Boolean))].sort().reverse();
+    labelFor = saaReceiptMonthLabel;
+  } else {
+    keys = [...new Set(rows.map((r) => saaReceiptMonthKey(r).slice(0, 4)).filter(Boolean))].sort().reverse();
+    labelFor = (k) => k;
+  }
+  valueSel.innerHTML = keys.map((k) => `<option value="${k}">${_rcEsc(labelFor(k))}</option>`).join("")
+    || `<option value="">No data yet</option>`;
+  if (prev && keys.includes(prev)) valueSel.value = prev;
+}
+
+// The rows + a human period label for the selected bucket/period, sorted
+// oldest-to-newest (matches the on-screen month groups' own row order).
+function _rcSelectedExportRows(bucket) {
+  const typeSel = document.getElementById(`rc-dl-period-type-${bucket}`);
+  const valueSel = document.getElementById(`rc-dl-period-value-${bucket}`);
+  const mode = typeSel.value;
+  let rows = _rcBucketRowsForDownload(bucket);
+  let periodLabel = "All time";
+  if (mode === "month" && valueSel.value) {
+    rows = rows.filter((r) => saaReceiptMonthKey(r) === valueSel.value);
+    periodLabel = saaReceiptMonthLabel(valueSel.value);
+  } else if (mode === "year" && valueSel.value) {
+    rows = rows.filter((r) => saaReceiptMonthKey(r).slice(0, 4) === valueSel.value);
+    periodLabel = valueSel.value;
+  }
+  rows = rows.slice().sort((a, b) => (a.r_received_at || "").localeCompare(b.r_received_at || ""));
+  return { rows, periodLabel };
+}
+
+function _rcCsvField(v) {
+  const s = String(v == null ? "" : v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function _rcDownloadCsv(bucket) {
+  const { rows, periodLabel } = _rcSelectedExportRows(bucket);
+  const header = ["Date", "Vendor", "Store Location", "Item Description", "Category", "Job / Project",
+    "Specification", "Qty", "Unit Price", "Item Total", "Sales Tax", "Subtotal", "Payment Method", "Receipt / Order Number"];
+  const lines = [header.map(_rcCsvField).join(",")];
+  const totals = { item_total: 0, sales_tax: 0, subtotal: 0 };
+  rows.forEach((r) => {
+    const subtotal = saaLineTotal(r);
+    totals.item_total += Number(r.item_total) || 0;
+    totals.sales_tax += Number(r.sales_tax) || 0;
+    totals.subtotal += subtotal || 0;
+    lines.push([
+      _rcCsvField(_rcFullDate(r.r_received_at)),
+      _rcCsvField(r.r_vendor),
+      _rcCsvField(r.r_store_location),
+      _rcCsvField(r.item_description),
+      _rcCsvField(r.category || "Uncategorized"),
+      _rcCsvField(_rcProjectLabel(r)),
+      _rcCsvField(r.specification),
+      _rcCsvField(r.qty),
+      _rcCsvField(r.unit_price),
+      _rcCsvField(r.item_total),
+      _rcCsvField(r.sales_tax),
+      _rcCsvField(subtotal),
+      _rcCsvField(r.r_payment_method),
+      _rcCsvField(r.r_receipt_number),
+    ].join(","));
+  });
+  if (rows.length) {
+    lines.push(["", "", "", "", "", "", "", "", "Total", _rcCsvField(totals.item_total), _rcCsvField(totals.sales_tax), _rcCsvField(totals.subtotal), "", ""].join(","));
+  }
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const periodSlug = periodLabel.replace(/\s+/g, "-").toLowerCase();
+  a.download = `SAA-receipts-${bucket}-${periodSlug}-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function _rcDownloadPdf(bucket) {
+  const { rows, periodLabel } = _rcSelectedExportRows(bucket);
+  printReceipts({
+    bucketLabel: _rcBucketLabel(bucket),
+    periodLabel,
+    generatedOn: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    rows: rows.map((r) => ({
+      dateLabel: _rcFullDate(r.r_received_at),
+      r_vendor: r.r_vendor,
+      item_description: r.item_description,
+      category: r.category,
+      projectLabel: _rcProjectLabel(r),
+      qty: r.qty,
+      item_total: r.item_total,
+      sales_tax: r.sales_tax,
+      subtotal: saaLineTotal(r),
+    })),
   });
 }
 
@@ -309,6 +450,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   document.querySelectorAll("#rc-tabs .cal-view-btn").forEach((b) => {
     b.addEventListener("click", () => _rcSwitchTab(b.dataset.tab));
+  });
+  SAA_RECEIPT_BUCKETS.forEach((bucket) => {
+    document.getElementById(`rc-dl-period-type-${bucket}`).addEventListener("change", () => _rcPopulateDownloadPeriod(bucket));
+    document.getElementById(`rc-dl-csv-${bucket}`).addEventListener("click", () => _rcDownloadCsv(bucket));
+    document.getElementById(`rc-dl-pdf-${bucket}`).addEventListener("click", () => _rcDownloadPdf(bucket));
   });
   document.getElementById("rc-search").addEventListener("input", () => { clearTimeout(window._rcSearchT); window._rcSearchT = setTimeout(_rcLoadAll, 250); });
   document.getElementById("rc-needs-review-only").addEventListener("change", _rcRenderActiveTab);

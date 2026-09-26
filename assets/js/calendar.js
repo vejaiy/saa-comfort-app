@@ -515,22 +515,35 @@ function saaCalTechTrackHtml(tech) {
   </div>`;
 }
 
-/** Round 48 (2026-09-23): the Day grid now renders one of two layouts
- *  depending on viewport width -- the original horizontal-timeline grid
- *  (technician tracks, hours across the top) on a normal-width screen, or
- *  the new vertical grid (technician columns, hours down the side) on a
- *  phone. Both wraps always exist in the DOM (gen_calendar.py); this just
- *  shows one and hides the other, then delegates to that layout's own
- *  render function -- called from every place that already called
- *  saaCalRenderDayGrid (view switch, navigate, load, drag/resize finish,
- *  the resize listener below), so nothing else needed to change to pick up
- *  a width change. */
+/** Round 48 (2026-09-23) had the Day grid switch to a phone-only vertical
+ *  layout (technician columns, hours down the side) below
+ *  SAA_CAL_MOBILE_BREAKPOINT, to avoid horizontal scrolling to see events.
+ *  Round 53 (2026-09-25), per Vijayan: "In calendar day view for phone make
+ *  technicians in row and hrs in column. Instead of having separate
+ *  sections for technicians and hrs." -- that's exactly what the ORIGINAL
+ *  horizontal grid already does (technician rows via .cal-tech-row, hours
+ *  as columns across the top), so the Day grid was switched to always use
+ *  it, on phone or desktop, with .cal-tech-label made sticky instead so
+ *  the technician name/status stays pinned on the left while the hour
+ *  columns scroll horizontally on a narrow screen.
+ *  Round 57 (2026-09-26), per Vijayan: "Calendar day view on phone. show
+ *  technicians as columns and hours as rows" -- back to the Round 48
+ *  layout on phone specifically. The vertical-grid functions/DOM/CSS were
+ *  never removed (kept in place after Round 53 to stay low-risk), so this
+ *  restores the original breakpoint switch rather than rebuilding it:
+ *  phone width (<= SAA_CAL_MOBILE_BREAKPOINT) renders the vertical grid,
+ *  everything above it keeps the horizontal grid Round 53 preferred for
+ *  desktop. */
 function saaCalRenderDayGrid() {
-  const mobile = _saaCalIsMobileDay();
-  document.getElementById("cal-day-view-wrap").hidden = mobile;
-  document.getElementById("cal-day-view-vertical-wrap").hidden = !mobile;
-  if (mobile) saaCalRenderDayGridVertical();
-  else saaCalRenderDayGridHorizontal();
+  if (_saaCalIsMobileDay()) {
+    document.getElementById("cal-day-view-wrap").hidden = true;
+    document.getElementById("cal-day-view-vertical-wrap").hidden = false;
+    saaCalRenderDayGridVertical();
+  } else {
+    document.getElementById("cal-day-view-wrap").hidden = false;
+    document.getElementById("cal-day-view-vertical-wrap").hidden = true;
+    saaCalRenderDayGridHorizontal();
+  }
 }
 
 function saaCalRenderDayGridHorizontal() {
@@ -1039,8 +1052,17 @@ async function saaCalRenderSystemPicker(customerId) {
     const jobBit = s.job ? ` — Job ${s.job.job_number} (${s.job.status})` : "";
     return `<option value="${s.id}">${_saaCalEsc(s.system_name || "System")}${_saaCalEsc(jobBit)}</option>`;
   }).join("");
-  select.value = "";
-  document.getElementById("ns-newsystem-fields").hidden = false;
+  // Round 55: same auto-default as jbRenderSystemPicker in jobs.js -- a
+  // customer with exactly one existing System is auto-selected instead of
+  // defaulting to blank "+ Add New System" (2+ systems still requires an
+  // explicit pick; 0 systems leaves "+ Add New System" as the only option).
+  if (saaCalCustomerSystems.length === 1) {
+    select.value = saaCalCustomerSystems[0].id;
+    await saaCalOnSystemChange();
+  } else {
+    select.value = "";
+    document.getElementById("ns-newsystem-fields").hidden = false;
+  }
 }
 
 /** New Job tab's System <select> change handler: reveals the "+ Add New

@@ -328,7 +328,14 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .cal-grid-hours .hr-label { flex: 1; font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; padding: 6px 0; border-left: 1px solid #eef1f4; }
 .cal-tech-row { display: flex; align-items: stretch; border-bottom: 1px solid #eef1f4; min-width: 900px; }
 .cal-tech-row:last-child { border-bottom: none; }
-.cal-tech-label { flex: 0 0 110px; padding: 8px 10px; font-size: .84rem; font-weight: 700; color: var(--navy); display: flex; flex-direction: column; justify-content: center; gap: 2px; border-right: 1px solid var(--line); background: #fafbfc; }
+/* Round 53 (2026-09-25): the Day grid's technician-rows/hour-columns
+   layout is now used on phone too (see saaCalRenderDayGrid in
+   calendar.js), where the wide hour axis means horizontally scrolling
+   .cal-grid-scroll to see later hours -- sticky + left:0 keeps each
+   technician's name/status pinned on screen while that row's hour
+   columns scroll underneath it, so scrolling never loses track of
+   which row is which technician. */
+.cal-tech-label { flex: 0 0 110px; padding: 8px 10px; font-size: .84rem; font-weight: 700; color: var(--navy); display: flex; flex-direction: column; justify-content: center; gap: 2px; border-right: 1px solid var(--line); background: #fafbfc; position: sticky; left: 0; z-index: 2; }
 .cal-tech-label .tech-status { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--muted); }
 .cal-tech-track { flex: 1; position: relative; min-height: 60px; background-image: repeating-linear-gradient(to right, #eef1f4 0, #eef1f4 1px, transparent 1px, transparent calc(100% / 24)); }
 .cal-tech-track.drop-hover { background-color: #eef6ff; }
@@ -387,6 +394,12 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .cal-vhour-col { flex: 0 0 42px; border-right: 1px solid var(--line); }
 .cal-vhour-col::before { content: ""; display: block; height: 34px; border-bottom: 1px solid var(--line); background: #f7fafb; } /* aligns with the sticky tech-head row */
 .cal-vhour-label { height: var(--cal-vhour-h); font-size: .62rem; color: var(--muted); text-align: right; padding: 2px 5px 0 0; box-sizing: border-box; }
+/* Round 57 (2026-09-26) fix: this rule was missing entirely -- without it
+   .cal-vtech-col's flex sizing has no flex container to apply within, so
+   technician columns stacked as full-width blocks instead of sitting side
+   by side. Never caught earlier because Round 53 disabled this grid before
+   it saw real use. */
+.cal-vgrid-body { display: flex; align-items: stretch; }
 .cal-vtech-col { flex: 0 0 116px; border-right: 1px solid #eef1f4; }
 .cal-vtech-col:last-child { border-right: none; }
 .cal-vtech-col-head { position: sticky; top: 0; z-index: 2; height: 34px; box-sizing: border-box; background: #fafbfc; border-bottom: 1px solid var(--line); padding: 4px 6px; font-size: .72rem; font-weight: 700; color: var(--navy); text-align: center; overflow: hidden; }
@@ -852,6 +865,37 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
    visible box, and the header row stays pinned while scrolling down. */
 .rc-table-scroll { max-height: 60vh; overflow-y: auto; }
 .rc-table-scroll thead tr th { position: sticky; top: 0; z-index: 2; }
+
+/* Round 53 follow-up (2026-09-26), per Vijayan: "make columns straight for
+   items in receipt, tools, supplies tab." Each month group (and each
+   bucket) renders its own <table> (_rcLineItemsTableHtml) -- with plain
+   auto table layout, the browser sizes each one's columns from that
+   table's own content, so the same column drifts to a different width in
+   one month's table vs. the next, or in one bucket vs. another. Fixed
+   layout + an explicit width per column (the <colgroup> in that function)
+   forces every one of these tables to use the exact same widths, so they
+   always line up when scrolled past one another. Long text wraps instead
+   of stretching the column; the fixed overall width (matching the sum of
+   the columns below) keeps the browser from redistributing the extra
+   space when the table is wider than its scroll box, same as .cal-grid-
+   hours' fixed min-width does for the Calendar's own wide grid. */
+.rc-lineitems-table { table-layout: fixed; white-space: normal; width: 1610px; }
+.rc-lineitems-table td, .rc-lineitems-table th { overflow-wrap: break-word; }
+.rc-lineitems-table col:nth-child(1) { width: 70px; }   /* Date */
+.rc-lineitems-table col:nth-child(2) { width: 90px; }   /* Vendor */
+.rc-lineitems-table col:nth-child(3) { width: 170px; }  /* Store Location */
+.rc-lineitems-table col:nth-child(4) { width: 220px; }  /* Item Description */
+.rc-lineitems-table col:nth-child(5) { width: 110px; }  /* Category */
+.rc-lineitems-table col:nth-child(6) { width: 130px; }  /* Job / Project */
+.rc-lineitems-table col:nth-child(7) { width: 110px; }  /* Specification */
+.rc-lineitems-table col:nth-child(8) { width: 50px; }   /* Qty */
+.rc-lineitems-table col:nth-child(9) { width: 80px; }   /* Unit Price */
+.rc-lineitems-table col:nth-child(10) { width: 80px; }  /* Item Total */
+.rc-lineitems-table col:nth-child(11) { width: 80px; }  /* Sales Tax */
+.rc-lineitems-table col:nth-child(12) { width: 80px; }  /* Subtotal */
+.rc-lineitems-table col:nth-child(13) { width: 100px; } /* Payment Method */
+.rc-lineitems-table col:nth-child(14) { width: 110px; } /* Receipt / Order Number */
+.rc-lineitems-table col:nth-child(15) { width: 130px; } /* actions (Email/Edit) */
 .rc-receipt-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; background: var(--card); flex-wrap: wrap; }
 .rc-receipt-row .rc-r-date { width: 84px; color: var(--muted); font-size: .82rem; flex-shrink: 0; }
 .rc-receipt-row .rc-r-main { flex: 1; min-width: 180px; }

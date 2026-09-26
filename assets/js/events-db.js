@@ -84,6 +84,27 @@ const SAA_JOBTYPE_TO_EVENTTYPE = {
 function saaEventTypeLabel(key) { return SAA_EVENT_TYPE_LABELS[key] || key || "—"; }
 function saaEventStatusLabel(key) { return SAA_EVENT_STATUS_LABELS[key] || key || "—"; }
 
+/** Round 54 (2026-09-26): maps an Event's own event_status onto the best-fit
+ *  Job status (SAA_JOBS_STATUS_OPTIONS in jobs-db.js), so a Job's status
+ *  always reads as a read-through from whichever Event is "current" for it
+ *  (see _saaEventsSyncJobFromCurrentEvent below) instead of the two ever
+ *  drifting apart, as reported by Vijayan ("Disconnect in status between
+ *  different view in job card"): a Job Card's own "Job Info" status showed
+ *  stale "New" for a Job whose current Event was already "Completed"
+ *  elsewhere (the Calendar drawer). scheduled/confirmed/rescheduled/no_show
+ *  all still mean "hasn't happened yet" from the Job's point of view, so
+ *  they all map to the Job's own "scheduled". */
+const SAA_EVENTSTATUS_TO_JOBSTATUS = {
+  scheduled: "scheduled",
+  confirmed: "scheduled",
+  rescheduled: "scheduled",
+  no_show: "scheduled",
+  en_route: "in_progress",
+  in_progress: "in_progress",
+  completed: "completed",
+  cancelled: "cancelled",
+};
+
 // Rough default durations per Event Type — moved here from calendar.js's
 // own SAA_CAL_EVENTTYPE_DURATION (Task 120) so jobs.js's Event modal (Job
 // Card field-parity, per Vijayan: "include all fields and logic in event
@@ -148,12 +169,24 @@ async function saaEventsFetchForJob(jobId) {
  *  recently scheduled Event that isn't Completed/Cancelled, falling
  *  back to the single most recent Event of any status if every Event
  *  is already closed out (a completed Job still has a "current event"
- *  to display, it's just in the past). */
+ *  to display, it's just in the past).
+ *
+ *  Round 55 follow-up, per Vijayan's screenshot editing an In Progress
+ *  Event's Scheduled/Completed times and finding the Job/Jobs List didn't
+ *  reflect it: on a Job with several Events, an Event actually being
+ *  worked (In Progress) now outranks a merely-Scheduled Event even if
+ *  that other one happens to be dated further in the future -- "current"
+ *  should mean "what's happening right now," not "whichever open Event
+ *  has the latest date." Only breaks a tie in Vijayan's favor when an
+ *  In Progress Event actually exists; with none, behavior is unchanged
+ *  (latest-scheduled still-open Event, same as before). */
 async function saaEventsFetchCurrentForJob(jobId) {
   const all = await saaEventsFetchForJob(jobId);
   if (!all.length) return null;
-  const open = all.find((e) => !["completed", "cancelled"].includes(e.event_status));
-  return open || all[0];
+  const open = all.filter((e) => !["completed", "cancelled"].includes(e.event_status));
+  if (!open.length) return all[0];
+  const inProgress = open.find((e) => e.event_status === "in_progress");
+  return inProgress || open[0];
 }
 
 /* ============================== Round 42 Task 118: event-level financial data ==============================
@@ -186,8 +219,10 @@ async function saaEventsGetDefaultEventId(jobId) {
 
 /** Keeps a Job's own (legacy, pre-Round-42) `assigned_technician_id[_2/_3]`
  *  / `scheduled_date` / `scheduled_time` columns in sync with whichever
- *  Event is now "current" for it, and re-runs mileage for whichever
- *  technician slot(s) that Event has assigned.
+ *  Event is now "current" for it, keeps the Job's own `status` in sync with
+ *  that Event's `event_status` (Round 54 — see SAA_EVENTSTATUS_TO_JOBSTATUS
+ *  above), and re-runs mileage for whichever technician slot(s) that Event
+ *  has assigned.
  *
  *  Why this exists: those Job columns are what the Jobs List's own
  *  Scheduled/Technician columns display, and what mileage-db.js has
@@ -212,8 +247,26 @@ async function saaEventsGetDefaultEventId(jobId) {
 async function _saaEventsSyncJobFromCurrentEvent(jobId) {
   try {
     if (!jobId) return;
-    const current = await saaEventsFetchCurrentForJob(jobId);
+    // Round 55 follow-up: the Job's "before" status/history used to be
+    // fetched in a SEPARATE, later lookup -- done only when a mapped
+    // status needed it, and only AFTER already committing to write
+    // scheduled_date/scheduled_time/technician below. If that second
+    // lookup ever came back empty or errored, the function still went
+    // ahead and applied the schedule half of the patch alone, leaving the
+    // Job's status stuck out of sync with its own schedule/technician --
+    // exactly the "Jobs and Events" mismatch Vijayan reported (a Job
+    // whose Scheduled Date matched one Event but whose Status never
+    // moved off "New"). Fetching it up front, in parallel with the
+    // current Event, means status and schedule/technician always move
+    // together: if this fails, the whole sync bails out below instead of
+    // applying half of it.
+    const [current, beforeJobRes] = await Promise.all([
+      saaEventsFetchCurrentForJob(jobId),
+      _saaClient.from("jobs").select("status,status_history,completed_date").eq("id", jobId).single(),
+    ]);
     if (!current) return;
+    const { data: beforeJob, error: beforeErr } = beforeJobRes;
+    if (beforeErr || !beforeJob) return;
 
     const patch = {
       assigned_technician_id: current.assigned_technician_id || null,
@@ -223,6 +276,24 @@ async function _saaEventsSyncJobFromCurrentEvent(jobId) {
       scheduled_time: current.scheduled_start ? String(current.scheduled_start).slice(11, 16) : null,
       updated_at: new Date().toISOString(),
     };
+
+    // Round 54: fold the mapped status into the same patch, and mirror
+    // saaJobsUpdateJob's own status_history/completed_date auto-stamping
+    // (jobs-db.js) so a status change arriving through an Event still
+    // behaves exactly like one made directly on the Job Card -- same
+    // "Completed Time" tracking (see saaJobsGetCompletedTime), same
+    // first-time-only completed_date stamp.
+    const mappedStatus = SAA_EVENTSTATUS_TO_JOBSTATUS[current.event_status];
+    if (mappedStatus) {
+      patch.status = mappedStatus;
+      if (mappedStatus !== beforeJob.status) {
+        patch.status_history = Object.assign({}, beforeJob.status_history || {}, { [mappedStatus]: new Date().toISOString() });
+      }
+      if (mappedStatus === "completed" && !beforeJob.completed_date) {
+        patch.completed_date = new Date().toISOString().slice(0, 10);
+      }
+    }
+
     const { data: job, error } = await _saaClient.from("jobs").update(patch).eq("id", jobId).select("*").single();
     if (error || !job) return;
 
@@ -397,6 +468,83 @@ async function saaEventsUpdate(eventId, fields) {
       const { data: ev } = await _saaClient.from("events").select("job_id").eq("id", eventId).maybeSingle();
       if (ev && ev.job_id) await _saaEventsSyncJobFromCurrentEvent(ev.job_id);
     }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: _saaEventsFriendlyDbError(e) };
+  }
+}
+
+/** Round 55: "add a separate true hard-delete option alongside Cancel" --
+ *  Vijayan's explicit pick among three options offered after "allow
+ *  provisions to delete events" (the existing Cancel-based soft delete,
+ *  jbeDeleteCurrentEvent -> saaEventsUpdate(..., {event_status:'cancelled'}),
+ *  is left completely untouched by this). This is for an Event created by
+ *  outright mistake that should be gone entirely, not just hidden. Two
+ *  guards protect data the rest of the app depends on:
+ *   1. An Event that some Job's converted_to_event_id points at is the
+ *      historical record of a real prior Job (Round 43's "one current Job
+ *      per Customer+System" conversion) -- not a mistake, so it's blocked.
+ *   2. A Job's only remaining Event is blocked too -- every Job needs at
+ *      least one Event for _saaEventsSyncJobFromCurrentEvent and the rest
+ *      of the app (Job Card, Event History, Calendar) to read a current
+ *      status/schedule from. Delete the Job itself if that's really the
+ *      intent.
+ *  Every foreign key referencing events(id) -- invoices, job_materials,
+ *  job_photos, jobs.converted_to_event_id, mileage_logs, payments, quotes,
+ *  receipt_line_items -- is ON DELETE NO ACTION, so a raw DELETE would fail
+ *  outright with real customer data still attached. Rather than losing that
+ *  data, every dependent row is re-scoped back to the Job level (its own
+ *  event_id cleared, job_id left alone) before the Event row itself is
+ *  removed -- nothing but the Event's own timeline entry actually goes
+ *  away. Returns { ok:true } | { ok:false, error }. */
+async function saaEventsHardDelete(eventId) {
+  try {
+    const { data: event, error: evErr } = await _saaClient
+      .from("events")
+      .select("id,job_id,event_number")
+      .eq("id", eventId)
+      .maybeSingle();
+    if (evErr) throw evErr;
+    if (!event) return { ok: false, error: "That event no longer exists." };
+
+    const { data: convertedFrom } = await _saaClient
+      .from("jobs")
+      .select("id,job_number")
+      .eq("converted_to_event_id", eventId)
+      .maybeSingle();
+    if (convertedFrom) {
+      return {
+        ok: false,
+        error: `This event is the historical record of job ${convertedFrom.job_number} (created when that job was converted) and can't be permanently deleted -- use Cancel instead if it needs to be hidden.`,
+      };
+    }
+
+    const { data: siblingEvents, error: sibErr } = await _saaClient
+      .from("events")
+      .select("id")
+      .eq("job_id", event.job_id);
+    if (sibErr) throw sibErr;
+    if ((siblingEvents || []).length <= 1) {
+      return {
+        ok: false,
+        error: "This is the only event on this job, so it can't be permanently deleted. Delete the whole job instead, or use Cancel to hide this event.",
+      };
+    }
+
+    await Promise.all([
+      _saaClient.from("invoices").update({ event_id: null }).eq("event_id", eventId),
+      _saaClient.from("job_materials").update({ event_id: null }).eq("event_id", eventId),
+      _saaClient.from("job_photos").update({ event_id: null }).eq("event_id", eventId),
+      _saaClient.from("mileage_logs").update({ event_id: null }).eq("event_id", eventId),
+      _saaClient.from("payments").update({ event_id: null }).eq("event_id", eventId),
+      _saaClient.from("quotes").update({ event_id: null }).eq("event_id", eventId),
+      _saaClient.from("receipt_line_items").update({ event_id: null }).eq("event_id", eventId),
+    ]);
+
+    const { error: delErr } = await _saaClient.from("events").delete().eq("id", eventId);
+    if (delErr) throw delErr;
+
+    await _saaEventsSyncJobFromCurrentEvent(event.job_id);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: _saaEventsFriendlyDbError(e) };
