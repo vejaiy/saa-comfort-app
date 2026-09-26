@@ -2740,10 +2740,9 @@ async function jbSaveSystem() {
 }
 
 function _jbEventTimeLabel(iso) {
-  if (!iso) return "Unscheduled";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "Unscheduled";
-  return d.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  const wc = saaEventsWallClock(iso); // Round 58: naive wall-clock, not a UTC instant
+  if (!wc || isNaN(wc.local.getTime())) return "Unscheduled";
+  return wc.local.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 async function jbRenderEventTimeline(job) {
@@ -2822,10 +2821,12 @@ async function jbOpenEventModal(event, defaultType) {
   document.getElementById("jbe-tech3").innerHTML = _jbEventTechOptionsHtml(event ? event.assigned_technician_id_3 : "");
   document.getElementById("jbe-priority").innerHTML = _jbOptionsHtml(SAA_JOBS_PRIORITY_OPTIONS, event ? event.priority : (_jbCurrentJob ? _jbCurrentJob.priority : "normal"));
 
-  const start = event && event.scheduled_start ? new Date(event.scheduled_start) : null;
-  const pad = (n) => String(n).padStart(2, "0");
-  document.getElementById("jbe-date").value = start ? `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}` : "";
-  document.getElementById("jbe-time").value = start ? `${pad(start.getHours())}:${pad(start.getMinutes())}` : "";
+  // Round 58: read the naive wall-clock value as-is (saaEventsWallClock),
+  // never via new Date() -- that converted "07:30+00:00" to local 2:30 AM,
+  // and every Save then wrote the shifted value back.
+  const startWc = event ? saaEventsWallClock(event.scheduled_start) : null;
+  document.getElementById("jbe-date").value = startWc ? startWc.date : "";
+  document.getElementById("jbe-time").value = startWc ? startWc.time : "";
 
   // Completed Date/Time (Job Card parity): confirmed value from
   // completed_at when set, else an estimate from Scheduled Time + this

@@ -113,6 +113,28 @@ const SAA_EVENTSTATUS_TO_JOBSTATUS = {
 // map a third time. calendar.js keeps its own same-named constant as an
 // alias to this one — see the comment there — so nothing else in that
 // file needed to change.
+/** Round 58 (2026-09-26): events.scheduled_start/scheduled_end hold NAIVE
+ *  wall-clock times (see calendar-db.js's header note) -- the app always
+ *  writes "YYYY-MM-DDTHH:MM:00" with no timezone, Postgres stores that as
+ *  if it were UTC, and Supabase hands it back as "...T07:30:00+00:00". The
+ *  Calendar, Job read-through sync and Mileage all read it back by slicing
+ *  the string, so "07:30" stays "07:30". A few Jobs-page spots instead ran
+ *  it through `new Date(...)`, which honours that "+00:00" and converts to
+ *  the browser's local time (Houston = UTC-5) -- so the Event card showed
+ *  7:30 AM as 2:30 AM, and saving the card without touching the field wrote
+ *  2:30 back, moving the Event 5 hours earlier on every Save. Every read of
+ *  scheduled_start/scheduled_end outside the Calendar now goes through this.
+ *  Returns { date: "YYYY-MM-DD", time: "HH:MM", local: Date } or null. */
+function saaEventsWallClock(ts) {
+  const m = String(ts || "").match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if (!m) return null;
+  return {
+    date: `${m[1]}-${m[2]}-${m[3]}`,
+    time: `${m[4]}:${m[5]}`,
+    local: new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]),
+  };
+}
+
 const SAA_EVENT_TYPE_DURATION = {
   service_call: 60, diagnostic: 60, repair: 90, maintenance: 60,
   estimate_visit: 45, installation: 480, follow_up: 15,
@@ -400,8 +422,9 @@ async function saaEventsGetCompletedTime(event) {
       };
     }
   }
-  if (event && event.scheduled_start) {
-    const start = new Date(event.scheduled_start);
+  const wc = event ? saaEventsWallClock(event.scheduled_start) : null;
+  if (wc) {
+    const start = wc.local;
     if (!isNaN(start.getTime())) {
       const duration = SAA_EVENT_TYPE_DURATION[event.event_type] || 60;
       const end = new Date(start.getTime() + duration * 60000);
@@ -573,9 +596,16 @@ async function saaEventsReschedule(eventId, { scheduledStart, scheduledEnd, tech
     if (technicianId !== undefined) patch.assigned_technician_id = technicianId || null;
     if (technicianId2 !== undefined) patch.assigned_technician_id_2 = technicianId2 || null;
     if (technicianId3 !== undefined) patch.assigned_technician_id_3 = technicianId3 || null;
-    if (current && current.scheduled_start !== scheduledStart) {
+    // Compare wall-clock values, not raw strings -- the stored value comes
+    // back as "...T07:30:00+00:00" while the new one is "...T07:30:00", so a
+    // raw !== flagged every call as a reschedule even when nothing moved.
+    const curWc = current ? saaEventsWallClock(current.scheduled_start) : null;
+    const newWc = saaEventsWallClock(scheduledStart);
+    const curKey = curWc ? `${curWc.date}T${curWc.time}` : null;
+    const newKey = newWc ? `${newWc.date}T${newWc.time}` : null;
+    if (current && curKey !== newKey) {
       patch.event_status = "rescheduled";
-      const fromStr = current.scheduled_start ? new Date(current.scheduled_start).toLocaleString() : "unscheduled";
+      const fromStr = curWc ? curWc.local.toLocaleString() : "unscheduled";
       const note = `[Rescheduled from ${fromStr}${reason ? ` — ${reason}` : ""}]`;
       patch.description = current.description ? `${current.description}\n${note}` : note;
     }
