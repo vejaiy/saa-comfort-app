@@ -1,0 +1,13 @@
+# Round 58 (2026-09-26): make browsers re-check HTML pages with the server
+# on every visit instead of silently reusing a cached copy for hours.
+# Without a Cache-Control header, browsers guessed how long each page stayed
+# "fresh" and kept loading the OLD page, which pointed at the OLD
+# ?v=-versioned JS/CSS, so a fix could be live on the server while a phone
+# or laptop kept running the previous version. "no-cache" still allows
+# caching, it just forces a quick check (a 304 when unchanged). JS/CSS/images
+# keep their normal long cache, since every deploy bumps their ?v= anyway.
+<IfModule mod_headers.c>
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>
