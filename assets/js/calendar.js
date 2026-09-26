@@ -95,6 +95,47 @@ let saaCalViewMode = "day"; // "day" | "week" | "month"
 let saaCalTechnicians = [];
 let saaCalAppointmentTypes = [];
 let saaCalTypesByKey = {};
+
+/* Round 61 (2026-09-26), per Vijayan: "calendars should match event titles."
+   Calendar cards used to take their icon and caption from the parent JOB
+   (its current job_type and title) -- so every visit on a Job whose type is
+   now Follow-Up showed as a 📞 follow-up captioned with the Job's title,
+   even the Installation visits themselves. Cards, chips, the Unscheduled
+   row and the drawer now describe the EVENT, the same way the Job Card's
+   Event History does: its own Event Type (icon + label) and its Reason.
+   Event types map onto the appointment_types icon table where the keys
+   differ; SAA_EVENT_TYPE_DURATION (events-db.js) gives the default length. */
+const SAA_CAL_EVENT_TO_APPT_TYPE = {
+  estimate_visit: "estimate",
+  maintenance: "tune_up",
+  warranty_visit: "return_visit",
+  customer_callback: "follow_up",
+};
+function saaCalEventTypeInfo(a) {
+  const et = a && a.event_type;
+  if (et) {
+    const t = saaCalTypesByKey[SAA_CAL_EVENT_TO_APPT_TYPE[et] || et] || {};
+    const dur = (typeof SAA_EVENT_TYPE_DURATION !== "undefined" && SAA_EVENT_TYPE_DURATION[et]) || t.default_duration_minutes || 60;
+    return { icon: t.icon || "", label: (typeof saaEventTypeLabel === "function" ? saaEventTypeLabel(et) : (t.label || et)), default_duration_minutes: dur };
+  }
+  return saaCalTypesByKey[a && a.job ? a.job.job_type : ""] || {};
+}
+/** "Installation · Replace old R22 system" -- matches the Event History line. */
+function saaCalEventCaption(a) {
+  const t = saaCalEventTypeInfo(a);
+  const reason = a && (a.reason || "").trim();
+  const label = t.label || (a && a.job && a.job.title) || "";
+  return reason ? `${label} · ${reason}` : label;
+}
+/** End minute for drawing: the saved end, or start + the Event Type's usual
+ *  length when no end was ever set (used to render as a sliver). */
+function saaCalEventEndMin(a) {
+  const end = saaCalMinutesFromTimeStr(a.scheduled_end);
+  if (end != null) return end;
+  const start = saaCalMinutesFromTimeStr(a.scheduled_start);
+  if (start == null) return null;
+  return Math.min(start + (saaCalEventTypeInfo(a).default_duration_minutes || 60), 24 * 60);
+}
 let saaCalScheduled = [];
 let saaCalUnscheduled = [];
 let saaCalSelectedTypeKey = null;
@@ -318,9 +359,9 @@ function saaCalRenderWeekView(scheduled) {
       .filter((a) => String(a.scheduled_start || "").slice(0, 10) === dateStr)
       .sort((a, b) => saaCalMinutesFromTimeStr(a.scheduled_start) - saaCalMinutesFromTimeStr(b.scheduled_start));
     const cardsHtml = dayEvents.length ? dayEvents.map((a) => {
-      const type = saaCalTypesByKey[a.job.job_type] || {};
+      const type = saaCalEventTypeInfo(a);
       const startMin = saaCalMinutesFromTimeStr(a.scheduled_start);
-      return `<div class="cal-week-appt st-${a.event_status}" data-event-id="${a.id}">
+      return `<div class="cal-week-appt st-${a.event_status}" data-event-id="${a.id}" title="${_saaCalEsc(saaCalEventCaption(a))}">
         <span class="t">${saaCalFormatClock(startMin)}</span>
         <span class="n">${type.icon || ""} ${_saaCalEsc(saaCalCustName(a.customer))}</span>
         <span class="tech">${_saaCalEsc([a.technician, a.technician2, a.technician3].filter(Boolean).map((t) => t.name).join(", ") || "None")}</span>
@@ -374,8 +415,8 @@ function saaCalRenderMonthView(scheduled) {
     const shown = dayEvents.slice(0, 3);
     const moreCount = dayEvents.length - shown.length;
     const chips = shown.map((a) => {
-      const type = saaCalTypesByKey[a.job.job_type] || {};
-      return `<div class="cal-month-chip st-${a.event_status}" data-event-id="${a.id}">${type.icon || ""} ${_saaCalEsc(saaCalCustName(a.customer))}</div>`;
+      const type = saaCalEventTypeInfo(a);
+      return `<div class="cal-month-chip st-${a.event_status}" data-event-id="${a.id}" title="${_saaCalEsc(saaCalEventCaption(a))}">${type.icon || ""} ${_saaCalEsc(saaCalCustName(a.customer))}</div>`;
     }).join("") + (moreCount > 0 ? `<div class="cal-month-more">+${moreCount} more</div>` : "");
     html += `<div class="cal-month-cell${inMonth ? "" : " is-outside"}${dateStr === todayStr ? " is-today" : ""}" data-date="${dateStr}">
       <div class="cal-month-daynum">${d.getDate()}</div>
@@ -423,10 +464,10 @@ function saaCalRenderUnscheduledQueue() {
     return;
   }
   wrap.innerHTML = saaCalUnscheduled.map((a) => {
-    const type = saaCalTypesByKey[a.job.job_type] || {};
+    const type = saaCalEventTypeInfo(a);
     return `<div class="cal-unassigned-card priority-${a.job.priority || "normal"}" draggable="true" data-event-id="${a.id}">
       <div class="name">${type.icon || ""} ${_saaCalEsc(saaCalCustName(a.customer))}</div>
-      <div class="meta">${_saaCalEsc(a.job.title || type.label || "")}</div>
+      <div class="meta">${_saaCalEsc(saaCalEventCaption(a))}</div>
     </div>`;
   }).join("");
 }
@@ -474,7 +515,7 @@ function saaCalTechStatusLabel(techId) {
  */
 function saaCalAssignLanes(appts) {
   const items = appts
-    .map((a) => ({ appt: a, start: saaCalMinutesFromTimeStr(a.scheduled_start), end: saaCalMinutesFromTimeStr(a.scheduled_end) }))
+    .map((a) => ({ appt: a, start: saaCalMinutesFromTimeStr(a.scheduled_start), end: saaCalEventEndMin(a) })) // Round 61: same drawn length as the card
     .sort((a, b) => a.start - b.start);
   const laneEnds = [];
   items.forEach((it) => {
@@ -497,9 +538,9 @@ function saaCalAssignLanes(appts) {
  *  (and anything else that doesn't pass it) keeps its old behavior. */
 function saaCalApptCardHtml(appt, lane, totalLanes, isPrimary) {
   if (isPrimary === undefined) isPrimary = true;
-  const type = saaCalTypesByKey[appt.job.job_type] || {};
+  const type = saaCalEventTypeInfo(appt);
   const startMin = saaCalMinutesFromTimeStr(appt.scheduled_start);
-  const endMin = saaCalMinutesFromTimeStr(appt.scheduled_end);
+  const endMin = saaCalEventEndMin(appt);
   const left = saaCalPct(startMin);
   const width = Math.max(saaCalPct(endMin) - left, 3);
   const n = totalLanes || 1;
@@ -509,9 +550,9 @@ function saaCalApptCardHtml(appt, lane, totalLanes, isPrimary) {
   const helperCls = isPrimary ? "" : " appt-card-helper";
   const helperNote = isPrimary ? "" : " (helping)";
   const resizeHandle = isPrimary ? `<div class="appt-resize-handle" title="Drag to change the end time"></div>` : "";
-  return `<div class="appt-card st-${appt.event_status}${helperCls}" draggable="${isPrimary}" data-event-id="${appt.id}" style="left:${left}%;width:${width}%;${vertical}" title="${_saaCalEsc(saaCalCustName(appt.customer))} — ${_saaCalEsc(appt.job.title || "")}${helperNote}">
+  return `<div class="appt-card st-${appt.event_status}${helperCls}" draggable="${isPrimary}" data-event-id="${appt.id}" style="left:${left}%;width:${width}%;${vertical}" title="${_saaCalEsc(saaCalCustName(appt.customer))} — ${_saaCalEsc(saaCalEventCaption(appt))}${helperNote}">
     <div class="appt-title">${type.icon || ""} ${_saaCalEsc(saaCalCustName(appt.customer))}${helperNote}</div>
-    <div class="appt-sub">${_saaCalEsc(appt.job.title || type.label || "")}</div>
+    <div class="appt-sub">${_saaCalEsc(saaCalEventCaption(appt))}</div>
     ${resizeHandle}
   </div>`;
 }
@@ -621,9 +662,9 @@ function saaCalHourLabelsVerticalHtml() {
  *  handler the horizontal grid uses) covers moving an event from here. */
 function saaCalApptCardHtmlVertical(appt, lane, totalLanes, isPrimary) {
   if (isPrimary === undefined) isPrimary = true;
-  const type = saaCalTypesByKey[appt.job.job_type] || {};
+  const type = saaCalEventTypeInfo(appt);
   const startMin = saaCalMinutesFromTimeStr(appt.scheduled_start);
-  const endMin = saaCalMinutesFromTimeStr(appt.scheduled_end);
+  const endMin = saaCalEventEndMin(appt);
   const top = saaCalPct(startMin);
   const height = Math.max(saaCalPct(endMin) - top, 4);
   const n = totalLanes || 1;
@@ -632,8 +673,9 @@ function saaCalApptCardHtmlVertical(appt, lane, totalLanes, isPrimary) {
     : "";
   const helperCls = isPrimary ? "" : " appt-card-helper";
   const helperNote = isPrimary ? "" : " (helping)";
-  return `<div class="appt-card appt-card-v st-${appt.event_status}${helperCls}" data-event-id="${appt.id}" style="top:${top}%;height:${height}%;${horiz}" title="${_saaCalEsc(saaCalCustName(appt.customer))} — ${_saaCalEsc(appt.job.title || "")}${helperNote}">
+  return `<div class="appt-card appt-card-v st-${appt.event_status}${helperCls}" data-event-id="${appt.id}" style="top:${top}%;height:${height}%;${horiz}" title="${_saaCalEsc(saaCalCustName(appt.customer))} — ${_saaCalEsc(saaCalEventCaption(appt))}${helperNote}">
     <div class="appt-title">${saaCalFormatClock(startMin).replace(":00", "")} ${type.icon || ""} ${_saaCalEsc(saaCalCustName(appt.customer))}${helperNote}</div>
+    <div class="appt-sub">${_saaCalEsc(type.label || "")}</div>
   </div>`;
 }
 
@@ -772,7 +814,7 @@ async function saaCalHandleDrop(techId, startMinutes) {
     : saaCalUnscheduled.find((a) => a.id === payload.id);
   if (!source) return;
 
-  const type = saaCalTypesByKey[source.job.job_type] || {};
+  const type = saaCalEventTypeInfo(source);
   const durationMin = source.scheduled_start && source.scheduled_end
     ? saaCalMinutesFromTimeStr(source.scheduled_end) - saaCalMinutesFromTimeStr(source.scheduled_start)
     : (type.default_duration_minutes || 60);
@@ -1233,16 +1275,16 @@ async function saaCalOpenJobDrawer(eventId) {
   const appt = saaCalScheduled.find((a) => a.id === eventId) || saaCalUnscheduled.find((a) => a.id === eventId);
   if (!appt) return;
   saaCalDrawerAppt = appt;
-  const type = saaCalTypesByKey[appt.job.job_type] || {};
+  const type = saaCalEventTypeInfo(appt);
   const custName = saaCalCustName(appt.customer);
   const startMin = saaCalMinutesFromTimeStr(appt.scheduled_start);
-  const endMin = saaCalMinutesFromTimeStr(appt.scheduled_end);
+  const endMin = saaCalEventEndMin(appt); // Round 61: a start with no saved end is still scheduled
   const timeStr = (startMin != null && endMin != null) ? `${saaCalFormatClock(startMin)} – ${saaCalFormatClock(endMin)}` : "Not yet scheduled";
   const jobNum = appt.job.job_number || ("J-" + String(appt.job_id || "").slice(0, 8).toUpperCase());
   const address = appt.customer.billing_address || appt.job.job_address || "—";
   const phone = appt.customer.phone || "";
 
-  document.getElementById("drawer-title").textContent = `${custName} – ${appt.job.title || type.label || ""}`;
+  document.getElementById("drawer-title").textContent = `${custName} – ${saaCalEventCaption(appt)}`;
   document.getElementById("drawer-jobnum").textContent = jobNum;
   document.getElementById("drawer-jobrecord-link").href = "jobs.html?job=" + encodeURIComponent(appt.job_id || "");
   document.getElementById("drawer-address").textContent = address;
@@ -1529,7 +1571,7 @@ function saaCalWireStaticHandlers() {
     const timeVal = document.getElementById("ra-time").value;
     const [hh, mm] = timeVal.split(":").map(Number);
     const startMinutes = hh * 60 + mm;
-    const type = saaCalTypesByKey[saaCalDrawerAppt.job.job_type] || {};
+    const type = saaCalEventTypeInfo(saaCalDrawerAppt);
     const existingDur = (saaCalDrawerAppt.scheduled_start && saaCalDrawerAppt.scheduled_end)
       ? saaCalMinutesFromTimeStr(saaCalDrawerAppt.scheduled_end) - saaCalMinutesFromTimeStr(saaCalDrawerAppt.scheduled_start)
       : (type.default_duration_minutes || 60);
