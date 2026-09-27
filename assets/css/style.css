@@ -1065,3 +1065,27 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
   #jb-event-modal .jbe-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 14px; align-items: start; }
   #jb-event-modal .jbe-col { display: block; }
 }
+
+/* ---- Round 66 (2026-09-27), per Vijayan: "mileage section can be made
+   concise to save space." Job Card + Event card: each leg (trip, return to
+   office, Technician 2/3 own car) is one line -- label | small miles box |
+   short Calculate button | auto/manual tag. ---- */
+.jb-mi-context { font-size: .76rem; line-height: 1.35; margin-bottom: 8px; }
+.jb-mi-row { display: grid; grid-template-columns: minmax(5.6em, 8.4em) minmax(72px, 108px) max-content; align-items: center; gap: 6px 8px; margin-bottom: 8px; }
+.jb-mi-row[hidden] { display: none; }
+.jb-mi-row > label { margin: 0; font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; line-height: 1.2; }
+.jb-mi-box { position: relative; }
+.jb-detail-card .jb-mi-box input { width: 100%; min-height: 36px; padding: 6px 30px 6px 9px; }
+.jb-mi-box span { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); font-size: .74rem; color: var(--muted); pointer-events: none; }
+.jb-detail-card .jb-mi-box input[readonly] { background: #f3f5f7; color: var(--muted); }
+.jb-mi-btn { white-space: nowrap; padding: 6px 10px; min-height: 36px; justify-self: start; }
+/* auto / manual tag sits under the label, so it costs no extra height */
+.jb-mi-note { display: block; margin-top: 2px; font-size: .62rem; font-weight: 700; letter-spacing: .3px; color: #1e7a3c; }
+.jb-mi-note:empty { display: none; }
+.jbd-mileage-slot.jb-mi-row { margin-top: 0; padding-top: 0; border-top: none; }
+@media (max-width: 1023px) {
+  .jb-detail-card .jb-mi-box input { font-size: 16px; min-height: 38px; }
+}
+@media (max-width: 400px) {
+  .jb-mi-row { grid-template-columns: minmax(5.6em, 6.8em) minmax(72px, 92px) max-content; }
+}

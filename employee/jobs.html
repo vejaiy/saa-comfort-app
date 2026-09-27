@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jobs | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260927b">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260927e">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260927b"></script>
-<script src="../assets/js/supabase-config.js?v=20260927b"></script>
-<script src="../assets/js/auth.js?v=20260927b"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260927e"></script>
+<script src="../assets/js/supabase-config.js?v=20260927e"></script>
+<script src="../assets/js/auth.js?v=20260927e"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -540,23 +540,26 @@
 
         <div class="drawer-section">
           <h4>Mileage</h4>
-          <div class="muted" id="jbd-mileage-context" style="font-size:.82rem;margin-bottom:8px">Assign a technician and a Scheduled Date to calculate this trip.</div>
-          <div class="field-row">
-            <div class="field"><label>Miles Driven</label><input type="number" step="0.1" min="0" id="jbd-mileage-miles" placeholder="0.0"></div>
-            <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbd-mileage-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Miles</button></div>
+          <div class="muted jb-mi-context" id="jbd-mileage-context">Assign a technician and a Scheduled Date to calculate this trip.</div>
+          <!-- Round 66 (2026-09-27), per Vijayan: "mileage section can be made
+               concise to save space." -- each leg is one line now: label, a
+               small miles box, a short Calculate button, and an auto/manual tag. -->
+          <div class="jb-mi-row">
+            <label for="jbd-mileage-miles">Trip miles<span class="jb-mi-note" id="jbd-mileage-note"></span></label>
+            <div class="jb-mi-box"><input type="number" step="0.1" min="0" id="jbd-mileage-miles" placeholder="0.0"><span>mi</span></div>
+            <button type="button" class="btn btn-ghost btn-sm jb-mi-btn" id="jbd-mileage-calc-btn" title="Calculate this trip's miles from the addresses">📍 Calculate</button>
           </div>
-          <div class="muted" id="jbd-mileage-note" style="font-size:.78rem"></div>
 
           <!-- Round 45 (2026-09-22), per Vijayan: "Add another button to
                calculate return miles to office" -- the trip home, job site
                back to SAA_COMPANY_ADDRESS. Read-only (like the Quote # field
                elsewhere) since it's only ever set by this Calculate button,
                never typed in by hand. -->
-          <div class="field-row" style="margin-top:10px">
-            <div class="field"><label>Return Miles (to Office)</label><input type="number" step="0.1" min="0" id="jbd-return-mileage-miles" placeholder="0.0" readonly style="background:#f3f5f7;color:var(--muted)"></div>
-            <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbd-return-mileage-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Return Miles</button></div>
+          <div class="jb-mi-row">
+            <label for="jbd-return-mileage-miles">Return to office<span class="jb-mi-note" id="jbd-return-mileage-note"></span></label>
+            <div class="jb-mi-box"><input type="number" step="0.1" min="0" id="jbd-return-mileage-miles" placeholder="0.0" readonly><span>mi</span></div>
+            <button type="button" class="btn btn-ghost btn-sm jb-mi-btn" id="jbd-return-mileage-calc-btn" title="Calculate the drive from this job back to the office">📍 Calculate</button>
           </div>
-          <div class="muted" id="jbd-return-mileage-note" style="font-size:.78rem"></div>
 
           <!-- Round 25 (2026-09-14), per Vijayan: "Mileage will be default
                to 1 tech. add provision to add mileage to multiple tech if
@@ -565,21 +568,15 @@
                these blocks only appear once that slot has a technician,
                and stay purely opt-in/manual (a technician who rode along
                in the same vehicle needs nothing entered here at all). -->
-          <div class="jbd-mileage-slot" id="jbd-mileage2-block" hidden style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)">
-            <div class="muted" style="font-size:.78rem;margin-bottom:6px">If Technician 2 drove separately:</div>
-            <div class="field-row">
-              <div class="field"><label>Miles Driven</label><input type="number" step="0.1" min="0" id="jbd-mileage2-miles" placeholder="0.0"></div>
-              <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbd-mileage2-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Miles</button></div>
-            </div>
-            <div class="muted" id="jbd-mileage2-note" style="font-size:.78rem"></div>
+          <div class="jbd-mileage-slot jb-mi-row" id="jbd-mileage2-block" hidden title="Only if Technician 2 drove separately">
+            <label for="jbd-mileage2-miles">Tech 2 (own car)<span class="jb-mi-note" id="jbd-mileage2-note"></span></label>
+            <div class="jb-mi-box"><input type="number" step="0.1" min="0" id="jbd-mileage2-miles" placeholder="0.0"><span>mi</span></div>
+            <button type="button" class="btn btn-ghost btn-sm jb-mi-btn" id="jbd-mileage2-calc-btn" title="Calculate Technician 2's miles from the addresses">📍 Calculate</button>
           </div>
-          <div class="jbd-mileage-slot" id="jbd-mileage3-block" hidden style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)">
-            <div class="muted" style="font-size:.78rem;margin-bottom:6px">If Technician 3 drove separately:</div>
-            <div class="field-row">
-              <div class="field"><label>Miles Driven</label><input type="number" step="0.1" min="0" id="jbd-mileage3-miles" placeholder="0.0"></div>
-              <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbd-mileage3-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Miles</button></div>
-            </div>
-            <div class="muted" id="jbd-mileage3-note" style="font-size:.78rem"></div>
+          <div class="jbd-mileage-slot jb-mi-row" id="jbd-mileage3-block" hidden title="Only if Technician 3 drove separately">
+            <label for="jbd-mileage3-miles">Tech 3 (own car)<span class="jb-mi-note" id="jbd-mileage3-note"></span></label>
+            <div class="jb-mi-box"><input type="number" step="0.1" min="0" id="jbd-mileage3-miles" placeholder="0.0"><span>mi</span></div>
+            <button type="button" class="btn btn-ghost btn-sm jb-mi-btn" id="jbd-mileage3-calc-btn" title="Calculate Technician 3's miles from the addresses">📍 Calculate</button>
           </div>
         </div>
 
@@ -764,37 +761,34 @@
 
     <div class="drawer-section" style="--o:3">
       <h4>Mileage</h4>
-      <div class="muted" id="jbe-mileage-context" style="font-size:.82rem;margin-bottom:8px">Assign a technician and a Scheduled Date to calculate this trip.</div>
-      <div class="field-row">
-        <div class="field"><label>Miles Driven</label><input type="number" step="0.1" min="0" id="jbe-mileage-miles" placeholder="0.0"></div>
-        <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbe-mileage-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Miles</button></div>
-      </div>
-      <div class="muted" id="jbe-mileage-note" style="font-size:.78rem"></div>
+      <div class="muted jb-mi-context" id="jbe-mileage-context">Assign a technician and a Scheduled Date to calculate this trip.</div>
+      <!-- Round 66 (2026-09-27), per Vijayan: "mileage section can be made
+               concise to save space." -- each leg is one line now: label, a
+               small miles box, a short Calculate button, and an auto/manual tag. -->
+          <div class="jb-mi-row">
+            <label for="jbe-mileage-miles">Trip miles<span class="jb-mi-note" id="jbe-mileage-note"></span></label>
+            <div class="jb-mi-box"><input type="number" step="0.1" min="0" id="jbe-mileage-miles" placeholder="0.0"><span>mi</span></div>
+            <button type="button" class="btn btn-ghost btn-sm jb-mi-btn" id="jbe-mileage-calc-btn" title="Calculate this trip's miles from the addresses">📍 Calculate</button>
+          </div>
 
       <!-- Round 45 (2026-09-22): Event-modal mirror of the Job Card's
            Return Miles (to Office) field just above. -->
-      <div class="field-row" style="margin-top:10px">
-        <div class="field"><label>Return Miles (to Office)</label><input type="number" step="0.1" min="0" id="jbe-return-mileage-miles" placeholder="0.0" readonly style="background:#f3f5f7;color:var(--muted)"></div>
-        <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbe-return-mileage-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Return Miles</button></div>
-      </div>
-      <div class="muted" id="jbe-return-mileage-note" style="font-size:.78rem"></div>
+      <div class="jb-mi-row">
+            <label for="jbe-return-mileage-miles">Return to office<span class="jb-mi-note" id="jbe-return-mileage-note"></span></label>
+            <div class="jb-mi-box"><input type="number" step="0.1" min="0" id="jbe-return-mileage-miles" placeholder="0.0" readonly><span>mi</span></div>
+            <button type="button" class="btn btn-ghost btn-sm jb-mi-btn" id="jbe-return-mileage-calc-btn" title="Calculate the drive from this job back to the office">📍 Calculate</button>
+          </div>
 
-      <div class="jbd-mileage-slot" id="jbe-mileage2-block" hidden style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)">
-        <div class="muted" style="font-size:.78rem;margin-bottom:6px">If Technician 2 drove separately:</div>
-        <div class="field-row">
-          <div class="field"><label>Miles Driven</label><input type="number" step="0.1" min="0" id="jbe-mileage2-miles" placeholder="0.0"></div>
-          <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbe-mileage2-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Miles</button></div>
-        </div>
-        <div class="muted" id="jbe-mileage2-note" style="font-size:.78rem"></div>
-      </div>
-      <div class="jbd-mileage-slot" id="jbe-mileage3-block" hidden style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)">
-        <div class="muted" style="font-size:.78rem;margin-bottom:6px">If Technician 3 drove separately:</div>
-        <div class="field-row">
-          <div class="field"><label>Miles Driven</label><input type="number" step="0.1" min="0" id="jbe-mileage3-miles" placeholder="0.0"></div>
-          <div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-ghost btn-sm" id="jbe-mileage3-calc-btn" style="margin-top:22px;width:100%">📍 Calculate Miles</button></div>
-        </div>
-        <div class="muted" id="jbe-mileage3-note" style="font-size:.78rem"></div>
-      </div>
+      <div class="jbd-mileage-slot jb-mi-row" id="jbe-mileage2-block" hidden title="Only if Technician 2 drove separately">
+            <label for="jbe-mileage2-miles">Tech 2 (own car)<span class="jb-mi-note" id="jbe-mileage2-note"></span></label>
+            <div class="jb-mi-box"><input type="number" step="0.1" min="0" id="jbe-mileage2-miles" placeholder="0.0"><span>mi</span></div>
+            <button type="button" class="btn btn-ghost btn-sm jb-mi-btn" id="jbe-mileage2-calc-btn" title="Calculate Technician 2's miles from the addresses">📍 Calculate</button>
+          </div>
+      <div class="jbd-mileage-slot jb-mi-row" id="jbe-mileage3-block" hidden title="Only if Technician 3 drove separately">
+            <label for="jbe-mileage3-miles">Tech 3 (own car)<span class="jb-mi-note" id="jbe-mileage3-note"></span></label>
+            <div class="jb-mi-box"><input type="number" step="0.1" min="0" id="jbe-mileage3-miles" placeholder="0.0"><span>mi</span></div>
+            <button type="button" class="btn btn-ghost btn-sm jb-mi-btn" id="jbe-mileage3-calc-btn" title="Calculate Technician 3's miles from the addresses">📍 Calculate</button>
+          </div>
     </div>
 
     <div class="drawer-section" style="--o:5">
@@ -890,17 +884,17 @@
 <div id="jb-toast" class="cal-toast" hidden></div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260927b"></script>
-<script src="../assets/js/worksheet.js?v=20260927b"></script>
-<script src="../assets/js/systems-db.js?v=20260927b"></script>
-<script src="../assets/js/events-db.js?v=20260927b"></script>
-<script src="../assets/js/jobs-db.js?v=20260927b"></script>
-<script src="../assets/js/job-photos-db.js?v=20260927b"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260927b"></script>
-<script src="../assets/js/camera-capture.js?v=20260927b"></script>
-<script src="../assets/js/print-invoice.js?v=20260927b"></script>
-<script src="../assets/js/maps-config.js?v=20260927b"></script>
-<script src="../assets/js/mileage-db.js?v=20260927b"></script>
-<script src="../assets/js/jobs.js?v=20260927b"></script>
+<script src="../assets/js/pricing-data.js?v=20260927e"></script>
+<script src="../assets/js/worksheet.js?v=20260927e"></script>
+<script src="../assets/js/systems-db.js?v=20260927e"></script>
+<script src="../assets/js/events-db.js?v=20260927e"></script>
+<script src="../assets/js/jobs-db.js?v=20260927e"></script>
+<script src="../assets/js/job-photos-db.js?v=20260927e"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260927e"></script>
+<script src="../assets/js/camera-capture.js?v=20260927e"></script>
+<script src="../assets/js/print-invoice.js?v=20260927e"></script>
+<script src="../assets/js/maps-config.js?v=20260927e"></script>
+<script src="../assets/js/mileage-db.js?v=20260927e"></script>
+<script src="../assets/js/jobs.js?v=20260927e"></script>
 </body>
 </html>

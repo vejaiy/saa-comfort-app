@@ -2387,7 +2387,7 @@ async function jbRenderMileageSection(job) {
   milesEl.value = existing && existing.miles != null ? existing.miles : "";
   job._jbMileageMilesAtOpen = milesEl.value;
   noteEl.textContent = existing
-    ? (existing.source === "manual" ? "Entered manually." : "Auto-calculated from addresses.")
+    ? (existing.source === "manual" ? "Manual" : "Auto")
     : "";
 
   // Round 45 (2026-09-22): the return-to-office leg for this same job/
@@ -2398,7 +2398,7 @@ async function jbRenderMileageSection(job) {
   const returnNoteEl = document.getElementById("jbd-return-mileage-note");
   const existingReturn = await saaMileageFetchForJob(job.id, null, "return_to_shop");
   returnMilesEl.value = existingReturn && existingReturn.miles != null ? existingReturn.miles : "";
-  returnNoteEl.textContent = existingReturn ? "Auto-calculated from addresses." : "";
+  returnNoteEl.textContent = existingReturn ? "Auto" : "";
 }
 
 async function jbCalculateMileage() {
@@ -2417,14 +2417,14 @@ async function jbCalculateMileage() {
     if (res.ok) {
       document.getElementById("jbd-mileage-miles").value = res.log.miles != null ? res.log.miles : "";
       _jbCurrentJob._jbMileageMilesAtOpen = document.getElementById("jbd-mileage-miles").value;
-      document.getElementById("jbd-mileage-note").textContent = "Auto-calculated from addresses.";
+      document.getElementById("jbd-mileage-note").textContent = "Auto";
       _jbToast(`${res.log.miles} miles calculated.`);
     } else {
       _jbToast(res.error, true);
     }
   } finally {
     btn.disabled = false;
-    btn.textContent = "📍 Calculate Miles";
+    btn.textContent = "📍 Calculate";
   }
 }
 
@@ -2442,14 +2442,14 @@ async function jbCalculateReturnMileage() {
     const res = await saaMileageRecalcReturnForJob(snap);
     if (res.ok) {
       document.getElementById("jbd-return-mileage-miles").value = res.log.miles != null ? res.log.miles : "";
-      document.getElementById("jbd-return-mileage-note").textContent = "Auto-calculated from addresses.";
+      document.getElementById("jbd-return-mileage-note").textContent = "Auto";
       _jbToast(`${res.log.miles} return miles calculated.`);
     } else {
       _jbToast(res.error, true);
     }
   } finally {
     btn.disabled = false;
-    btn.textContent = "📍 Calculate Return Miles";
+    btn.textContent = "📍 Calculate";
   }
 }
 
@@ -2476,7 +2476,7 @@ async function jbRenderMileageSlot(job, n) {
   milesEl.value = existing && existing.miles != null ? existing.miles : "";
   job[`_jbMileage${n}MilesAtOpen`] = milesEl.value;
   noteEl.textContent = existing
-    ? (existing.source === "manual" ? "Entered manually." : "Auto-calculated from addresses.")
+    ? (existing.source === "manual" ? "Manual" : "Auto")
     : "";
 }
 
@@ -2498,14 +2498,14 @@ async function jbCalculateMileageSlot(n) {
     if (res.ok) {
       document.getElementById(`jbd-mileage${n}-miles`).value = res.log.miles != null ? res.log.miles : "";
       _jbCurrentJob[`_jbMileage${n}MilesAtOpen`] = document.getElementById(`jbd-mileage${n}-miles`).value;
-      document.getElementById(`jbd-mileage${n}-note`).textContent = "Auto-calculated from addresses.";
+      document.getElementById(`jbd-mileage${n}-note`).textContent = "Auto";
       _jbToast(`${res.log.miles} miles calculated.`);
     } else {
       _jbToast(res.error, true);
     }
   } finally {
     btn.disabled = false;
-    btn.textContent = "📍 Calculate Miles";
+    btn.textContent = "📍 Calculate";
   }
 }
 
@@ -2568,7 +2568,7 @@ async function jbeRenderMileageSection() {
   milesEl.value = existing && existing.miles != null ? existing.miles : "";
   _jbeMileageAtOpen.primary = milesEl.value;
   noteEl.textContent = existing
-    ? (existing.source === "manual" ? "Entered manually." : "Auto-calculated from addresses.")
+    ? (existing.source === "manual" ? "Manual" : "Auto")
     : "";
 
   // Round 45 (2026-09-22): Event-modal mirror of the Job Card's Return
@@ -2577,7 +2577,7 @@ async function jbeRenderMileageSection() {
   const returnNoteEl = document.getElementById("jbe-return-mileage-note");
   const existingReturn = await saaMileageFetchForEvent(event.id, techId, "return_to_shop");
   returnMilesEl.value = existingReturn && existingReturn.miles != null ? existingReturn.miles : "";
-  returnNoteEl.textContent = existingReturn ? "Auto-calculated from addresses." : "";
+  returnNoteEl.textContent = existingReturn ? "Auto" : "";
 }
 
 async function jbeCalculateMileage() {
@@ -2597,14 +2597,14 @@ async function jbeCalculateMileage() {
     if (res.ok) {
       document.getElementById("jbe-mileage-miles").value = res.log.miles != null ? res.log.miles : "";
       _jbeMileageAtOpen.primary = document.getElementById("jbe-mileage-miles").value;
-      document.getElementById("jbe-mileage-note").textContent = "Auto-calculated from addresses.";
+      document.getElementById("jbe-mileage-note").textContent = "Auto";
       _jbToast(`${res.log.miles} miles calculated.`);
     } else {
       _jbToast(res.error, true);
     }
   } finally {
     btn.disabled = false;
-    btn.textContent = "📍 Calculate Miles";
+    btn.textContent = "📍 Calculate";
   }
 }
 
@@ -2622,14 +2622,14 @@ async function jbeCalculateReturnMileage() {
     const res = await saaMileageRecalcReturnForEvent(snap, false, null, _jbCurrentJob);
     if (res.ok) {
       document.getElementById("jbe-return-mileage-miles").value = res.log.miles != null ? res.log.miles : "";
-      document.getElementById("jbe-return-mileage-note").textContent = "Auto-calculated from addresses.";
+      document.getElementById("jbe-return-mileage-note").textContent = "Auto";
       _jbToast(`${res.log.miles} return miles calculated.`);
     } else {
       _jbToast(res.error, true);
     }
   } finally {
     btn.disabled = false;
-    btn.textContent = "📍 Calculate Return Miles";
+    btn.textContent = "📍 Calculate";
   }
 }
 
@@ -2651,7 +2651,7 @@ async function jbeRenderMileageSlot(n) {
   milesEl.value = existing && existing.miles != null ? existing.miles : "";
   _jbeMileageAtOpen[n] = milesEl.value;
   noteEl.textContent = existing
-    ? (existing.source === "manual" ? "Entered manually." : "Auto-calculated from addresses.")
+    ? (existing.source === "manual" ? "Manual" : "Auto")
     : "";
 }
 
@@ -2674,14 +2674,14 @@ async function jbeCalculateMileageSlot(n) {
     if (res.ok) {
       document.getElementById(`jbe-mileage${n}-miles`).value = res.log.miles != null ? res.log.miles : "";
       _jbeMileageAtOpen[n] = document.getElementById(`jbe-mileage${n}-miles`).value;
-      document.getElementById(`jbe-mileage${n}-note`).textContent = "Auto-calculated from addresses.";
+      document.getElementById(`jbe-mileage${n}-note`).textContent = "Auto";
       _jbToast(`${res.log.miles} miles calculated.`);
     } else {
       _jbToast(res.error, true);
     }
   } finally {
     btn.disabled = false;
-    btn.textContent = "📍 Calculate Miles";
+    btn.textContent = "📍 Calculate";
   }
 }
 
@@ -3231,7 +3231,7 @@ async function _jbeAutosaveNow() {
         document.getElementById(noteId).textContent = "";
       } else {
         const mRes = await (techId ? saaMileageSetManualForEvent(snap, parseFloat(milesEl.value), techId) : saaMileageSetManualForEvent(snap, parseFloat(milesEl.value)));
-        if (mRes.ok) { _jbeMileageAtOpen[key] = milesEl.value; document.getElementById(noteId).textContent = "Entered manually."; }
+        if (mRes.ok) { _jbeMileageAtOpen[key] = milesEl.value; document.getElementById(noteId).textContent = "Manual"; }
         else { ok = false; _jbToast(mRes.error, true); }
       }
     }
@@ -3463,7 +3463,7 @@ async function jbSaveEventModal() {
         const mRes = await saaMileageSetManualForEvent(snap, parseFloat(mileageVal));
         if (mRes.ok) {
           _jbeMileageAtOpen.primary = mileageVal;
-          document.getElementById("jbe-mileage-note").textContent = "Entered manually.";
+          document.getElementById("jbe-mileage-note").textContent = "Manual";
         } else {
           _jbToast(mRes.error, true);
         }
@@ -3486,7 +3486,7 @@ async function jbSaveEventModal() {
         const mRes = await saaMileageSetManualForEvent(snap, parseFloat(milesVal), techId);
         if (mRes.ok) {
           _jbeMileageAtOpen[n] = milesVal;
-          document.getElementById(`jbe-mileage${n}-note`).textContent = "Entered manually.";
+          document.getElementById(`jbe-mileage${n}-note`).textContent = "Manual";
         } else {
           _jbToast(mRes.error, true);
         }
@@ -3780,7 +3780,7 @@ async function jbSaveDetail(opts) {
       const mRes = await saaMileageSetManualForJob(snap, parseFloat(mileageVal));
       if (mRes.ok) {
         job._jbMileageMilesAtOpen = mileageVal;
-        document.getElementById("jbd-mileage-note").textContent = "Entered manually.";
+        document.getElementById("jbd-mileage-note").textContent = "Manual";
       } else {
         _jbToast(mRes.error, true);
       }
@@ -3818,7 +3818,7 @@ async function jbSaveDetail(opts) {
       const mRes = await saaMileageSetManualForJob(snap, parseFloat(milesVal), techId);
       if (mRes.ok) {
         job[`_jbMileage${n}MilesAtOpen`] = milesVal;
-        document.getElementById(`jbd-mileage${n}-note`).textContent = "Entered manually.";
+        document.getElementById(`jbd-mileage${n}-note`).textContent = "Manual";
       } else {
         _jbToast(mRes.error, true);
       }
