@@ -925,34 +925,50 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .jb-autosave-state.is-saved::before { content: "\2713  "; }
 .jb-autosave-state.is-error { color: #b3261e; font-weight: 600; }
 
-/* ---- Round 63 (2026-09-26), per Vijayan: "There are unused space in event
-   card. Adjust the space to maximize viewing data. But don't make it
-   clustered. Make the card easy to read. Highlight where require."
-   Event card only (#jb-event-modal), phone and desktop. ---- */
+/* ---- Round 63 (2026-09-26) + Round 64 (2026-09-27): Job Card and Event
+   card layout, phone / tablet / desktop.
+   Round 63, per Vijayan: "There are unused space in event card. Adjust the
+   space to maximize viewing data. But don't make it clustered. Make the card
+   easy to read. Highlight where require."
+   Round 64: "do the same for job card. for phone view, tablet view, desktop
+   view. update the event card view similarly for tablet view and desktop
+   view."
+   Both modals share .jb-detail-card, so most rules cover both. ---- */
 
-/* Pinned header: number + summary (type, status badge, when) + autosave
-   state + (x), visible while scrolling the card. */
-#jb-event-modal .jbe-head {
+/* Pinned header: title + number, one-line summary, autosave state, (x). */
+.jb-detail-card .jb-card-head {
   position: sticky; top: -22px; z-index: 6; background: #fff;
-  margin: -22px -22px 14px; padding: 14px 56px 10px 22px;
+  margin: -22px -22px 14px; padding: 14px 60px 10px 22px;
   border-bottom: 1px solid var(--line);
 }
-#jb-event-modal .jbe-head h3 { display: inline; margin: 0 8px 0 0; font-size: 1.15rem; }
-#jb-event-modal #jb-event-modal-number { font-size: .82rem; }
-#jb-event-modal .jbe-head .jb-autosave-state { margin: 4px 0 0; }
-.jbe-head-close {
+.jb-card-head h2, .jb-card-head h3 { display: inline; margin: 0 8px 0 0; }
+.jb-card-head h2 { font-size: 1.3rem; }
+.jb-card-head h3 { font-size: 1.15rem; }
+.jb-card-head .job-num, .jb-card-head #jb-event-modal-number { display: inline; font-size: .82rem; color: var(--muted); }
+.jb-card-head .jb-autosave-state { margin: 4px 0 0; }
+.jb-card-head .jbe-head-close, .jb-card-head .cal-drawer-close {
   position: absolute; top: 10px; right: 12px; width: 36px; height: 36px; border-radius: 50%;
   border: 1px solid var(--line); background: #fff; color: var(--navy); font-size: 1.5rem; line-height: 1;
   cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;
 }
-.jbe-head-close:hover { background: #f3f5f7; }
+.jb-card-head .jbe-head-close:hover, .jb-card-head .cal-drawer-close:hover { background: #f3f5f7; }
 .jbe-head-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 6px; font-size: .92rem; }
 .jbe-head-summary:empty { display: none; }
 .jbe-head-summary strong { color: var(--navy); }
 .jbe-head-when { color: var(--ink); font-weight: 600; }
 
-/* Status dropdown: colored left edge + tint matching its status badge. */
-#jbe-status { box-shadow: inset 5px 0 0 var(--line); padding-left: 14px; font-weight: 600; }
+/* Labels small, grey, capitals -- so the values themselves stand out. */
+.jb-detail-card .field label { font-size: .74rem; margin-bottom: 3px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+.jb-detail-card .field { margin-bottom: 12px; }
+.jb-detail-card .field-row { gap: 12px; align-items: end; } /* boxes line up even when one label wraps */
+.jb-detail-card .field-row:has(#jbe-cost-material), .jb-detail-card .field-row:has(#jbd-cost-material) { align-items: start; } /* helper line sits under that box */
+.jb-detail-card .field-row.jb-addr-row { grid-template-columns: 1.5fr .7fr 1fr; } /* City / State / ZIP */
+.jb-detail-card input:disabled, .jb-detail-card select:disabled { background: #f3f5f7; color: var(--muted); }
+.jb-detail-card .field > span.muted:last-child { display: block; font-size: .72rem; line-height: 1.3; margin-top: 3px; }
+.jb-derived-note { font-size: .76rem; color: #5b6b7a; background: #f5f8fa; border: 1px dashed var(--line); border-radius: 7px; padding: 6px 9px; margin-bottom: 10px; line-height: 1.35; }
+
+/* Status dropdowns: colored left edge matching the status badge. */
+#jbe-status, #jbd-status { box-shadow: inset 5px 0 0 var(--line); padding-left: 14px; font-weight: 600; }
 #jbe-status[data-status="scheduled"]   { box-shadow: inset 5px 0 0 var(--evt-scheduled); }
 #jbe-status[data-status="confirmed"]   { box-shadow: inset 5px 0 0 var(--evt-confirmed); }
 #jbe-status[data-status="en_route"]    { box-shadow: inset 5px 0 0 var(--evt-en_route); }
@@ -961,57 +977,91 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 #jbe-status[data-status="cancelled"]   { box-shadow: inset 5px 0 0 var(--evt-cancelled); }
 #jbe-status[data-status="rescheduled"] { box-shadow: inset 5px 0 0 var(--evt-rescheduled); }
 #jbe-status[data-status="no_show"]     { box-shadow: inset 5px 0 0 var(--evt-no_show); }
+#jbd-status[data-status="assigned"]    { box-shadow: inset 5px 0 0 #3b4fc4; }
+#jbd-status[data-status="scheduled"]   { box-shadow: inset 5px 0 0 #1a4c8a; }
+#jbd-status[data-status="in_progress"] { box-shadow: inset 5px 0 0 #d9a520; }
+#jbd-status[data-status="completed"]   { box-shadow: inset 5px 0 0 var(--ok); }
+#jbd-status[data-status="cancelled"]   { box-shadow: inset 5px 0 0 #9a9a9a; }
 
-/* "Estimated" completion as a small amber tag instead of a long sentence
-   that wrapped the label. */
+/* "Estimated" completion: a small amber tag, not a long sentence. */
 .jbe-est-pill:empty { display: none; }
 .jbe-est-pill {
   display: inline-block; margin-left: 4px; padding: 0 7px; border-radius: 999px;
   background: #fdf3d8; color: #8a6d1a; border: 1px solid #f0dfa0;
-  font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; vertical-align: middle;
+  font-size: .64rem; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; vertical-align: middle;
 }
 
-/* Date/time inputs look like every other box (iPhone showed them as small
-   gray chips). */
+/* Date/time boxes look like every other box (iPhone showed small gray chips). */
 .jb-detail-card input[type=date], .jb-detail-card input[type=time] {
   width: 100%; min-height: 40px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 7px;
   font-size: .95rem; font-family: inherit; background: #fff; color: var(--ink);
 }
 .jb-detail-card input[type=date]:disabled, .jb-detail-card input[type=time]:disabled { background: #f3f5f7; color: var(--muted); }
 
-/* Phone: less padding, and pairs stay side by side (type/status, date/time,
-   technicians, completed date/time, money fields) instead of one field per
-   row; City/State/ZIP share one row. 16px text so iPhone doesn't zoom in
-   when a field is tapped. */
+/* Event card lower sections: single column (original order) below 768px. */
+#jb-event-modal .jbe-cols { display: flex; flex-direction: column; }
+#jb-event-modal .jbe-col { display: contents; }
+#jb-event-modal .jbe-cols .drawer-section { order: var(--o, 0); }
+
+/* ---------- Phone (up to 640px) ---------- */
 @media (max-width: 640px) {
-  #jb-event-modal { padding: 6px; }
-  #jb-event-modal .modal-card { padding: 12px; max-height: 94vh; }
-  #jb-event-modal .jbe-head { top: -12px; margin: -12px -12px 10px; padding: 10px 52px 8px 12px; }
-  .jbe-head-close { top: 8px; right: 8px; }
-  #jb-event-modal .drawer-section { padding: 0 10px 6px; margin-bottom: 10px; }
-  #jb-event-modal .drawer-section h4 { margin: 0 -10px 10px; padding: 9px 10px; }
-  #jb-event-modal .field-row { grid-template-columns: 1fr 1fr; gap: 10px; }
-  #jb-event-modal .field-row.jbe-addr-row { grid-template-columns: 1.5fr .7fr 1fr; }
-  #jb-event-modal .field { margin-bottom: 10px; }
-  #jb-event-modal label { font-size: .76rem; margin-bottom: 3px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
-  #jb-event-modal input[type=text], #jb-event-modal input[type=number], #jb-event-modal input[type=date],
-  #jb-event-modal input[type=time], #jb-event-modal select, #jb-event-modal textarea {
-    font-size: 16px; padding: 8px 9px; min-height: 42px; color: var(--ink);
-  }
-  #jb-event-modal input[type=date], #jb-event-modal input[type=time] { -webkit-appearance: none; appearance: none; text-align: left; }
-  #jb-event-modal input[type=date]::-webkit-date-and-time-value, #jb-event-modal input[type=time]::-webkit-date-and-time-value { text-align: left; }
-  #jb-event-modal #jbe-status { padding-left: 13px; }
-  #jb-event-modal .field-opt { display: none; }
-  #jb-event-modal .field-row .btn { white-space: normal; line-height: 1.2; }
+  #jb-event-modal, #jb-detail-modal { padding: 6px; }
+  .jb-detail-card.modal-card { padding: 12px; max-height: 94vh; }
+  .jb-detail-card .jb-card-head { top: -12px; margin: -12px -12px 10px; padding: 10px 54px 8px 12px; }
+  .jb-card-head .jbe-head-close, .jb-card-head .cal-drawer-close { top: 8px; right: 8px; }
+  .jb-card-head h2 { font-size: 1.1rem; }
+  .jb-card-head .job-num { display: block; margin-top: 1px; }
+  .jb-card-head h3 { font-size: 1.05rem; }
+  .jbe-head-summary { font-size: .86rem; margin-top: 4px; }
+  .jb-card-head .jb-autosave-state { font-size: .74rem; margin-top: 2px; }
+  .jb-detail-card .drawer-section { padding: 0 10px 6px; margin-bottom: 10px; }
+  .jb-detail-card .drawer-section h4 { margin: 0 -10px 10px; padding: 9px 10px; }
+  .jb-detail-card .field-row { grid-template-columns: 1fr 1fr; gap: 10px; } /* pairs stay side by side */
+  .jb-detail-card .field-row.jb-addr-row { grid-template-columns: 1.5fr .7fr 1fr; }
+  .jb-detail-card .field { margin-bottom: 10px; }
+  .jb-detail-card .field-opt { display: none; }
+  .jb-detail-card .field-row .btn { white-space: normal; line-height: 1.2; }
+  .jb-detail-card .jb-quick-actions { gap: 6px !important; margin-bottom: 10px !important; }
 }
-/* Round 63 refinements */
-#jb-event-modal .field-row { align-items: end; } /* inputs line up even when one label wraps (e.g. the ESTIMATED tag) */
-#jb-event-modal .field-row.jbe-addr-row { grid-template-columns: 1.5fr .7fr 1fr; }
-#jb-event-modal input:disabled, #jb-event-modal select:disabled { background: #f3f5f7; color: var(--muted); }
-#jb-event-modal .field > span.muted:last-child { display: block; font-size: .72rem; line-height: 1.3; margin-top: 3px; }
-@media (max-width: 640px) {
-  #jb-event-modal .jbe-head h3 { font-size: 1.05rem; }
-  #jb-event-modal .jbe-head-summary { font-size: .88rem; margin-top: 4px; }
-  #jb-event-modal .jbe-head .jb-autosave-state { font-size: .74rem; margin-top: 2px; }
+/* Phones and tablets: 16px text so iOS doesn't zoom in when a field is tapped. */
+@media (max-width: 1023px) {
+  .jb-detail-card input[type=text], .jb-detail-card input[type=number], .jb-detail-card input[type=email],
+  .jb-detail-card input[type=tel], .jb-detail-card input[type=date], .jb-detail-card input[type=time],
+  .jb-detail-card select, .jb-detail-card textarea { font-size: 16px; padding: 8px 9px; min-height: 42px; color: var(--ink); }
+  .jb-detail-card input[type=date], .jb-detail-card input[type=time] { -webkit-appearance: none; appearance: none; text-align: left; }
+  .jb-detail-card input[type=date]::-webkit-date-and-time-value, .jb-detail-card input[type=time]::-webkit-date-and-time-value { text-align: left; }
+  #jbe-status, #jbd-status { padding-left: 13px; }
 }
-#jb-event-modal .field-row:has(#jbe-cost-material) { align-items: start; } /* its helper line sits under the box */
+
+/* ---------- Tablet (641px - 1023px) ---------- */
+@media (min-width: 641px) and (max-width: 1023px) {
+  #jb-event-modal, #jb-detail-modal { padding: 12px; }
+  .jb-detail-card.modal-card { padding: 16px; max-height: 95vh; }
+  #jb-event-modal .modal-card { max-width: 900px; }
+  .jb-detail-card .jb-card-head { top: -16px; margin: -16px -16px 12px; padding: 12px 58px 10px 16px; }
+  .jb-detail-card .drawer-section { padding: 0 12px 8px; margin-bottom: 12px; }
+  .jb-detail-card .drawer-section h4 { margin: 0 -12px 10px; padding: 9px 12px; }
+  .jb-detail-grid { gap: 0 14px; }
+}
+
+/* ---------- Desktop (1024px and up) ---------- */
+@media (min-width: 1024px) {
+  .jb-detail-card.modal-card { max-height: 92vh; }
+  #jb-event-modal .modal-card { max-width: 1100px; }
+  #jb-detail-modal .modal-card { max-width: 1240px; }
+  .jb-detail-grid { gap: 0 16px; }
+}
+
+/* ---------- Tablet (portrait and up) and desktop: Event card uses the width ---------- */
+@media (min-width: 768px) {
+  /* Event Info in four columns: Type | Status | Reason (2); Date | Time |
+     Address (2); City (2) | State | ZIP; Tech | Tech 2 | Tech 3 | Priority;
+     Completed Date | Completed Time. */
+  #jb-event-modal .jbe-info-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 12px; align-items: end; }
+  #jb-event-modal .jbe-info-grid > .field-row { display: contents; }
+  #jb-event-modal .jbe-info-grid .fi-span2 { grid-column: span 2; }
+  /* Lower sections side by side (like the Job Card): the visit's work on the
+     left, money and paperwork on the right. */
+  #jb-event-modal .jbe-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 14px; align-items: start; }
+  #jb-event-modal .jbe-col { display: block; }
+}

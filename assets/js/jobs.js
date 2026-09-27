@@ -3285,6 +3285,7 @@ async function _jbRefreshJobDerivedFields() {
   const { data: fresh } = await _saaClient.from("jobs").select("*").eq("id", job.id).maybeSingle();
   if (!fresh || !_jbCurrentJob || _jbCurrentJob.id !== fresh.id) return;
   Object.assign(_jbCurrentJob, fresh);
+  _jbdRenderHeadSummary(_jbCurrentJob); // Round 64
   const setIfIdle = (id, val) => {
     const el = document.getElementById(id);
     if (el && document.activeElement !== el) el.value = val == null ? "" : val;
@@ -3304,7 +3305,7 @@ async function _jbRefreshJobDerivedFields() {
     const ct = await saaJobsGetCompletedTime(fresh);
     setIfIdle("jbd-completed-time", ct.time);
     const note = document.getElementById("jbd-completed-time-note");
-    if (note) note.textContent = ct.isEstimate ? "(estimated from schedule — edit from the Event)" : "";
+    if (note) note.textContent = ct.isEstimate ? "Estimated" : "";
   }
 }
 
@@ -3504,6 +3505,33 @@ async function jbSaveEventModal() {
   }
 }
 
+/** Round 64 (2026-09-27): the Job Card's pinned one-line summary --
+ *  customer, a colored status badge, the scheduled day/time and the
+ *  assigned technician(s) -- so it's all visible without scrolling, same
+ *  idea as the Event card's _jbeRenderHeadSummary. Also tags the (disabled,
+ *  Event-derived) Status dropdown with data-status for its colored edge. */
+function _jbdRenderHeadSummary(job) {
+  const el = document.getElementById("jbd-head-summary");
+  if (!el || !job) return;
+  const parts = [];
+  if (job.customer) parts.push(`<strong>${_jbEsc(_jbCustName(job.customer))}</strong>`);
+  if (job.status) parts.push(`<span class="jb-badge jb-status-${_jbEsc(job.status)}">${_jbEsc(_jbJobStatusLabel(job))}</span>`);
+  if (job.scheduled_date) {
+    const [y, m, d] = String(job.scheduled_date).split("-").map(Number);
+    const [hh, mm] = String(job.scheduled_time || "00:00").split(":").map(Number);
+    const dt = new Date(y, m - 1, d, hh || 0, mm || 0);
+    const when = dt.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) +
+      (job.scheduled_time ? " · " + dt.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : "");
+    parts.push(`<span class="jbe-head-when">${_jbEsc(when)}</span>`);
+  }
+  const techNames = [job.assigned_technician_id, job.assigned_technician_id_2, job.assigned_technician_id_3]
+    .filter(Boolean).map((id) => (_jbTechnicians.find((t) => t.id === id) || {}).name).filter(Boolean);
+  if (techNames.length) parts.push(`<span class="muted">${_jbEsc(techNames.join(", "))}</span>`);
+  el.innerHTML = parts.join("");
+  const st = document.getElementById("jbd-status");
+  if (st) st.dataset.status = job.status || "";
+}
+
 async function jbOpenDetail(jobId) {
   const job = _jbAllJobs.find((j) => j.id === jobId);
   if (!job) return;
@@ -3512,6 +3540,7 @@ async function jbOpenDetail(jobId) {
 
   document.getElementById("jbd-title").textContent = job.title || saaJobTypeLabel(job.job_type);
   document.getElementById("jbd-jobnum").textContent = `${_jbJobNum(job)} · Received ${_jbFormatDate(job.created_at)}`;
+  _jbdRenderHeadSummary(job); // Round 64
 
   // Round 43 (2026-09-22): historical-Job banner. A converted Job's own
   // events.job_id gets re-pointed FORWARD onto the new current Job (so the
@@ -3561,7 +3590,7 @@ async function jbOpenDetail(jobId) {
   // Round 55 follow-up: "confirm or edit" used to point back at this same
   // (now disabled, auto-derived) field -- edit it from the current Event's
   // own modal instead, same as Status just above.
-  document.getElementById("jbd-completed-time-note").textContent = _jbCompletedTime.isEstimate ? "(estimated from schedule — edit from the Event)" : "";
+  document.getElementById("jbd-completed-time-note").textContent = _jbCompletedTime.isEstimate ? "Estimated" : "";
   document.getElementById("jbd-address").value = job.job_address || "";
   document.getElementById("jbd-city").value = job.job_city || "";
   document.getElementById("jbd-state").value = job.job_state || "TX";

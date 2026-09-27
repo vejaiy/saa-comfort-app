@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jobs | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260926m">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260927b">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260926m"></script>
-<script src="../assets/js/supabase-config.js?v=20260926m"></script>
-<script src="../assets/js/auth.js?v=20260926m"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260927b"></script>
+<script src="../assets/js/supabase-config.js?v=20260927b"></script>
+<script src="../assets/js/auth.js?v=20260927b"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -252,11 +252,19 @@
 <!-- ============ Job Card detail modal ============ -->
 <div class="modal-overlay" id="jb-detail-modal" hidden>
   <div class="modal-card jb-detail-card">
-    <button type="button" class="cal-drawer-close" id="jb-detail-close-btn">&times;</button>
-    <h2 id="jbd-title" style="margin-bottom:2px"></h2>
-    <div class="job-num" id="jbd-jobnum" style="margin-bottom:4px"></div>
-    <!-- Round 60: autosave indicator, mirrored from jbd-status-msg (jobs.js) -->
-    <div class="jb-autosave-state" id="jbd-autosave-state" aria-live="polite"></div>
+    <!-- Round 64 (2026-09-27), per Vijayan: "do the same for job card. for
+         phone view, tablet view, desktop view" -- same pinned header as the
+         Event card (Round 63): title, job number, a one-line summary (status
+         badge, schedule, technician -- _jbdRenderHeadSummary in jobs.js),
+         the autosave state and the (x), visible while scrolling. -->
+    <div class="jb-card-head jbd-head">
+      <button type="button" class="cal-drawer-close" id="jb-detail-close-btn" aria-label="Close" title="Close">&times;</button>
+      <h2 id="jbd-title"></h2>
+      <span class="job-num" id="jbd-jobnum"></span>
+      <div class="jbe-head-summary" id="jbd-head-summary"></div>
+      <!-- Round 60: autosave indicator, mirrored from jbd-status-msg (jobs.js) -->
+      <div class="jb-autosave-state" id="jbd-autosave-state" aria-live="polite"></div>
+    </div>
     <!-- Round 43 (2026-09-22): shown only when this Job has been converted
          into a historical Event by a later visit (is_current = false) --
          "never display a historical Job as if still active." Links straight
@@ -350,12 +358,15 @@
 
         <div class="drawer-section">
           <h4>Job Info</h4>
+          <!-- Round 64: one note instead of an "Auto-derived from current Event"
+               caption under each of Status / Scheduled Date / Completion Date. -->
+          <div class="jb-derived-note">&#128279; Status, schedule and completion (greyed out) follow this Job's current Event &mdash; change them there.</div>
           <div class="field-row">
             <div class="field"><label>Job Type</label><select id="jbd-type"></select></div>
             <div class="field"><label>Priority</label><select id="jbd-priority"></select></div>
           </div>
           <div class="field-row">
-            <div class="field"><label>Status</label><select id="jbd-status" disabled title="Auto-derived from this Job's current Event status -- change it from the Event instead"></select><span class="muted" style="font-size:.72rem">Auto-derived from current Event</span></div>
+            <div class="field"><label>Status</label><select id="jbd-status" disabled title="Auto-derived from this Job's current Event status -- change it from the Event instead"></select></div>
             <div class="field"><label>Technician</label><select id="jbd-tech"></select></div>
           </div>
           <!-- Round 25 (2026-09-14), per Vijayan: "Support multiple
@@ -366,8 +377,8 @@
                drives automatic mileage calculation; see the Mileage
                section further down for technician 2/3's own opt-in entry. -->
           <div class="field-row">
-            <div class="field"><label>Technician 2 <span class="muted" style="font-weight:400">(optional)</span></label><select id="jbd-tech2"></select></div>
-            <div class="field"><label>Technician 3 <span class="muted" style="font-weight:400">(optional)</span></label><select id="jbd-tech3"></select></div>
+            <div class="field"><label>Technician 2 <span class="muted field-opt" style="font-weight:400">(optional)</span></label><select id="jbd-tech2"></select></div>
+            <div class="field"><label>Technician 3 <span class="muted field-opt" style="font-weight:400">(optional)</span></label><select id="jbd-tech3"></select></div>
           </div>
           <!-- Round 55 follow-up, per Vijayan ("schedule time and completion
                time is update it is not updating in Jobs and Events"):
@@ -382,15 +393,15 @@
                schedule or completion time from the Event (Job Card's
                event modal or the Calendar drawer) instead. -->
           <div class="field-row">
-            <div class="field"><label>Scheduled Date</label><input type="date" id="jbd-scheduled" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"><span class="muted" style="font-size:.72rem">Auto-derived from current Event</span></div>
+            <div class="field"><label>Scheduled Date</label><input type="date" id="jbd-scheduled" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"></div>
             <div class="field"><label>Scheduled Time</label><input type="time" id="jbd-time" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"></div>
           </div>
           <div class="field-row">
-            <div class="field"><label>Completion Date</label><input type="date" id="jbd-completed" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"><span class="muted" style="font-size:.72rem">Auto-derived from current Event</span></div>
-            <div class="field"><label>Completed Time <span class="muted" id="jbd-completed-time-note" style="font-weight:400;font-size:.78rem"></span></label><input type="time" id="jbd-completed-time" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"></div>
+            <div class="field"><label>Completion Date</label><input type="date" id="jbd-completed" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"></div>
+            <div class="field"><label>Completed Time <span class="jbe-est-pill" id="jbd-completed-time-note"></span></label><input type="time" id="jbd-completed-time" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"></div>
           </div>
           <div class="field"><label>Service Address</label><input type="text" id="jbd-address"></div>
-          <div class="field-row field-row-3">
+          <div class="field-row field-row-3 jb-addr-row">
             <div class="field"><label>City</label><input type="text" id="jbd-city"></div>
             <div class="field"><label>State</label><input type="text" id="jbd-state" maxlength="2" style="text-transform:uppercase"></div>
             <div class="field"><label>ZIP</label><input type="text" id="jbd-zip"></div>
@@ -609,7 +620,7 @@
 
 <!-- ============ Event detail / create modal (Round 42, 2026-09-19) ============ -->
 <div class="modal-overlay" id="jb-event-modal" hidden>
-  <div class="modal-card jb-detail-card" style="max-width:680px">
+  <div class="modal-card jb-detail-card jbe-card">
     <!-- Round 63 (2026-09-26), per Vijayan: "There are unused space in event
          card. Adjust the space to maximize viewing data. But don't make it
          clustered. Make the card easy to read. Highlight where require." --
@@ -617,7 +628,7 @@
          summary (type, colored status badge, date/time -- see
          _jbeRenderHeadSummary in jobs.js), the autosave state, and a close
          (x) so there's no need to scroll to the bottom to leave. -->
-    <div class="jbe-head">
+    <div class="jbe-head jb-card-head">
       <button type="button" class="jbe-head-close" id="jb-event-x-btn" aria-label="Close" title="Close">&times;</button>
       <h3 id="jb-event-modal-title">Event</h3>
       <span class="muted" id="jb-event-modal-number"></span>
@@ -641,6 +652,8 @@
          where -> who's assigned/how urgent -> how it wrapped up. -->
     <div class="drawer-section">
       <h4>Event Info</h4>
+      <!-- Round 64: 4 columns on a wide screen (style.css .jbe-info-grid) -->
+      <div class="jbe-info-grid">
       <div class="field-row">
         <div class="field"><label>Event Type</label><select id="jbe-type"></select></div>
         <div class="field"><label>Status</label><select id="jbe-status"></select></div>
@@ -648,14 +661,14 @@
       <!-- Round 63: Reason for Visit moved up from Visit Notes -- it's what the
            tech needs to know first, and it's the line the Event History and
            Calendar cards show for this visit. -->
-      <div class="field"><label>Reason for Visit</label><input type="text" id="jbe-reason"></div>
+      <div class="field fi-span2"><label>Reason for Visit</label><input type="text" id="jbe-reason"></div>
       <div class="field-row">
         <div class="field"><label>Scheduled Date</label><input type="date" id="jbe-date"></div>
         <div class="field"><label>Scheduled Time</label><input type="time" id="jbe-time"></div>
       </div>
-      <div class="field"><label>Service Address</label><input type="text" id="jbe-address"></div>
-      <div class="field-row field-row-3 jbe-addr-row">
-        <div class="field"><label>City</label><input type="text" id="jbe-city"></div>
+      <div class="field fi-span2"><label>Service Address</label><input type="text" id="jbe-address"></div>
+      <div class="field-row field-row-3 jbe-addr-row jb-addr-row">
+        <div class="field fi-span2"><label>City</label><input type="text" id="jbe-city"></div>
         <div class="field"><label>State</label><input type="text" id="jbe-state" maxlength="2" style="text-transform:uppercase"></div>
         <div class="field"><label>ZIP</label><input type="text" id="jbe-zip"></div>
       </div>
@@ -676,6 +689,7 @@
         <div class="field"><label>Completed Date</label><input type="date" id="jbe-completed-date"></div>
         <div class="field"><label>Completed Time <span class="jbe-est-pill" id="jbe-completed-time-note"></span></label><input type="time" id="jbe-completed-time"></div>
       </div>
+      </div>
     </div>
 
     <!-- Round 42 Task 121-123, per Vijayan: "event is once a full job...
@@ -688,7 +702,44 @@
          answers: Financials are per-Event, Quote linking is per-Event, and
          these sections have "their own working control" -- not a
          read-only summary. -->
-    <div class="drawer-section">
+    <!-- Round 64: two columns on a wide screen -- the visit's work (notes,
+         photos, inspection, materials) on the left, money and paperwork on
+         the right, mirroring the Job Card. Below 768px the columns dissolve
+         (display:contents) and --o restores the original single-column order. -->
+    <div class="jbe-cols">
+    <div class="jbe-col">
+    
+
+    <div class="drawer-section" style="--o:9">
+      <h4>Visit Notes</h4>
+      <div class="field"><label>Description</label><textarea id="jbe-description" rows="2"></textarea></div>
+      <div class="field"><label>Technician Notes</label><textarea id="jbe-tech-notes" rows="2"></textarea></div>
+      <div class="field"><label>Customer Notes</label><textarea id="jbe-cust-notes" rows="2"></textarea></div>
+      <div class="field"><label>Work Performed</label><textarea id="jbe-work" rows="2"></textarea></div>
+      <div class="field"><label>Parts Used</label><textarea id="jbe-parts" rows="2"></textarea></div>
+    </div>
+
+    <div class="drawer-section" style="--o:4">
+      <h4>Photos</h4>
+      <button type="button" class="btn btn-ghost btn-sm" id="jbe-add-photos-btn">📷 Add Photos</button>
+      <div class="jb-photo-grid" id="jbe-photos-grid"><span class="jb-photo-empty">No photos yet.</span></div>
+    </div>
+
+    <div class="drawer-section" style="--o:7">
+      <h4>Inspection</h4>
+      <div class="jb-insp-summary">
+        <span id="jbe-insp-summary" class="muted" style="font-size:.85rem">Not started</span>
+        <button type="button" class="btn btn-ghost btn-sm" id="jbe-open-inspection-btn">✅ Open Inspection Checklist</button>
+      </div>
+    </div>
+
+    <div class="drawer-section" style="--o:8">
+      <h4>Bill of Material</h4>
+      <a class="btn btn-ghost btn-sm" id="jbe-bom-btn" href="#" target="_blank" rel="noopener">🧰 Bill of Material</a>
+    </div>
+    </div>
+    <div class="jbe-col">
+    <div class="drawer-section" style="--o:1">
       <h4>Quote</h4>
       <div id="jbe-quote-linked" hidden></div>
       <div id="jbe-quote-search-wrap" class="cal-cust-search-wrap">
@@ -697,7 +748,7 @@
       </div>
     </div>
 
-    <div class="drawer-section">
+    <div class="drawer-section" style="--o:2">
       <h4>Financials</h4>
       <div class="field-row">
         <div class="field"><label>Quoted Amount</label><input type="number" step="0.01" id="jbe-quoted"></div>
@@ -711,7 +762,7 @@
       <div class="jb-profit-box" id="jbe-profit-box"></div>
     </div>
 
-    <div class="drawer-section">
+    <div class="drawer-section" style="--o:3">
       <h4>Mileage</h4>
       <div class="muted" id="jbe-mileage-context" style="font-size:.82rem;margin-bottom:8px">Assign a technician and a Scheduled Date to calculate this trip.</div>
       <div class="field-row">
@@ -746,55 +797,30 @@
       </div>
     </div>
 
-    <div class="drawer-section">
-      <h4>Photos</h4>
-      <button type="button" class="btn btn-ghost btn-sm" id="jbe-add-photos-btn">📷 Add Photos</button>
-      <div class="jb-photo-grid" id="jbe-photos-grid"><span class="jb-photo-empty">No photos yet.</span></div>
-    </div>
-
-    <div class="drawer-section">
+    <div class="drawer-section" style="--o:5">
       <h4>Receipts</h4>
       <button type="button" class="btn btn-ghost btn-sm" id="jbe-add-receipt-btn">🧾 Add Receipt</button>
       <div class="jb-photo-grid" id="jbe-receipts-grid"><span class="jb-photo-empty">No receipts yet.</span></div>
     </div>
 
-    <div class="drawer-section">
+    <div class="drawer-section" style="--o:6">
       <h4>Invoice &amp; Payment <span class="jb-badge" id="jbe-invoice-quote-flag" hidden></span></h4>
       <div id="jbe-invoice-box"></div>
-    </div>
-
-    <div class="drawer-section">
-      <h4>Inspection</h4>
-      <div class="jb-insp-summary">
-        <span id="jbe-insp-summary" class="muted" style="font-size:.85rem">Not started</span>
-        <button type="button" class="btn btn-ghost btn-sm" id="jbe-open-inspection-btn">✅ Open Inspection Checklist</button>
-      </div>
-    </div>
-
-    <div class="drawer-section">
-      <h4>Bill of Material</h4>
-      <a class="btn btn-ghost btn-sm" id="jbe-bom-btn" href="#" target="_blank" rel="noopener">🧰 Bill of Material</a>
-    </div>
-
-    <div class="drawer-section">
-      <h4>Visit Notes</h4>
-      <div class="field"><label>Description</label><textarea id="jbe-description" rows="2"></textarea></div>
-      <div class="field"><label>Technician Notes</label><textarea id="jbe-tech-notes" rows="2"></textarea></div>
-      <div class="field"><label>Customer Notes</label><textarea id="jbe-cust-notes" rows="2"></textarea></div>
-      <div class="field"><label>Work Performed</label><textarea id="jbe-work" rows="2"></textarea></div>
-      <div class="field"><label>Parts Used</label><textarea id="jbe-parts" rows="2"></textarea></div>
     </div>
 
     <!-- "Customer Signature" title-matches JB_SECTIONS_COLLAPSED_BY_DEFAULT
          in jobs.js, same as the Job Card's own "Customer Signature /
          Approval" section -- starts collapsed here too, for consistency. -->
-    <div class="drawer-section">
+    <div class="drawer-section" style="--o:10">
       <h4>Customer Signature</h4>
       <div class="field-row">
         <div class="field"><label>Customer Signature Name</label><input type="text" id="jbe-sig-name"></div>
         <div class="field"><label>Signature Date</label><input type="date" id="jbe-sig-date"></div>
       </div>
     </div>
+    </div>
+    </div>
+
 
     <div class="modal-close-row">
       <button type="button" class="btn btn-navy btn-sm" id="jb-event-save-btn">Save Event</button><!-- label set per mode in jbOpenEventModal: "Done" (existing, autosaved) / "Create Event" (new) -->
@@ -864,17 +890,17 @@
 <div id="jb-toast" class="cal-toast" hidden></div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260926m"></script>
-<script src="../assets/js/worksheet.js?v=20260926m"></script>
-<script src="../assets/js/systems-db.js?v=20260926m"></script>
-<script src="../assets/js/events-db.js?v=20260926m"></script>
-<script src="../assets/js/jobs-db.js?v=20260926m"></script>
-<script src="../assets/js/job-photos-db.js?v=20260926m"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260926m"></script>
-<script src="../assets/js/camera-capture.js?v=20260926m"></script>
-<script src="../assets/js/print-invoice.js?v=20260926m"></script>
-<script src="../assets/js/maps-config.js?v=20260926m"></script>
-<script src="../assets/js/mileage-db.js?v=20260926m"></script>
-<script src="../assets/js/jobs.js?v=20260926m"></script>
+<script src="../assets/js/pricing-data.js?v=20260927b"></script>
+<script src="../assets/js/worksheet.js?v=20260927b"></script>
+<script src="../assets/js/systems-db.js?v=20260927b"></script>
+<script src="../assets/js/events-db.js?v=20260927b"></script>
+<script src="../assets/js/jobs-db.js?v=20260927b"></script>
+<script src="../assets/js/job-photos-db.js?v=20260927b"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260927b"></script>
+<script src="../assets/js/camera-capture.js?v=20260927b"></script>
+<script src="../assets/js/print-invoice.js?v=20260927b"></script>
+<script src="../assets/js/maps-config.js?v=20260927b"></script>
+<script src="../assets/js/mileage-db.js?v=20260927b"></script>
+<script src="../assets/js/jobs.js?v=20260927b"></script>
 </body>
 </html>
