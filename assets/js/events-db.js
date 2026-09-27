@@ -135,6 +135,56 @@ function saaEventsWallClock(ts) {
   };
 }
 
+/** Round 62 (2026-09-26), per Vijayan: "cards in calendar can match the
+ *  timing in event cards or vice versa whichever is the latest edit."
+ *  The ONE definition of when an Event ends, used by both the Event card's
+ *  Completed Date/Time and the Calendar card's right/bottom edge, so the two
+ *  can never disagree:
+ *    1. completed_at (a real instant, shown in local time) when set;
+ *    2. else scheduled_end (the Calendar's drag-to-resize end);
+ *    3. else Scheduled Time + the Event Type's usual length (an estimate).
+ *  Every edit keeps the first two in step (see saaEventsSetCompletedTime and
+ *  _saaEventsCompletedAtForNewEnd), so whichever side was edited last wins.
+ *  opts.ignoreCompleted skips step 1 (the Calendar uses it when a completion
+ *  lands on another day or before the start, which it can't draw).
+ *  Returns { date, time, minutes, isEstimate, source } or null. */
+function saaEventsEndInfo(event, opts) {
+  opts = opts || {};
+  if (!event) return null;
+  const pad = (n) => String(n).padStart(2, "0");
+  const pack = (d, source) => ({
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    minutes: d.getHours() * 60 + d.getMinutes(),
+    isEstimate: source !== "completed",
+    source,
+  });
+  if (event.completed_at && !opts.ignoreCompleted) {
+    const d = new Date(event.completed_at);
+    if (!isNaN(d.getTime())) return pack(d, "completed");
+  }
+  const endWc = saaEventsWallClock(event.scheduled_end);
+  if (endWc) return pack(endWc.local, "scheduled_end");
+  const startWc = saaEventsWallClock(event.scheduled_start);
+  if (startWc) {
+    const duration = (typeof SAA_EVENT_TYPE_DURATION !== "undefined" && SAA_EVENT_TYPE_DURATION[event.event_type]) || 60;
+    return pack(new Date(startWc.local.getTime() + duration * 60000), "estimate");
+  }
+  return null;
+}
+
+/** When the Calendar moves/resizes an Event that already has a completion
+ *  time, the completion time follows the new end (the calendar edit is the
+ *  latest word on when the visit ended). Returns the completed_at value to
+ *  write, or undefined to leave it alone. */
+async function _saaEventsCompletedAtForNewEnd(eventId, scheduledEnd) {
+  const endWc = saaEventsWallClock(scheduledEnd);
+  if (!endWc) return undefined;
+  const { data } = await _saaClient.from("events").select("completed_at").eq("id", eventId).maybeSingle();
+  if (!data || !data.completed_at) return undefined;
+  return endWc.local.toISOString();
+}
+
 const SAA_EVENT_TYPE_DURATION = {
   service_call: 60, diagnostic: 60, repair: 90, maintenance: 60,
   estimate_visit: 45, installation: 480, follow_up: 15,
@@ -411,31 +461,10 @@ async function saaEventsCreateForJob(jobId, fields) {
  *      Event is actually marked Completed.
  *  Returns { date: "YYYY-MM-DD"|"", time: "HH:MM"|"", isEstimate: bool }. */
 async function saaEventsGetCompletedTime(event) {
-  const pad = (n) => String(n).padStart(2, "0");
-  if (event && event.completed_at) {
-    const d = new Date(event.completed_at);
-    if (!isNaN(d.getTime())) {
-      return {
-        date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-        time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
-        isEstimate: false,
-      };
-    }
-  }
-  const wc = event ? saaEventsWallClock(event.scheduled_start) : null;
-  if (wc) {
-    const start = wc.local;
-    if (!isNaN(start.getTime())) {
-      const duration = SAA_EVENT_TYPE_DURATION[event.event_type] || 60;
-      const end = new Date(start.getTime() + duration * 60000);
-      return {
-        date: `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`,
-        time: `${pad(end.getHours())}:${pad(end.getMinutes())}`,
-        isEstimate: true,
-      };
-    }
-  }
-  return { date: "", time: "", isEstimate: false };
+  // Round 62: same definition the Calendar draws with -- see saaEventsEndInfo.
+  const info = saaEventsEndInfo(event || null);
+  if (!info) return { date: "", time: "", isEstimate: false };
+  return { date: info.date, time: info.time, isEstimate: info.isEstimate };
 }
 
 /** Manually set/override an Event's recorded completed date+time (mirrors
@@ -448,7 +477,13 @@ async function saaEventsSetCompletedTime(eventId, dateStr, hhmm) {
   try {
     if (!dateStr || !hhmm) return { ok: false, error: "Both a completed date and time are required." };
     const iso = new Date(`${dateStr}T${hhmm}:00`).toISOString();
-    const { error } = await _saaClient.from("events").update({ completed_at: iso, updated_at: new Date().toISOString() }).eq("id", eventId);
+    const patch = { completed_at: iso, updated_at: new Date().toISOString() };
+    // Round 62: the Calendar card's end follows an edited completion time
+    // when it's on the visit's own day and after its start.
+    const { data: cur } = await _saaClient.from("events").select("scheduled_start").eq("id", eventId).maybeSingle();
+    const startWc = cur ? saaEventsWallClock(cur.scheduled_start) : null;
+    if (startWc && startWc.date === dateStr && hhmm > startWc.time) patch.scheduled_end = `${dateStr}T${hhmm}:00`;
+    const { error } = await _saaClient.from("events").update(patch).eq("id", eventId);
     if (error) throw error;
     return { ok: true };
   } catch (e) {
@@ -620,6 +655,10 @@ async function saaEventsReschedule(eventId, { scheduledStart, scheduledEnd, tech
       const note = `[Rescheduled from ${fromStr}${reason ? ` — ${reason}` : ""}]`;
       patch.description = current.description ? `${current.description}\n${note}` : note;
     }
+    if (scheduledEnd) {
+      const c = await _saaEventsCompletedAtForNewEnd(eventId, scheduledEnd); // Round 62
+      if (c !== undefined) patch.completed_at = c;
+    }
     const { error } = await _saaClient.from("events").update(patch).eq("id", eventId);
     if (error) throw error;
     const { data: ev } = await _saaClient.from("events").select("job_id").eq("id", eventId).maybeSingle();
@@ -642,6 +681,10 @@ async function saaEventsUpdateAssignment({ eventId, technicianId, technicianId2,
     if (technicianId3 !== undefined) patch.assigned_technician_id_3 = technicianId3 || null;
     if (scheduledStart !== undefined) patch.scheduled_start = scheduledStart || null;
     if (scheduledEnd !== undefined) patch.scheduled_end = scheduledEnd || null;
+    if (scheduledEnd) {
+      const c = await _saaEventsCompletedAtForNewEnd(eventId, scheduledEnd); // Round 62
+      if (c !== undefined) patch.completed_at = c;
+    }
     const { error } = await _saaClient.from("events").update(patch).eq("id", eventId);
     if (error) throw error;
     // Round 42 Task 118: this is a drag/resize/reassign of an EXISTING

@@ -127,13 +127,25 @@ function saaCalEventCaption(a) {
   const label = t.label || (a && a.job && a.job.title) || "";
   return reason ? `${label} · ${reason}` : label;
 }
-/** End minute for drawing: the saved end, or start + the Event Type's usual
- *  length when no end was ever set (used to render as a sliver). */
+/** End minute for drawing. Round 62, per Vijayan ("cards in calendar can
+ *  match the timing in event cards or vice versa whichever is the latest
+ *  edit"): uses saaEventsEndInfo (events-db.js), the same definition the
+ *  Event card's Completed Date/Time shows -- completion time, else the
+ *  saved end, else Scheduled Time + the type's usual length. A completion
+ *  on another day (or before the start) can't be drawn on this day's grid,
+ *  so that one case falls back to the saved end / usual length. */
 function saaCalEventEndMin(a) {
-  const end = saaCalMinutesFromTimeStr(a.scheduled_end);
-  if (end != null) return end;
   const start = saaCalMinutesFromTimeStr(a.scheduled_start);
-  if (start == null) return null;
+  if (start == null) return saaCalMinutesFromTimeStr(a.scheduled_end);
+  const startDate = String(a.scheduled_start).slice(0, 10);
+  const fits = (info) => info && info.date === startDate && info.minutes > start;
+  if (typeof saaEventsEndInfo === "function") {
+    let info = saaEventsEndInfo(a);
+    if (!fits(info)) info = saaEventsEndInfo(a, { ignoreCompleted: true });
+    if (fits(info)) return info.minutes;
+  }
+  const end = saaCalMinutesFromTimeStr(a.scheduled_end);
+  if (end != null && end > start) return end;
   return Math.min(start + (saaCalEventTypeInfo(a).default_duration_minutes || 60), 24 * 60);
 }
 let saaCalScheduled = [];
@@ -735,7 +747,7 @@ function saaCalStartResize(e) {
   card.draggable = false;
   card.classList.add("resizing");
   const startMin = saaCalMinutesFromTimeStr(appt.scheduled_start);
-  const origEndMin = saaCalMinutesFromTimeStr(appt.scheduled_end);
+  const origEndMin = saaCalEventEndMin(appt); // Round 62: start from the edge actually drawn
   let newEndMin = origEndMin;
 
   function onMove(ev) {
@@ -815,8 +827,9 @@ async function saaCalHandleDrop(techId, startMinutes) {
   if (!source) return;
 
   const type = saaCalEventTypeInfo(source);
-  const durationMin = source.scheduled_start && source.scheduled_end
-    ? saaCalMinutesFromTimeStr(source.scheduled_end) - saaCalMinutesFromTimeStr(source.scheduled_start)
+  // Round 62: keep the length the card is actually drawn with.
+  const durationMin = source.scheduled_start
+    ? saaCalEventEndMin(source) - saaCalMinutesFromTimeStr(source.scheduled_start)
     : (type.default_duration_minutes || 60);
   const endMinutes = startMinutes + durationMin;
 
@@ -830,7 +843,7 @@ async function saaCalHandleDrop(techId, startMinutes) {
     _saaCalApptHasTech(a, techId) &&
     a.event_status !== "cancelled" &&
     saaCalMinutesFromTimeStr(a.scheduled_start) < endMinutes &&
-    saaCalMinutesFromTimeStr(a.scheduled_end) > startMinutes
+    saaCalEventEndMin(a) > startMinutes // Round 62: same length as drawn
   );
 
   const techName = (saaCalTechnicians.find((t) => t.id === techId) || {}).name || "technician";
@@ -853,7 +866,7 @@ async function saaCalHandleDrop(techId, startMinutes) {
   if (conflict) {
     const custName = saaCalCustName(conflict.customer);
     document.getElementById("cal-conflict-detail").textContent =
-      `${techName} already has ${custName}, ${saaCalFormatClock(saaCalMinutesFromTimeStr(conflict.scheduled_start))} – ${saaCalFormatClock(saaCalMinutesFromTimeStr(conflict.scheduled_end))}.`;
+      `${techName} already has ${custName}, ${saaCalFormatClock(saaCalMinutesFromTimeStr(conflict.scheduled_start))} – ${saaCalFormatClock(saaCalEventEndMin(conflict))}.`;
     document.getElementById("cal-conflict-modal").hidden = false;
     document.getElementById("cal-conflict-confirm-btn").onclick = async () => {
       document.getElementById("cal-conflict-modal").hidden = true;
@@ -1572,8 +1585,8 @@ function saaCalWireStaticHandlers() {
     const [hh, mm] = timeVal.split(":").map(Number);
     const startMinutes = hh * 60 + mm;
     const type = saaCalEventTypeInfo(saaCalDrawerAppt);
-    const existingDur = (saaCalDrawerAppt.scheduled_start && saaCalDrawerAppt.scheduled_end)
-      ? saaCalMinutesFromTimeStr(saaCalDrawerAppt.scheduled_end) - saaCalMinutesFromTimeStr(saaCalDrawerAppt.scheduled_start)
+    const existingDur = saaCalDrawerAppt.scheduled_start // Round 62: the drawn length
+      ? saaCalEventEndMin(saaCalDrawerAppt) - saaCalMinutesFromTimeStr(saaCalDrawerAppt.scheduled_start)
       : (type.default_duration_minutes || 60);
     const res = await saaEventsUpdateAssignment({
       eventId: saaCalDrawerAppt.id,

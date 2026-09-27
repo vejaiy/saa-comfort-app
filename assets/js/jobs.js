@@ -2258,8 +2258,24 @@ async function jbSaveInspection() {
  * Card's drawer is gone. The quick-actions button is now a plain link to
  * the dedicated Bill of Material page (bill-of-material.html), pointed at
  * this job — see jbWireBomLink below, called from jbOpenDetail. */
+/** Round 62 (2026-09-26), per Vijayan: closing a Bill of Material opened
+ *  from the Job Card should go back to the Job Card, not the Dashboard.
+ *  The page it opens gets ?return=<this page>?job=<id>[&event=<id>], which
+ *  its (x) uses (templates.py page_close_btn); this page reopens that Job
+ *  Card/Event from those params on load (see the deep-link block at the
+ *  bottom of this file). Keeps any other params, e.g. calendar's embed=1. */
+function _jbReturnUrl(jobId, eventId) {
+  const page = (window.location.pathname.split("/").pop() || "jobs.html");
+  const params = new URLSearchParams(window.location.search);
+  params.delete("job");
+  params.delete("event");
+  params.set("job", jobId);
+  if (eventId) params.set("event", eventId);
+  return `${page}?${params.toString()}`;
+}
+
 function jbWireBomLink(job) {
-  const href = `bill-of-material.html?job=${encodeURIComponent(job.job_number || job.id)}`;
+  const href = `bill-of-material.html?job=${encodeURIComponent(job.job_number || job.id)}&return=${encodeURIComponent(_jbReturnUrl(job.id))}`;
   // Round 15: a second Bill of Material link right in the Equipment
   // section (in addition to the quick-actions one at the top) -- Vijayan
   // pointed at the Equipment section specifically when asking for a BOM
@@ -2282,7 +2298,8 @@ function jbeWireBomLink(event) {
   const link = document.getElementById("jbe-bom-btn");
   if (!link) return;
   if (event && event.id) {
-    link.href = `bill-of-material.html?event=${encodeURIComponent(event.id)}`;
+    const back = _jbCurrentJob ? `&return=${encodeURIComponent(_jbReturnUrl(_jbCurrentJob.id, event.id))}` : ""; // Round 62
+    link.href = `bill-of-material.html?event=${encodeURIComponent(event.id)}${back}`;
     link.textContent = "🧰 Bill of Material";
   } else {
     link.removeAttribute("href");
@@ -2839,7 +2856,7 @@ async function jbOpenEventModal(event, defaultType) {
   const completedInfo = await saaEventsGetCompletedTime(event || {});
   document.getElementById("jbe-completed-date").value = completedInfo.date;
   document.getElementById("jbe-completed-time").value = completedInfo.time;
-  document.getElementById("jbe-completed-time-note").textContent = completedInfo.isEstimate ? "(estimated from schedule — confirm or edit)" : "";
+  document.getElementById("jbe-completed-time-note").textContent = completedInfo.isEstimate ? "Estimated" : "";
   _jbEventCompletedAtOpen = { date: completedInfo.date, time: completedInfo.time };
 
   // Service Address/City/State/ZIP -- an Event's own value once set,
@@ -2914,6 +2931,7 @@ async function jbOpenEventModal(event, defaultType) {
 
   jbeWireBomLink(event);
 
+  _jbeRenderHeadSummary(); // Round 63
   // Round 60: autosave baseline + mode-specific button label/indicator.
   _jbeCancelAutosave();
   _jbeLastSaved = _jbeSnapshotFields();
@@ -3032,6 +3050,35 @@ const JBE_SYNC_FIELD_IDS = ["jbe-type", "jbe-status", "jbe-date", "jbe-time", "j
 // Fields that change this Event's trip (and so its auto-calculated mileage).
 const JBE_TRIP_FIELD_IDS = ["jbe-tech", "jbe-date", "jbe-time", "jbe-address", "jbe-city", "jbe-state", "jbe-zip"];
 const JBE_MILEAGE_MILES_IDS = ["jbe-mileage-miles", "jbe-mileage2-miles", "jbe-mileage3-miles"];
+
+/** Round 63: the pinned one-line summary under the Event number -- type,
+ *  a colored status badge (same colors as the Event History), and the
+ *  scheduled day/time -- plus a data-status hook the Status dropdown's
+ *  colored edge keys off (style.css). Reads the form, so it stays right as
+ *  the tech changes things. */
+function _jbeRenderHeadSummary() {
+  const el = document.getElementById("jbe-head-summary");
+  const typeSel = document.getElementById("jbe-type");
+  const stSel = document.getElementById("jbe-status");
+  if (!el || !typeSel || !stSel) return;
+  const typeLabel = typeSel.selectedOptions[0] ? typeSel.selectedOptions[0].textContent : "";
+  const st = stSel.value || "";
+  const stLabel = stSel.selectedOptions[0] ? stSel.selectedOptions[0].textContent : "";
+  const d = document.getElementById("jbe-date").value;
+  const t = document.getElementById("jbe-time").value;
+  let when = "Not scheduled";
+  if (d) {
+    const [y, m, dd] = d.split("-").map(Number);
+    const [hh, mm] = (t || "00:00").split(":").map(Number);
+    const dt = new Date(y, m - 1, dd, hh, mm);
+    when = dt.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) +
+      (t ? " · " + dt.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : "");
+  }
+  el.innerHTML = `<strong>${_jbEsc(typeLabel)}</strong>` +
+    (st ? `<span class="jb-event-badge evt-${_jbEsc(st)}">${_jbEsc(stLabel)}</span>` : "") +
+    `<span class="jbe-head-when">${_jbEsc(when)}</span>`;
+  stSel.dataset.status = st;
+}
 
 function _jbeSnapshotFields() {
   const snap = {};
@@ -3209,7 +3256,7 @@ async function _jbeAutosaveNow() {
         const info = await saaEventsGetCompletedTime(_jbEventModalTarget);
         cdEl.value = info.date;
         ctEl.value = info.time;
-        document.getElementById("jbe-completed-time-note").textContent = info.isEstimate ? "(estimated from schedule — confirm or edit)" : "";
+        document.getElementById("jbe-completed-time-note").textContent = info.isEstimate ? "Estimated" : "";
         _jbeLastSaved["jbe-completed-date"] = info.date;
         _jbeLastSaved["jbe-completed-time"] = info.time;
         _jbEventCompletedAtOpen = { date: info.date, time: info.time };
@@ -4109,6 +4156,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("jbd-schedule-event-btn").addEventListener("click", jbStartNextJob);
   document.getElementById("jb-event-save-btn").addEventListener("click", jbSaveEventModal);
   document.getElementById("jb-event-close-btn").addEventListener("click", jbCloseEventModalWithSave);
+  // Round 63: pinned header's (x) and live summary line.
+  const jbeX = document.getElementById("jb-event-x-btn");
+  if (jbeX) jbeX.addEventListener("click", jbCloseEventModalWithSave);
+  ["jbe-type", "jbe-status", "jbe-date", "jbe-time"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", _jbeRenderHeadSummary);
+    el.addEventListener("change", _jbeRenderHeadSummary);
+  });
   document.getElementById("jb-event-modal").addEventListener("click", (e) => {
     if (e.target.id === "jb-event-modal") jbCloseEventModalWithSave(); // clicked the backdrop, not the card
   });
@@ -4207,6 +4263,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (openId && _jbAllJobs.some((j) => j.id === openId)) {
       if (openEventId) jbOpenEventDirect(openId, openEventId);
       else jbOpenDetail(openId);
+    }
+  } else {
+    // Round 62: the same ?job=<id>[&event=<id>] deep link on pages that embed
+    // the Job Card as an overlay (the Dispatch Calendar) -- this is where a
+    // Bill of Material opened from the Job Card on the Calendar returns to.
+    const params = new URLSearchParams(window.location.search);
+    const openId = params.get("job");
+    const openEventId = params.get("event");
+    if (openId) {
+      await jbLoadAll();
+      if (_jbAllJobs.some((j) => j.id === openId)) {
+        if (openEventId) await jbOpenEventDirect(openId, openEventId);
+        else await jbOpenDetail(openId);
+      }
     }
   }
 });
