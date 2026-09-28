@@ -2718,6 +2718,11 @@ async function jbRenderSystemSection(job) {
   document.getElementById("jbd-sys-install-date").value = (_jbSystem && _jbSystem.install_date) || "";
   document.getElementById("jbd-sys-location").value = (_jbSystem && _jbSystem.system_location) || "";
   document.getElementById("jbd-sys-warranty").value = (_jbSystem && _jbSystem.warranty_info) || "";
+  // Round 68: model numbers (also filled in by the Service Call Checklist).
+  document.getElementById("jbd-sys-cond-model").value = (_jbSystem && _jbSystem.outdoor_unit) || "";
+  document.getElementById("jbd-sys-coil-model").value = (_jbSystem && _jbSystem.coil) || "";
+  document.getElementById("jbd-sys-fc-model").value = (_jbSystem && _jbSystem.indoor_unit) || "";
+  document.getElementById("jbd-sys-furn-model").value = (_jbSystem && _jbSystem.furnace_air_handler) || "";
   document.getElementById("jbd-sys-status").textContent = "";
 }
 
@@ -2742,6 +2747,10 @@ async function jbSaveSystem() {
     system_location: document.getElementById("jbd-sys-location").value.trim() || null,
     system_orientation: document.getElementById("jbd-sys-orientation").value || null,
     warranty_info: document.getElementById("jbd-sys-warranty").value.trim() || null,
+    outdoor_unit: document.getElementById("jbd-sys-cond-model").value.trim() || null,
+    coil: document.getElementById("jbd-sys-coil-model").value.trim() || null,
+    indoor_unit: document.getElementById("jbd-sys-fc-model").value.trim() || null,
+    furnace_air_handler: document.getElementById("jbd-sys-furn-model").value.trim() || null,
   });
   btn.disabled = false;
   if (res.ok) {
@@ -2932,6 +2941,7 @@ async function jbOpenEventModal(event, defaultType) {
   jbeWireBomLink(event);
 
   _jbeRenderHeadSummary(); // Round 63
+  if (typeof saaSvcRefreshEventSection === "function") saaSvcRefreshEventSection(); // Round 68: Service Call Checklist section
   // Round 60: autosave baseline + mode-specific button label/indicator.
   _jbeCancelAutosave();
   _jbeLastSaved = _jbeSnapshotFields();

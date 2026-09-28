@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tool List | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260927e">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260928d">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260927e"></script>
-<script src="../assets/js/supabase-config.js?v=20260927e"></script>
-<script src="../assets/js/auth.js?v=20260927e"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260928d"></script>
+<script src="../assets/js/supabase-config.js?v=20260928d"></script>
+<script src="../assets/js/auth.js?v=20260928d"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -182,7 +182,12 @@
      still NEEDED. Marking an item purchased hides it from the default view
      without deleting it (toggle "Show purchased" to see history), and does
      NOT auto-create a Purchase Ledger row, since the real vendor/price/
-     receipt # aren't known until the purchase actually happens. -->
+     receipt # aren't known until the purchase actually happens.
+     Round 67 (2026-09-28), per Vijayan: "Add edit/ delete button in tools to
+     buy list. should be able to delete the item in tools to buy once that
+     tool is bought." -- action buttons moved to the FIRST column (they were
+     off-screen to the right on a phone): Bought (asks: remove from the list,
+     or keep it as purchased), Edit, Delete. -->
 <div class="rc-tab-panel" id="tl-panel-shopping" hidden>
   <div class="card" style="margin-top:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
@@ -191,11 +196,11 @@
         <input type="checkbox" id="tl-shop-show-purchased"> Show purchased
       </label>
     </div>
-    <p class="muted" style="font-size:.85rem;margin-top:4px">A shopping list for tools/supplies still needed &mdash; not yet purchased. Once bought, mark it purchased here and log the actual purchase in the Purchase Ledger tab.</p>
+    <p class="muted" style="font-size:.85rem;margin-top:4px">A shopping list for tools/supplies still needed. Once bought, tap <strong>&#10003; Bought</strong> to remove it from the list (or keep it as purchased), and log the actual purchase in the Purchase Ledger tab. <strong>&#9998;</strong> edits an item, <strong>&#128465;</strong> deletes it.</p>
     <div class="jobs-table-wrap">
       <table class="jobs-table">
         <thead>
-          <tr><th>Item</th><th>Specification</th><th>Brand</th><th>Qty</th><th>Category</th><th>Type</th><th>Est. Price</th><th>Priority</th><th>Notes</th><th></th></tr>
+          <tr><th></th><th>Item</th><th>Specification</th><th>Brand</th><th>Qty</th><th>Category</th><th>Type</th><th>Est. Price</th><th>Priority</th><th>Notes</th></tr>
         </thead>
         <tbody id="tl-shop-tbody"></tbody>
       </table>
@@ -203,8 +208,10 @@
     </div>
   </div>
 
-  <div class="card" style="margin-top:20px;max-width:820px">
-    <h3>Add to Shopping List</h3>
+  <!-- Round 67 (2026-09-28): the same form doubles as the Edit form (the
+       row's pencil button fills it in; see tools-page.js _tlShopStartEdit). -->
+  <div class="card" id="tl-shop-form-card" style="margin-top:20px;max-width:820px">
+    <h3 id="tl-shop-form-title">Add to Shopping List</h3>
     <div class="field-row">
       <div class="field" style="flex:2"><label>Item Name</label><input type="text" id="tl-shop-add-name" placeholder="e.g. Digital Manifold Gauge Set"></div>
       <div class="field"><label>Specification</label><input type="text" id="tl-shop-add-spec" placeholder="Model #, size, etc."></div>
@@ -226,16 +233,17 @@
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
       <button type="button" class="btn btn-navy btn-sm" id="tl-shop-add-btn">Add to List</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="tl-shop-cancel-edit-btn" hidden>Cancel</button>
       <span class="muted" id="tl-shop-add-status" style="font-size:.85rem"></span>
     </div>
   </div>
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260927e"></script>
-<script src="../assets/js/worksheet.js?v=20260927e"></script>
-<script src="../assets/js/tools-db.js?v=20260927e"></script>
-<script src="../assets/js/print-tool-list.js?v=20260927e"></script>
-<script src="../assets/js/tools-page.js?v=20260927e"></script>
+<script src="../assets/js/pricing-data.js?v=20260928d"></script>
+<script src="../assets/js/worksheet.js?v=20260928d"></script>
+<script src="../assets/js/tools-db.js?v=20260928d"></script>
+<script src="../assets/js/print-tool-list.js?v=20260928d"></script>
+<script src="../assets/js/tools-page.js?v=20260928d"></script>
 </body>
 </html>

@@ -1089,3 +1089,127 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 @media (max-width: 400px) {
   .jb-mi-row { grid-template-columns: minmax(5.6em, 6.8em) minmax(72px, 92px) max-content; }
 }
+
+/* Round 67 (2026-09-28): Tools to Buy -- action buttons first, compact. */
+.tl-shop-actions { white-space: nowrap; }
+.tl-shop-actions .btn { padding: 4px 8px; min-width: 34px; }
+.tl-shop-actions .tl-shop-bought { color: var(--ok); border-color: #b7e3cb; font-weight: 700; }
+.tl-shop-actions .tl-shop-del:hover { color: var(--danger); border-color: var(--danger); }
+tr.tl-shop-purchased td:not(.tl-shop-actions) { opacity: .6; }
+.tl-shop-editing { box-shadow: 0 0 0 2px #f0c24b; }
+
+/* ================= Service Call Checklist (Round 68, 2026-09-28) =================
+   Per Vijayan: yes/no toggles grey by default (green/red/blue/slate once set),
+   short questions, easy section navigation, big touch targets for the field.
+   Modal is full-screen on a phone, a centered card on tablet/desktop. */
+.svc-modal { padding: 0; align-items: stretch; justify-content: center; }
+.svc-card { background: #fff; width: 100%; max-width: 780px; height: 100%; overflow-y: auto; position: relative; -webkit-overflow-scrolling: touch; }
+@media (min-width: 768px) {
+  .svc-modal { padding: 16px; align-items: center; }
+  .svc-card { height: auto; max-height: 94vh; border-radius: var(--radius); box-shadow: var(--shadow); }
+}
+.svc-head { position: sticky; top: 0; z-index: 6; background: #fff; padding: 10px 14px 0; border-bottom: 1px solid var(--line); }
+.svc-head-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.svc-head-titles { min-width: 0; }
+.svc-head h3 { margin: 0; font-size: 1.1rem; }
+.svc-head-top .btn { min-height: 42px; padding: 0 20px; flex: 0 0 auto; }
+.svc-head-sub { font-size: .78rem; margin-top: 1px; line-height: 1.3; }
+.svc-head-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.svc-total { font-weight: 700; font-size: .85rem; color: var(--navy); }
+.svc-save-state { font-size: .74rem; color: var(--muted); margin-left: auto; }
+.svc-save-state.is-pending { color: #8a6d1d; }
+.svc-save-state.is-saved { color: #1e7a3c; }
+.svc-save-state.is-saved::before { content: "\2713  "; }
+.svc-save-state.is-error { color: #b3261e; font-weight: 700; }
+.svc-bar { height: 5px; background: #e7ecef; border-radius: 3px; margin: 8px 0 6px; overflow: hidden; }
+.svc-bar-fill { height: 100%; width: 0; background: #1e9e55; transition: width .25s ease; }
+.svc-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 9px; scrollbar-width: none; }
+.svc-tabs::-webkit-scrollbar { display: none; }
+.svc-tab { flex: 0 0 auto; border: 2px solid var(--sc); color: var(--sc); background: #fff; border-radius: 999px; padding: 6px 11px; font-weight: 700; font-size: .78rem; white-space: nowrap; cursor: pointer; font-family: inherit; }
+.svc-tab.is-active { background: var(--sc); color: #fff; }
+.svc-tab .svc-tab-n { font-weight: 600; opacity: .85; margin-left: 3px; }
+.svc-tab.is-done .svc-tab-n::after { content: " \2713"; }
+
+.svc-body { padding: 12px 12px 4px; }
+.svc-sec { padding: 0; margin-bottom: 16px; scroll-margin-top: 150px; border: 1px solid var(--line); border-top: 4px solid var(--sc); border-radius: 10px; overflow: hidden; background: #fff; }
+.svc-sec-h { display: flex; justify-content: space-between; align-items: center; margin: 0; padding: 10px 12px; font-size: .92rem; text-transform: uppercase; letter-spacing: .5px; color: var(--sc); background: #f3f6f9; background: color-mix(in srgb, var(--sc) 11%, #fff); }
+.svc-sec-count { font-size: .78rem; font-weight: 700; background: #fff; border: 1.5px solid var(--sc); border-radius: 999px; padding: 1px 9px; letter-spacing: 0; }
+.svc-grid { display: grid; grid-template-columns: 1fr 1fr; }
+.svc-row { grid-column: 1 / -1; padding: 9px 12px; border-top: 1px solid #eef1f4; }
+.svc-row[hidden] { display: none; }
+.svc-row.svc-half { grid-column: auto; }
+.svc-row.svc-half:has(+ .svc-half) { border-right: 1px solid #eef1f4; }
+.svc-q, .svc-row label.svc-q { display: block; margin: 0; font-size: .95rem; font-weight: 600; color: var(--ink); line-height: 1.25; text-transform: none; letter-spacing: 0; }
+.svc-unit { font-weight: 400; color: var(--muted); font-size: .8rem; }
+
+/* Yes / No toggle -- grey until answered; tap the chosen side again to clear. */
+.svc-yn { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.svc-yn .svc-q { flex: 1; }
+.svc-toggle { display: flex; flex: 0 0 auto; border-radius: 999px; overflow: hidden; border: 1px solid #d3dae0; background: #e9edf0; }
+.svc-toggle button { min-width: 60px; height: 44px; border: none; background: transparent; color: #8b98a4; font-weight: 700; font-size: .92rem; font-family: inherit; cursor: pointer; padding: 0 12px; }
+.svc-toggle button + button { border-left: 1px solid #d3dae0; }
+.svc-yn.tone-good.is-yes .svc-yes, .svc-yn.tone-bad.is-no .svc-no { background: #1e9e55; color: #fff; }
+.svc-yn.tone-good.is-no .svc-no, .svc-yn.tone-bad.is-yes .svc-yes { background: #d63b31; color: #fff; }
+.svc-yn.tone-info.is-yes .svc-yes { background: #1a6fd1; color: #fff; }
+.svc-yn.tone-info.is-no .svc-no { background: #5b6b7a; color: #fff; }
+.svc-yn.is-flag { background: #fdecea; }
+
+/* Dropdowns / text: grey until the tech picks or types something. */
+.svc-sel { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.svc-sel .svc-q { flex: 1; }
+.svc-card select.svc-sel-input { flex: 0 0 55%; width: 55%; min-height: 44px; font-size: 16px; font-weight: 600; color: var(--ink); border: 1.5px solid var(--sc); background: #fff; }
+.svc-card select.svc-sel-input.is-unset { color: #8b98a4; font-weight: 400; border-color: #d3dae0; background: #f1f4f6; }
+.svc-text { display: flex; flex-direction: column; gap: 4px; }
+.svc-text:not(.svc-half) { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
+.svc-text:not(.svc-half) .svc-q { flex: 1; }
+.svc-card input.svc-in { min-height: 44px; font-size: 16px; background: #f1f4f6; border: 1.5px solid #d3dae0; }
+.svc-text:not(.svc-half) input.svc-in { flex: 0 0 55%; width: 55%; }
+.svc-text.is-set input.svc-in { background: #fff; border-color: var(--sc); font-weight: 600; }
+
+/* Sliders: shows the default greyed; recorded only once touched. */
+.svc-slider .svc-q { display: flex; align-items: center; gap: 6px; }
+.svc-clear { margin-left: auto; width: 26px; height: 26px; border-radius: 50%; border: 1px solid #d3dae0; background: #fff; color: #5b6b7a; font-size: 1rem; line-height: 1; cursor: pointer; padding: 0; }
+.svc-clear[hidden] { display: none; }
+.svc-sl, .svc-duct { display: flex; align-items: center; gap: 6px; }
+.svc-sl { margin-top: 6px; }
+.svc-range { flex: 1; min-width: 0; height: 34px; background: transparent; -webkit-appearance: none; appearance: none; margin: 0; --thumb: #b6c0c9; }
+.svc-slider.is-set .svc-range, .svc-duct .svc-range { --thumb: var(--sc); }
+.svc-range::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; background: #dfe5ea; }
+.svc-range::-moz-range-track { height: 8px; border-radius: 4px; background: #dfe5ea; }
+.svc-range::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; margin-top: -10px; border-radius: 50%; background: var(--thumb); border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.svc-range::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--thumb); border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.svc-step { flex: 0 0 auto; min-width: 40px; height: 40px; border-radius: 10px; border: 1px solid #d3dae0; background: #fff; color: var(--navy); font-size: 1.1rem; font-weight: 700; cursor: pointer; padding: 0 6px; font-family: inherit; }
+.svc-step-big { font-size: .8rem; min-width: 44px; }
+.svc-val { flex: 0 0 auto; min-width: 3.1em; text-align: right; font-weight: 800; font-size: 1.05rem; color: #8b98a4; font-variant-numeric: tabular-nums; }
+.svc-slider.is-set .svc-val, .svc-duct .svc-val { color: var(--sc); }
+.svc-duct { margin: 6px 0; }
+.svc-duct-n { flex: 0 0 5.4em; font-size: .78rem; font-weight: 700; color: var(--muted); }
+.svc-duct-x { flex: 0 0 auto; width: 32px; height: 32px; border-radius: 50%; border: 1px solid #f0c4c0; background: #fff; color: #b3261e; font-size: 1.1rem; cursor: pointer; padding: 0; }
+.svc-none { color: #8b98a4; font-style: italic; font-size: .85rem; display: block; margin: 6px 0; }
+.svc-ducts .svc-add { margin-top: 4px; min-height: 42px; }
+
+/* Serial-plate photos. */
+.svc-photo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.svc-photo .svc-cam { min-height: 44px; }
+.svc-thumbs { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; }
+.svc-thumbs:empty { display: none; }
+.svc-thumb { position: relative; width: 64px; height: 64px; }
+.svc-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+.svc-thumb-x { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; border: none; background: #b3261e; color: #fff; font-size: .9rem; line-height: 1; cursor: pointer; padding: 0; }
+.svc-foot { padding: 6px 12px 16px; text-align: right; }
+.svc-foot .btn { min-height: 46px; min-width: 140px; }
+
+/* Event card: Service Call Checklist section. */
+.jbe-svc-section { border-color: #1a6fd1 !important; border-width: 2px !important; }
+.jbe-svc-section h4 { background: #e6f0fc !important; color: #124f99 !important; }
+.jbe-svc-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px; }
+.svc-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; border: 1.5px solid var(--sc); color: var(--sc); font-size: .76rem; font-weight: 600; background: #fff; }
+.svc-chip b { font-weight: 800; }
+.svc-chip.is-done { background: var(--sc); color: #fff; }
+.jbe-svc-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.jbe-svc-actions .btn { min-height: 44px; }
+.jbe-svc-actions .muted { font-size: .78rem; }
+@media (max-width: 400px) {
+  .svc-toggle button { min-width: 52px; padding: 0 8px; }
+  .svc-card select.svc-sel-input, .svc-text:not(.svc-half) input.svc-in { flex-basis: 50%; width: 50%; }
+}

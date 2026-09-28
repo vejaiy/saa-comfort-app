@@ -171,6 +171,23 @@ async function saaToolShoppingListMarkPurchased(id, purchased) {
   return error ? { ok: false, error: error.message } : { ok: true, row: data };
 }
 
+/** Round 67 (2026-09-28): edit an item on the Tools to Buy list. */
+async function saaToolShoppingListUpdate(id, patch) {
+  const { data, error } = await _saaClient.from("tool_shopping_list").update({
+    item_name: patch.item_name,
+    specification: patch.specification || null,
+    brand: patch.brand || null,
+    qty: patch.qty === "" || patch.qty == null ? 1 : Number(patch.qty),
+    category: patch.category || null,
+    type: patch.type || "tools",
+    estimated_price: patch.estimated_price === "" || patch.estimated_price == null ? null : Number(patch.estimated_price),
+    priority: patch.priority || null,
+    notes: patch.notes || null,
+    updated_at: new Date().toISOString(),
+  }).eq("id", id).select("*").single();
+  return error ? { ok: false, error: error.message } : { ok: true, row: data };
+}
+
 async function saaToolShoppingListDelete(id) {
   const { error } = await _saaClient.from("tool_shopping_list").delete().eq("id", id);
   return error ? { ok: false, error: error.message } : { ok: true };

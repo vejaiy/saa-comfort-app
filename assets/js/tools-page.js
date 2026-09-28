@@ -240,18 +240,60 @@ document.getElementById("tl-purch-add-btn").addEventListener("click", async () =
   renderPurchases();
 });
 
-/* ---- Tools to Buy (shopping list) ---- */
+/* ---- Tools to Buy (shopping list) ----
+   Round 67 (2026-09-28), per Vijayan: "Add edit/ delete button in tools to
+   buy list. should be able to delete the item in tools to buy once that
+   tool is bought." Actions sit in the first column (they were off-screen to
+   the right on a phone): Bought, Edit, Delete. Bought asks whether to remove
+   the item from the list or keep it as purchased history. */
+
+let _tlShopRows = [];      // last rendered rows, for Edit / Bought lookups
+let _tlShopEditingId = null;
+
+/** Three-way choice for a bought item. Resolves "delete" | "keep" | null. */
+function _tlShopBoughtChoice(itemName) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal-card" style="max-width:420px">
+        <h3>Bought: ${_tlEsc(itemName)}</h3>
+        <p class="muted" style="margin-bottom:16px">Remove it from the Tools to Buy list, or keep it here marked as purchased (hidden unless "Show purchased" is ticked)?</p>
+        <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+          <button type="button" class="btn btn-ghost btn-sm" data-act="cancel">Cancel</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-act="keep">Keep as purchased</button>
+          <button type="button" class="btn btn-navy btn-sm" data-act="delete">Remove from list</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const done = (v) => { overlay.remove(); resolve(v); };
+    overlay.querySelector('[data-act="cancel"]').addEventListener("click", () => done(null));
+    overlay.querySelector('[data-act="keep"]').addEventListener("click", () => done("keep"));
+    overlay.querySelector('[data-act="delete"]').addEventListener("click", () => done("delete"));
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) done(null); });
+  });
+}
 
 async function renderShoppingList() {
   const filters = _tlFilters();
   filters.includePurchased = document.getElementById("tl-shop-show-purchased").checked;
   const rows = await saaToolShoppingListFetchAll(filters);
+  _tlShopRows = rows;
   const tbody = document.getElementById("tl-shop-tbody");
   document.getElementById("tl-shop-empty").hidden = rows.length > 0;
 
-  tbody.innerHTML = rows.map((r) => `
-    <tr data-id="${r.id}"${r.status === "purchased" ? ' style="opacity:.6"' : ""}>
-      <td>${_tlEsc(r.item_name)}</td>
+  tbody.innerHTML = rows.map((r) => {
+    const purchased = r.status === "purchased";
+    return `
+    <tr data-id="${r.id}"${purchased ? ' class="tl-shop-purchased"' : ""}>
+      <td class="tl-shop-actions">
+        ${purchased
+          ? `<button type="button" class="btn btn-ghost btn-sm tl-shop-toggle" data-id="${r.id}" data-purchased="1" title="Put it back on the to-buy list">&#8617; To Buy</button>`
+          : `<button type="button" class="btn btn-ghost btn-sm tl-shop-toggle tl-shop-bought" data-id="${r.id}" data-purchased="0" title="I bought this">&#10003; Bought</button>`}
+        <button type="button" class="btn btn-ghost btn-sm tl-shop-edit" data-id="${r.id}" title="Edit" aria-label="Edit">&#9998;</button>
+        <button type="button" class="btn btn-ghost btn-sm tl-shop-del" data-id="${r.id}" title="Delete" aria-label="Delete">&#128465;</button>
+      </td>
+      <td><strong>${_tlEsc(r.item_name)}</strong>${purchased ? `<div class="muted" style="font-size:.72rem">Purchased${r.purchased_date ? " " + _tlEsc(r.purchased_date) : ""}</div>` : ""}</td>
       <td>${_tlEsc(r.specification)}</td>
       <td>${_tlEsc(r.brand)}</td>
       <td>${r.qty == null ? "" : r.qty}</td>
@@ -260,37 +302,53 @@ async function renderShoppingList() {
       <td>${_tlMoney(r.estimated_price)}</td>
       <td>${_tlEsc(_tlPriorityLabel(r.priority))}</td>
       <td class="muted" style="font-size:.82rem">${_tlEsc(r.notes)}</td>
-      <td style="white-space:nowrap">
-        <button type="button" class="btn btn-ghost btn-sm tl-shop-toggle" data-id="${r.id}" data-purchased="${r.status === "purchased" ? "1" : "0"}">${r.status === "purchased" ? "Mark To Buy" : "Mark Purchased"}</button>
-        <button type="button" class="btn btn-ghost btn-sm tl-shop-del" data-id="${r.id}">Delete</button>
-      </td>
-    </tr>`).join("");
+    </tr>`;
+  }).join("");
 
   tbody.querySelectorAll(".tl-shop-toggle").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const nowPurchased = btn.dataset.purchased !== "1";
-      const res = await saaToolShoppingListMarkPurchased(btn.dataset.id, nowPurchased);
+      const id = btn.dataset.id;
+      if (btn.dataset.purchased === "1") {
+        const res = await saaToolShoppingListMarkPurchased(id, false);
+        if (!res.ok) { alert("Couldn't update: " + res.error); return; }
+        renderShoppingList();
+        return;
+      }
+      const row = _tlShopRows.find((r) => r.id === id) || {};
+      const choice = await _tlShopBoughtChoice(row.item_name || "this item");
+      if (!choice) return;
+      const res = choice === "delete"
+        ? await saaToolShoppingListDelete(id)
+        : await saaToolShoppingListMarkPurchased(id, true);
       if (!res.ok) { alert("Couldn't update: " + res.error); return; }
+      if (_tlShopEditingId === id) _tlShopResetForm();
       renderShoppingList();
     });
   });
 
+  tbody.querySelectorAll(".tl-shop-edit").forEach((btn) => {
+    btn.addEventListener("click", () => _tlShopStartEdit(btn.dataset.id));
+  });
+
   tbody.querySelectorAll(".tl-shop-del").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      if (!confirm("Remove this item from the shopping list?")) return;
+      const row = _tlShopRows.find((r) => r.id === btn.dataset.id) || {};
+      const ok = await saaConfirm(`Delete "${_tlEsc(row.item_name || "this item")}" from the Tools to Buy list? This can't be undone.`,
+        { title: "Delete item", okLabel: "Delete", cancelLabel: "Cancel" });
+      if (!ok) return;
       const res = await saaToolShoppingListDelete(btn.dataset.id);
       if (!res.ok) { alert("Couldn't delete: " + res.error); return; }
+      if (_tlShopEditingId === btn.dataset.id) _tlShopResetForm();
       renderShoppingList();
     });
   });
 }
 
-document.getElementById("tl-shop-add-btn").addEventListener("click", async () => {
-  const status = document.getElementById("tl-shop-add-status");
-  const itemName = document.getElementById("tl-shop-add-name").value.trim();
-  if (!itemName) { status.textContent = "Item name is required."; return; }
-  const res = await saaToolShoppingListAdd({
-    item_name: itemName,
+const _TL_SHOP_FIELDS = { name: "item_name", spec: "specification", brand: "brand", qty: "qty", category: "category", type: "type", price: "estimated_price", priority: "priority", notes: "notes" };
+
+function _tlShopFormValues() {
+  return {
+    item_name: document.getElementById("tl-shop-add-name").value.trim(),
     specification: document.getElementById("tl-shop-add-spec").value.trim(),
     brand: document.getElementById("tl-shop-add-brand").value.trim(),
     qty: document.getElementById("tl-shop-add-qty").value,
@@ -299,15 +357,61 @@ document.getElementById("tl-shop-add-btn").addEventListener("click", async () =>
     estimated_price: document.getElementById("tl-shop-add-price").value,
     priority: document.getElementById("tl-shop-add-priority").value,
     notes: document.getElementById("tl-shop-add-notes").value.trim(),
-  });
-  if (!res.ok) { status.textContent = "Error: " + res.error; return; }
+  };
+}
+
+/** Back to "Add" mode with an empty form. */
+function _tlShopResetForm() {
+  _tlShopEditingId = null;
   ["name", "spec", "brand", "qty", "category", "price", "notes"].forEach((f) => {
     const el = document.getElementById(`tl-shop-add-${f}`);
     if (el) el.value = f === "qty" ? "1" : "";
   });
+  document.getElementById("tl-shop-add-type").value = "tools";
   document.getElementById("tl-shop-add-priority").value = "";
-  status.textContent = "Added to shopping list.";
+  document.getElementById("tl-shop-form-title").textContent = "Add to Shopping List";
+  document.getElementById("tl-shop-add-btn").textContent = "Add to List";
+  document.getElementById("tl-shop-cancel-edit-btn").hidden = true;
+  document.getElementById("tl-shop-form-card").classList.remove("tl-shop-editing");
+}
+
+/** Fill the Add form with an existing item and switch it to "Save Changes". */
+function _tlShopStartEdit(id) {
+  const row = _tlShopRows.find((r) => r.id === id);
+  if (!row) return;
+  _tlShopEditingId = id;
+  Object.entries(_TL_SHOP_FIELDS).forEach(([f, col]) => {
+    const el = document.getElementById(`tl-shop-add-${f}`);
+    if (!el) return;
+    let v = row[col];
+    if (f === "type") v = v || "tools";
+    el.value = v == null ? "" : v;
+  });
+  document.getElementById("tl-shop-form-title").textContent = `Edit: ${row.item_name || "item"}`;
+  document.getElementById("tl-shop-add-btn").textContent = "Save Changes";
+  document.getElementById("tl-shop-cancel-edit-btn").hidden = false;
+  document.getElementById("tl-shop-add-status").textContent = "";
+  const card = document.getElementById("tl-shop-form-card");
+  card.classList.add("tl-shop-editing");
+  card.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.getElementById("tl-shop-add-name").focus({ preventScroll: true });
+}
+
+document.getElementById("tl-shop-add-btn").addEventListener("click", async () => {
+  const status = document.getElementById("tl-shop-add-status");
+  const vals = _tlShopFormValues();
+  if (!vals.item_name) { status.textContent = "Item name is required."; return; }
+  const editing = _tlShopEditingId;
+  const res = editing ? await saaToolShoppingListUpdate(editing, vals) : await saaToolShoppingListAdd(vals);
+  if (!res.ok) { status.textContent = "Error: " + res.error; return; }
+  _tlShopResetForm();
+  status.textContent = editing ? "Changes saved." : "Added to shopping list.";
   renderShoppingList();
+});
+
+document.getElementById("tl-shop-cancel-edit-btn").addEventListener("click", () => {
+  _tlShopResetForm();
+  document.getElementById("tl-shop-add-status").textContent = "";
 });
 
 document.getElementById("tl-shop-show-purchased").addEventListener("change", renderShoppingList);

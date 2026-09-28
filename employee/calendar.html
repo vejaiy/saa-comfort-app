@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260927e">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260928d">
 <script>
 if (new URLSearchParams(location.search).get('embed') === '1') {
   document.documentElement.classList.add('saa-embed');
@@ -14,9 +14,9 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260927e"></script>
-<script src="../assets/js/supabase-config.js?v=20260927e"></script>
-<script src="../assets/js/auth.js?v=20260927e"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260928d"></script>
+<script src="../assets/js/supabase-config.js?v=20260928d"></script>
+<script src="../assets/js/auth.js?v=20260928d"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -420,6 +420,15 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
             <div class="field"><label>Orientation</label><select id="jbd-sys-orientation"></select></div>
           </div>
           <div class="field"><label>Warranty Info</label><input type="text" id="jbd-sys-warranty"></div>
+          <!-- Round 68: model numbers -- filled in by the Service Call Checklist too. -->
+          <div class="field-row">
+            <div class="field"><label>Condenser Model #</label><input type="text" id="jbd-sys-cond-model" autocapitalize="characters"></div>
+            <div class="field"><label>Coil Model #</label><input type="text" id="jbd-sys-coil-model" autocapitalize="characters"></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Fan Coil Model #</label><input type="text" id="jbd-sys-fc-model" autocapitalize="characters"></div>
+            <div class="field"><label>Furnace Model #</label><input type="text" id="jbd-sys-furn-model" autocapitalize="characters"></div>
+          </div>
           <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
             <button type="button" class="btn btn-ghost btn-sm" id="jbd-sys-save-btn">Save System</button>
             <span id="jbd-sys-status" class="muted" style="font-size:.82rem"></span>
@@ -791,6 +800,20 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
          answers: Financials are per-Event, Quote linking is per-Event, and
          these sections have "their own working control" -- not a
          read-only summary. -->
+    <!-- Round 68 (2026-09-28), per Vijayan: "Add checklist to Service Call
+         event." Shown only when Event Type = Service Call (service-checklist.js,
+         saaSvcRefreshEventSection). The checklist itself opens in its own
+         full-screen modal (#jb-svc-modal below) so the Event card stays short. -->
+    <div class="drawer-section jbe-svc-section" id="jbe-svc-section" hidden>
+      <h4>Service Call Checklist <span class="jb-badge" id="jbe-svc-progress"></span></h4>
+      <div class="jbe-svc-chips" id="jbe-svc-chips"></div>
+      <div class="jbe-svc-actions">
+        <button type="button" class="btn btn-navy" id="jbe-svc-open-btn">&#9745; Open Checklist</button>
+        <button type="button" class="btn btn-ghost" id="jbe-svc-print-btn">&#128424; Print</button>
+        <span class="muted" id="jbe-svc-hint"></span>
+      </div>
+    </div>
+
     <!-- Round 64: two columns on a wide screen -- the visit's work (notes,
          photos, inspection, materials) on the left, money and paperwork on
          the right, mirroring the Job Card. Below 768px the columns dissolve
@@ -951,6 +974,33 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
   </div>
 </div>
 
+<!-- ============ Service Call Checklist modal (Round 68, 2026-09-28) ============
+     Sits after the Event modal (and before the camera modal) in the DOM so it
+     paints above the Event card, and the camera paints above it. The body is
+     built by service-checklist.js. ============ -->
+<div class="modal-overlay svc-modal" id="jb-svc-modal" hidden>
+  <div class="svc-card">
+    <div class="svc-head">
+      <div class="svc-head-top">
+        <div class="svc-head-titles">
+          <h3>Service Call Checklist</h3>
+          <div class="svc-head-sub muted" id="svc-head-sub"></div>
+        </div>
+        <button type="button" class="btn btn-navy" id="svc-done-btn">Done</button>
+      </div>
+      <div class="svc-head-row">
+        <span class="svc-total" id="svc-total"></span>
+        <span class="svc-save-state" id="svc-save-state"></span>
+        <button type="button" class="btn btn-ghost btn-sm" id="svc-print-btn">&#128424; Print</button>
+      </div>
+      <div class="svc-bar"><div class="svc-bar-fill" id="svc-bar-fill"></div></div>
+      <div class="svc-tabs" id="svc-tabs"></div>
+    </div>
+    <div class="svc-body" id="jb-svc-body"></div>
+    <div class="svc-foot"><button type="button" class="btn btn-navy" id="svc-done-bottom-btn">Done</button></div>
+  </div>
+</div>
+
 <!-- ============ Camera capture modal (Photos + per-Inspection-item photos) ============ -->
 <div class="modal-overlay" id="cam-modal" hidden>
   <div class="modal-card">
@@ -977,19 +1027,21 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260927e"></script>
-<script src="../assets/js/worksheet.js?v=20260927e"></script>
-<script src="../assets/js/systems-db.js?v=20260927e"></script>
-<script src="../assets/js/events-db.js?v=20260927e"></script>
-<script src="../assets/js/calendar-db.js?v=20260927e"></script>
-<script src="../assets/js/jobs-db.js?v=20260927e"></script>
-<script src="../assets/js/job-photos-db.js?v=20260927e"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260927e"></script>
-<script src="../assets/js/camera-capture.js?v=20260927e"></script>
-<script src="../assets/js/print-invoice.js?v=20260927e"></script>
-<script src="../assets/js/maps-config.js?v=20260927e"></script>
-<script src="../assets/js/mileage-db.js?v=20260927e"></script>
-<script src="../assets/js/jobs.js?v=20260927e"></script>
-<script src="../assets/js/calendar.js?v=20260927e"></script>
+<script src="../assets/js/pricing-data.js?v=20260928d"></script>
+<script src="../assets/js/worksheet.js?v=20260928d"></script>
+<script src="../assets/js/systems-db.js?v=20260928d"></script>
+<script src="../assets/js/events-db.js?v=20260928d"></script>
+<script src="../assets/js/calendar-db.js?v=20260928d"></script>
+<script src="../assets/js/jobs-db.js?v=20260928d"></script>
+<script src="../assets/js/job-photos-db.js?v=20260928d"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260928d"></script>
+<script src="../assets/js/camera-capture.js?v=20260928d"></script>
+<script src="../assets/js/print-invoice.js?v=20260928d"></script>
+<script src="../assets/js/maps-config.js?v=20260928d"></script>
+<script src="../assets/js/mileage-db.js?v=20260928d"></script>
+<script src="../assets/js/jobs.js?v=20260928d"></script>
+<script src="../assets/js/print-service-checklist.js?v=20260928d"></script>
+<script src="../assets/js/service-checklist.js?v=20260928d"></script>
+<script src="../assets/js/calendar.js?v=20260928d"></script>
 </body>
 </html>
