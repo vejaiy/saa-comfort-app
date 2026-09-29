@@ -34,6 +34,10 @@ const _svcSlider = (k, q, min, max, def, unit, extra) => Object.assign({ t: "sli
 const _SVC_CABINETS = [["a", "A-Cabinet"], ["b", "B-Cabinet"], ["c", "C-Cabinet"], ["d", "D-Cabinet"]];
 const _SVC_ORIENT = [["upflow", "Upflow"], ["downflow", "Downflow"], ["horizontal_left", "Horizontal left"], ["horizontal_right", "Horizontal right"]];
 
+// Round 75: tube sizes are picked from a wheel (native <select> = the iOS scroll wheel).
+const _SVC_TUBE_S = ['3/8"', '1/2"', '5/8"', '3/4"', '7/8"', '1"', '1 1/8"', '1 3/8"', '1.5"'].map((v) => [v, v]);
+const _SVC_TUBE_L = ['1/4"', '3/8"', '5/8"', '3/4"'].map((v) => [v, v]);
+
 /** Drain / lineset / filter questions shared by the Coil and the Fan Coil. */
 function _svcAirSide(p) {
   return [
@@ -41,8 +45,9 @@ function _svcAirSide(p) {
     _svcYn(p + ".trap", "Primary drain has P-trap & vent?"),
     _svcYn(p + ".sec_conn", "Secondary drain tied to line or switch?"),
     _svcYn(p + ".sec_clear", "Secondary drain line clear?"),
-    _svcText(p + ".tube_s", "Suction tube size", { half: true, ph: '3/4"' }),
-    _svcText(p + ".tube_l", "Liquid tube size", { half: true, ph: '3/8"' }),
+    // Default to the condenser's size (shown greyed; recorded once picked / confirmed).
+    _svcSel(p + ".tube_s", "Suction tube size", _SVC_TUBE_S, { half: true, defFrom: "cond.tube_s" }),
+    _svcSel(p + ".tube_l", "Liquid tube size", _SVC_TUBE_L, { half: true, defFrom: "cond.tube_l" }),
     _svcYn(p + ".drop", "Both lines drop to coil?", "info"),
   ];
 }
@@ -61,8 +66,8 @@ const SAA_SVC_SECTIONS = [
       _svcSlider("cond.psi_l", "Liquid pressure", 0, 670, 350, "psi", { big: true }),
       _svcSlider("cond.sh", "Superheat", -20, 50, 15, "°F"),
       _svcSlider("cond.sc", "Subcool", -20, 50, 12, "°F"),
-      _svcText("cond.tube_s", "Suction tube size", { half: true, ph: '3/4"' }),
-      _svcText("cond.tube_l", "Liquid tube size", { half: true, ph: '3/8"' }),
+      _svcSel("cond.tube_s", "Suction tube size", _SVC_TUBE_S, { half: true }),
+      _svcSel("cond.tube_l", "Liquid tube size", _SVC_TUBE_L, { half: true }),
       _svcYn("cond.anchor", "Unit anchored to pad?"),
       _svcSlider("cond.size", "OD unit size", 23, 48, 35, "in"),
       _svcYn("cond.door", "Fits through side door?"),
@@ -201,6 +206,24 @@ function _svcThumbsHtml(item, ans) {
   return photos.map((p) => `<div class="svc-thumb"><img src="${_svcEsc(p.url)}" alt="Serial plate"><button type="button" class="svc-thumb-x" data-id="${_svcEsc(p.id)}" aria-label="Delete photo">&times;</button></div>`).join("");
 }
 
+/** The <option> list for a select row. Rows with defFrom (Coil / Fan Coil tube
+ *  sizes) show the condenser's size as a greyed default and offer a one-tap
+ *  "same as condenser" choice that records it. */
+function _svcSelOptionsHtml(item, ans) {
+  const v = ans[item.k];
+  const rec = _svcRecorded(item, ans);
+  const defV = item.defFrom ? (ans[item.defFrom] || "") : (item.def || "");
+  let ph = "Select…";
+  if (defV) ph = item.defFrom ? `${_svcOptLabel(item, defV)} \u2014 same as condenser` : `${_svcOptLabel(item, defV)} (default)`;
+  let html = `<option value=""${rec ? "" : " selected"}>${_svcEsc(ph)}</option>`;
+  if (item.defFrom && defV && !(rec && v === defV)) {
+    html += `<option value="__def__">Use ${_svcEsc(_svcOptLabel(item, defV))} (same as condenser)</option>`;
+  }
+  html += item.opts.map(([val, lab]) => `<option value="${_svcEsc(val)}"${v === val ? " selected" : ""}>${_svcEsc(lab)}</option>`).join("");
+  if (rec && !item.opts.some((o) => o[0] === v)) html += `<option value="${_svcEsc(v)}" selected>${_svcEsc(v)}</option>`; // older typed value
+  return html;
+}
+
 function _svcRowHtml(item, ans) {
   const rec = _svcRecorded(item, ans);
   const v = ans[item.k];
@@ -220,13 +243,9 @@ function _svcRowHtml(item, ans) {
       </div>`;
     }
     case "select": {
-      const ph = item.def ? `${_svcOptLabel(item, item.def)} (default)` : "Select…";
-      return `<div class="svc-row svc-sel${rec ? " is-set" : ""}" data-k="${k}" data-t="select"${hid}>
+      return `<div class="svc-row svc-sel${item.half ? " svc-half" : ""}${rec ? " is-set" : ""}" data-k="${k}" data-t="select"${hid}>
         <label class="svc-q" for="svc-f-${k}">${q}</label>
-        <select id="svc-f-${k}" class="svc-sel-input${rec ? "" : " is-unset"}">
-          <option value=""${rec ? "" : " selected"}>${_svcEsc(ph)}</option>
-          ${item.opts.map(([val, lab]) => `<option value="${_svcEsc(val)}"${v === val ? " selected" : ""}>${_svcEsc(lab)}</option>`).join("")}
-        </select>
+        <select id="svc-f-${k}" class="svc-sel-input${rec ? "" : " is-unset"}">${_svcSelOptionsHtml(item, ans)}</select>
       </div>`;
     }
     case "text":
@@ -396,6 +415,7 @@ function _svcSyncRow(row) {
       row.classList.toggle("is-set", rec);
       const sel = row.querySelector("select");
       sel.classList.toggle("is-unset", !rec);
+      sel.innerHTML = _svcSelOptionsHtml(item, _svcAnswers);
       sel.value = rec ? v : "";
       break;
     }
@@ -433,6 +453,7 @@ function _svcSet(k, val) {
   document.querySelectorAll("#jb-svc-body .svc-row").forEach((r) => {
     const it = _SVC_ITEM_BY_KEY[r.dataset.k];
     if (it && it.showIf && it.showIf.k === k) r.hidden = !_svcVisible(it, _svcAnswers);
+    if (it && it.defFrom === k) _svcSyncRow(r); // Coil / Fan Coil tube size default follows the condenser
   });
   _svcRefreshCounts();
   _svcQueueSave();
@@ -524,7 +545,10 @@ function _svcOnBodyInput(e) {
 function _svcOnBodyChange(e) {
   if (!e.target.classList.contains("svc-sel-input")) return;
   const row = e.target.closest(".svc-row");
-  _svcSet(row.dataset.k, e.target.value);
+  const item = _SVC_ITEM_BY_KEY[row.dataset.k];
+  let val = e.target.value;
+  if (val === "__def__" && item && item.defFrom) val = _svcAnswers[item.defFrom]; // "same as condenser"
+  _svcSet(row.dataset.k, val);
 }
 
 async function _svcTakePhoto(item) {
@@ -570,12 +594,14 @@ function _svcOnScroll() {
     const el = document.getElementById(`svc-sec-${s.key}`);
     if (el && el.getBoundingClientRect().top - cardTop < 150) active = s.key;
   });
+  // Scrolled all the way down: the last section can be too short to reach the top, so it counts as active.
+  if (card.scrollTop > 0 && card.scrollTop + card.clientHeight >= card.scrollHeight - 4) active = SAA_SVC_SECTIONS[SAA_SVC_SECTIONS.length - 1].key;
   SAA_SVC_SECTIONS.forEach((s) => document.getElementById(`svc-tab-${s.key}`).classList.toggle("is-active", s.key === active));
 }
 
 /* ---------------- Open / close ---------------- */
 
-function saaSvcOpen() {
+function saaSvcOpen(sectionKey) {
   const ev = (typeof _jbEventModalTarget !== "undefined") ? _jbEventModalTarget : null;
   if (!ev || !ev.id) { _jbToast("Create this event first, then fill in the checklist.", true); return; }
   _svcEvent = ev;
@@ -594,7 +620,22 @@ function saaSvcOpen() {
   _svcSetState("saved", "Changes save automatically");
   document.getElementById("jb-svc-modal").hidden = false;
   document.querySelector("#jb-svc-modal .svc-card").scrollTop = 0;
-  _svcOnScroll();
+  if (typeof sectionKey === "string" && _SVC_SECTION_KEYS.includes(sectionKey)) _svcGoTo(sectionKey, false);
+  else _svcOnScroll();
+}
+
+const _SVC_SECTION_KEYS = SAA_SVC_SECTIONS.map((s) => s.key);
+
+/** Scroll the checklist to one section (Condenser / Coil / ...) and flash it. */
+function _svcGoTo(key, smooth) {
+  const el = document.getElementById(`svc-sec-${key}`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
+  el.classList.remove("is-flash");
+  void el.offsetWidth; // restart the animation
+  el.classList.add("is-flash");
+  setTimeout(() => el.classList.remove("is-flash"), 1600);
+  if (!smooth) _svcOnScroll();
 }
 
 async function saaSvcClose() {
@@ -629,7 +670,7 @@ function saaSvcRefreshEventSection() {
   document.getElementById("jbe-svc-progress").textContent = `${t.done}/${t.total}`;
   document.getElementById("jbe-svc-chips").innerHTML = SAA_SVC_SECTIONS.map((s) => {
     const p = _svcProgress(s, ans);
-    return `<span class="svc-chip${p.total && p.done === p.total ? " is-done" : ""}" style="--sc:${s.color}">${s.icon} ${_svcEsc(s.title)} <b>${p.done}/${p.total}</b></span>`;
+    return `<button type="button" class="svc-chip${p.total && p.done === p.total ? " is-done" : ""}" data-sec="${s.key}" style="--sc:${s.color}"${saved ? "" : " disabled"} title="Open ${_svcEsc(s.title)} in the checklist">${s.icon} ${_svcEsc(s.title)} <b>${p.done}/${p.total}</b></button>`;
   }).join("");
   document.getElementById("jbe-svc-open-btn").disabled = !saved;
   document.getElementById("jbe-svc-print-btn").disabled = !saved;
@@ -640,10 +681,11 @@ function saaSvcRefreshEventSection() {
 
 /* ---------------- Print ---------------- */
 
-function saaSvcPrint() {
+/** Everything the printout needs about the event (or null + a toast). */
+function _svcPrintContext() {
   const modalOpen = _svcEvent && !document.getElementById("jb-svc-modal").hidden;
   const ev = modalOpen ? _svcEvent : ((typeof _jbEventModalTarget !== "undefined") ? _jbEventModalTarget : null);
-  if (!ev || !ev.id) { _jbToast("Create this event first.", true); return; }
+  if (!ev || !ev.id) { _jbToast("Create this event first.", true); return null; }
   const ans = modalOpen ? _svcAnswers : (ev.service_checklist || {});
   const job = typeof _jbCurrentJob !== "undefined" ? _jbCurrentJob : null;
   const cust = job && job.customer ? job.customer : null;
@@ -657,7 +699,7 @@ function saaSvcPrint() {
   let when = "";
   const wc = typeof saaEventsWallClock === "function" ? saaEventsWallClock(ev.scheduled_start) : null;
   if (wc) when = wc.local.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-  printServiceChecklist({
+  return {
     eventNumber: ev.event_number || "",
     jobNumber: job ? (job.job_number || "") : "",
     customer: cust ? _jbCustName(cust) : "",
@@ -666,7 +708,41 @@ function saaSvcPrint() {
     technicians: techs.join(", "),
     date: when,
     answers: ans,
-  });
+  };
+}
+
+/** Round 75: Print opens a small options dialog (sections + which questions). */
+function saaSvcPrint() {
+  const ctx = _svcPrintContext();
+  if (!ctx) return;
+  const modal = document.getElementById("svc-print-modal");
+  if (!modal) { printServiceChecklist(ctx); return; }
+  document.getElementById("svc-print-secs").innerHTML = SAA_SVC_SECTIONS.map((s) => {
+    const p = _svcProgress(s, ctx.answers);
+    return `<label class="svc-print-opt" style="--sc:${s.color}"><input type="checkbox" name="svc-print-sec" value="${s.key}" checked>
+      <span>${s.icon} ${_svcEsc(s.title)}</span><small>${p.done}/${p.total} answered</small></label>`;
+  }).join("");
+  modal.hidden = false;
+}
+
+function _svcPrintClose() {
+  const modal = document.getElementById("svc-print-modal");
+  if (modal) modal.hidden = true;
+}
+
+function _svcPrintGo() {
+  const ctx = _svcPrintContext();
+  if (!ctx) return;
+  const sections = Array.from(document.querySelectorAll('#svc-print-modal input[name="svc-print-sec"]:checked')).map((i) => i.value);
+  if (!sections.length) { _jbToast("Pick at least one section to print.", true); return; }
+  const modeEl = document.querySelector('#svc-print-modal input[name="svc-print-mode"]:checked');
+  ctx.print = {
+    sections,
+    mode: modeEl ? modeEl.value : "all",
+    pageBreaks: !!document.getElementById("svc-print-pb").checked,
+  };
+  _svcPrintClose();
+  printServiceChecklist(ctx);
 }
 
 /* ---------------- Wire up ---------------- */
@@ -681,8 +757,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("svc-tabs").addEventListener("click", (e) => {
     const tab = e.target.closest(".svc-tab");
     if (!tab) return;
-    const el = document.getElementById(`svc-sec-${tab.dataset.sec}`);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    _svcGoTo(tab.dataset.sec, true);
   });
   modal.querySelector(".svc-card").addEventListener("scroll", _svcOnScroll, { passive: true });
   document.getElementById("svc-done-btn").addEventListener("click", saaSvcClose);
@@ -690,8 +765,19 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("svc-print-btn").addEventListener("click", saaSvcPrint);
   modal.addEventListener("click", (e) => { if (e.target === modal) saaSvcClose(); });
 
+  const pm = document.getElementById("svc-print-modal");
+  if (pm) {
+    document.getElementById("svc-print-go").addEventListener("click", _svcPrintGo);
+    document.getElementById("svc-print-cancel").addEventListener("click", _svcPrintClose);
+    pm.addEventListener("click", (e) => { if (e.target === pm) _svcPrintClose(); });
+  }
   const openBtn = document.getElementById("jbe-svc-open-btn");
-  if (openBtn) openBtn.addEventListener("click", saaSvcOpen);
+  if (openBtn) openBtn.addEventListener("click", () => saaSvcOpen());
+  const chips = document.getElementById("jbe-svc-chips");
+  if (chips) chips.addEventListener("click", (e) => {
+    const chip = e.target.closest(".svc-chip[data-sec]");
+    if (chip && !chip.disabled) saaSvcOpen(chip.dataset.sec); // Round 75: the chips are buttons that open their section
+  });
   const printBtn = document.getElementById("jbe-svc-print-btn");
   if (printBtn) printBtn.addEventListener("click", saaSvcPrint);
   const typeSel = document.getElementById("jbe-type");

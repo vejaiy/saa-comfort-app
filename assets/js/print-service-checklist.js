@@ -54,21 +54,44 @@ function _svcPrintStyle() {
   td.a.yes.flag, td.a.no.flag { color: #b3261e; }
   tr.flag td { background: #fdecea; }
   .footer { display: flex; justify-content: space-between; color: #55636e; font-size: .72rem; border-top: 1px solid #cfd8de; padding-top: 6px; margin-top: 14px; }
+  section.pb { break-before: page; }
+  .box { display: inline-block; width: 11px; height: 11px; border: 1.4px solid #1a2733; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
+  .box + .box, .yn-blank .box:not(:first-child) { margin-left: 8px; }
+  .blank-line { display: inline-block; min-width: 110px; border-bottom: 1px solid #55636e; height: 12px; }
+  .none { color: #55636e; font-style: italic; padding: 8px 4px; }
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }`;
 }
 
-function _svcPrintSectionHtml(sec, ans) {
+function _svcBlankAnswer(item) {
+  switch (item.t) {
+    case "yn": return `<span class="yn-blank"><span class="box"></span>Yes <span class="box"></span>No</span>`;
+    case "slider": return `<span class="blank-line"></span> ${_svcPrintEsc(item.unit || "")}`;
+    case "ducts": return `<span class="blank-line"></span> in`;
+    default: return `<span class="blank-line"></span>`;
+  }
+}
+
+/** mode: all | answered | flagged | blank. Returns "" when a section has nothing to show. */
+function _svcPrintSectionHtml(sec, ans, mode, pageBreak) {
   const rows = [];
   sec.items.forEach((item) => {
     if (item.t === "photo") return; // pictures are never printed
-    if (item.showIf && ans[item.showIf.k] !== item.showIf.v) return;
+    if (mode !== "blank" && item.showIf && ans[item.showIf.k] !== item.showIf.v) return;
+    if (mode === "blank") {
+      rows.push(`<tr><td class="q">${_svcPrintEsc(item.q)}</td><td class="a">${_svcBlankAnswer(item)}</td></tr>`);
+      return;
+    }
     const a = saaSvcAnswerText(item, ans);
+    if (mode === "answered" && !a.recorded) return;
+    if (mode === "flagged" && !a.flag) return;
     const cls = !a.recorded ? "nr" : item.t === "yn" ? (ans[item.k] ? "yes" : "no") + (a.flag ? " flag" : "") : "";
     rows.push(`<tr${a.flag ? ' class="flag"' : ""}><td class="q">${_svcPrintEsc(item.q)}</td><td class="a ${cls}">${_svcPrintEsc(a.text)}</td></tr>`);
   });
+  if (!rows.length) return "";
   const p = _svcProgress(sec, ans);
-  return `<section style="--sc:${sec.color}">
-    <h3><span>${_svcPrintEsc(sec.title)}</span><small>${p.done} of ${p.total} recorded</small></h3>
+  const note = mode === "blank" ? "" : mode === "flagged" ? `<small>${rows.length} flagged</small>` : `<small>${p.done} of ${p.total} recorded</small>`;
+  return `<section${pageBreak ? ' class="pb"' : ""} style="--sc:${sec.color}">
+    <h3><span>${_svcPrintEsc(sec.title)}</span>${note}</h3>
     <table>${rows.join("")}</table>
   </section>`;
 }
@@ -80,6 +103,19 @@ function printServiceChecklist(opts) {
   const info = SAA_SVC_PRINT_INFO;
   const ans = opts.answers || {};
   const t = _svcTotals(ans);
+  // Round 75: print options -- which sections, and which questions.
+  const po = Object.assign({ sections: SAA_SVC_SECTIONS.map((s) => s.key), mode: "all", pageBreaks: false }, opts.print || {});
+  const chosen = SAA_SVC_SECTIONS.filter((s) => po.sections.includes(s.key));
+  let first = true;
+  let body = chosen.map((s) => {
+    const h = _svcPrintSectionHtml(s, ans, po.mode, po.pageBreaks && !first);
+    if (h) first = false;
+    return h;
+  }).join("");
+  if (!body) body = `<div class="none">${po.mode === "flagged" ? "No flagged items in the selected sections." : "Nothing recorded in the selected sections."}</div>`;
+  const titleNote = po.mode === "blank" ? " (blank form)" : po.mode === "flagged" ? " &mdash; flagged items" : po.mode === "answered" ? " &mdash; answered items" : "";
+  const progNote = po.mode === "blank" ? "" : `${t.done} of ${t.total} items recorded`;
+  const footNote = po.mode === "blank" ? "Fill in by hand." : po.mode === "all" ? 'Items marked "Not Recorded" were not filled in.' : (po.mode === "flagged" ? "Only answers needing attention are shown." : "Unanswered items are not shown.");
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -93,7 +129,7 @@ function printServiceChecklist(opts) {
     <div class="contact">${info.phone}<br>${info.email}<br>${info.address}</div>
   </div>
   <div class="rule"></div>
-  <div class="title-row"><h2>Service Call Checklist</h2><span class="prog">${t.done} of ${t.total} items recorded</span></div>
+  <div class="title-row"><h2>Service Call Checklist${titleNote}</h2><span class="prog">${progNote}</span></div>
   <div class="meta">
     <div><div class="label">Event #</div><div class="val">${_svcPrintEsc(opts.eventNumber) || "&mdash;"}</div></div>
     <div><div class="label">Job #</div><div class="val">${_svcPrintEsc(opts.jobNumber) || "&mdash;"}</div></div>
@@ -102,8 +138,8 @@ function printServiceChecklist(opts) {
     <div class="wide"><div class="label">Service address</div><div class="val">${_svcPrintEsc(opts.address) || "&mdash;"}</div></div>
     <div class="wide"><div class="label">Technician(s)</div><div class="val">${_svcPrintEsc(opts.technicians) || "&mdash;"}</div></div>
   </div>
-  ${SAA_SVC_SECTIONS.map((s) => _svcPrintSectionHtml(s, ans)).join("")}
-  <div class="footer"><span>Printed ${_svcPrintEsc(new Date().toLocaleString())}</span><span>${info.name} &middot; Items marked "Not Recorded" were not filled in.</span></div>
+  ${body}
+  <div class="footer"><span>Printed ${_svcPrintEsc(new Date().toLocaleString())}</span><span>${info.name} &middot; ${footNote}</span></div>
   <script>window.onload = function () { setTimeout(function () { window.print(); }, 200); };<\/script>
 </body>
 </html>`;

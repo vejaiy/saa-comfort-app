@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jobs | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260929d">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260929e">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260929d"></script>
-<script src="../assets/js/supabase-config.js?v=20260929d"></script>
-<script src="../assets/js/auth.js?v=20260929d"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260929e"></script>
+<script src="../assets/js/supabase-config.js?v=20260929e"></script>
+<script src="../assets/js/auth.js?v=20260929e"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -878,6 +878,28 @@
   </div>
 </div>
 
+<!-- ============ Service Call Checklist print options (Round 75, 2026-09-29) ============ -->
+<div class="modal-overlay svc-print-modal" id="svc-print-modal" hidden>
+  <div class="modal-card svc-print-card">
+    <h3>Print / Save as PDF</h3>
+    <p class="muted" style="font-size:.85rem;margin:0 0 8px">Pick what goes on the page. In the print window choose &ldquo;Save as PDF&rdquo; (on a phone: Share &rarr; Save to Files).</p>
+    <h4 class="svc-print-h">Sections</h4>
+    <div class="svc-print-list" id="svc-print-secs"></div>
+    <h4 class="svc-print-h">Questions</h4>
+    <div class="svc-print-list">
+      <label class="svc-print-opt stack"><input type="radio" name="svc-print-mode" value="all" checked><span>All questions</span><small>Unanswered show &ldquo;Not Recorded&rdquo;</small></label>
+      <label class="svc-print-opt stack"><input type="radio" name="svc-print-mode" value="answered"><span>Answered only</span><small>Skips anything not filled in</small></label>
+      <label class="svc-print-opt stack"><input type="radio" name="svc-print-mode" value="flagged"><span>Problems only</span><small>Answers that need attention (red)</small></label>
+      <label class="svc-print-opt stack"><input type="radio" name="svc-print-mode" value="blank"><span>Blank form</span><small>Check boxes to fill in by hand</small></label>
+    </div>
+    <label class="svc-print-opt svc-print-pb"><input type="checkbox" id="svc-print-pb"><span>Start each section on a new page</span></label>
+    <div class="modal-close-row">
+      <button type="button" class="btn btn-navy" id="svc-print-go">&#128424; Print / Save PDF</button>
+      <button type="button" class="btn btn-ghost" id="svc-print-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ Camera capture modal (Photos + per-Inspection-item photos) ============ -->
 <div class="modal-overlay" id="cam-modal" hidden>
   <div class="modal-card">
@@ -903,19 +925,19 @@
 <div id="jb-toast" class="cal-toast" hidden></div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260929d"></script>
-<script src="../assets/js/worksheet.js?v=20260929d"></script>
-<script src="../assets/js/systems-db.js?v=20260929d"></script>
-<script src="../assets/js/events-db.js?v=20260929d"></script>
-<script src="../assets/js/jobs-db.js?v=20260929d"></script>
-<script src="../assets/js/job-photos-db.js?v=20260929d"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260929d"></script>
-<script src="../assets/js/camera-capture.js?v=20260929d"></script>
-<script src="../assets/js/print-invoice.js?v=20260929d"></script>
-<script src="../assets/js/maps-config.js?v=20260929d"></script>
-<script src="../assets/js/mileage-db.js?v=20260929d"></script>
-<script src="../assets/js/jobs.js?v=20260929d"></script>
-<script src="../assets/js/print-service-checklist.js?v=20260929d"></script>
-<script src="../assets/js/service-checklist.js?v=20260929d"></script>
+<script src="../assets/js/pricing-data.js?v=20260929e"></script>
+<script src="../assets/js/worksheet.js?v=20260929e"></script>
+<script src="../assets/js/systems-db.js?v=20260929e"></script>
+<script src="../assets/js/events-db.js?v=20260929e"></script>
+<script src="../assets/js/jobs-db.js?v=20260929e"></script>
+<script src="../assets/js/job-photos-db.js?v=20260929e"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260929e"></script>
+<script src="../assets/js/camera-capture.js?v=20260929e"></script>
+<script src="../assets/js/print-invoice.js?v=20260929e"></script>
+<script src="../assets/js/maps-config.js?v=20260929e"></script>
+<script src="../assets/js/mileage-db.js?v=20260929e"></script>
+<script src="../assets/js/jobs.js?v=20260929e"></script>
+<script src="../assets/js/print-service-checklist.js?v=20260929e"></script>
+<script src="../assets/js/service-checklist.js?v=20260929e"></script>
 </body>
 </html>

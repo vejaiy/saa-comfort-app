@@ -1203,6 +1203,12 @@ tr.tl-shop-purchased td:not(.tl-shop-actions) { opacity: .6; }
 .svc-thumbs:empty { display: none; }
 .svc-thumb { position: relative; width: 64px; height: 64px; }
 .svc-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+/* Round 75: tube-size wheel pickers (half-width selects stack label over wheel) */
+.svc-sel.svc-half { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 4px; }
+.svc-sel.svc-half .svc-q { flex: none; }
+.svc-card .svc-sel.svc-half select.svc-sel-input { flex: none; width: 100%; }
+.svc-sec.is-flash { animation: svcFlash 1.5s ease-out; }
+@keyframes svcFlash { 0% { box-shadow: 0 0 0 4px var(--sc); } 100% { box-shadow: 0 0 0 0 transparent; } }
 .svc-thumb-x { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; border: none; background: #b3261e; color: #fff; font-size: .9rem; line-height: 1; cursor: pointer; padding: 0; }
 .svc-foot { padding: 6px 12px 16px; text-align: right; }
 .svc-foot .btn { min-height: 46px; min-width: 140px; }
@@ -1211,7 +1217,10 @@ tr.tl-shop-purchased td:not(.tl-shop-actions) { opacity: .6; }
 .jbe-svc-section { border-color: #1a6fd1 !important; border-width: 2px !important; }
 .jbe-svc-section h4 { background: #e6f0fc !important; color: #124f99 !important; }
 .jbe-svc-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px; }
-.svc-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; border: 1.5px solid var(--sc); color: var(--sc); font-size: .76rem; font-weight: 600; background: #fff; }
+.svc-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; border: 1.5px solid var(--sc); color: var(--sc); font-size: .76rem; font-weight: 600; background: #fff; font-family: inherit; cursor: pointer; min-height: 36px; }
+.svc-chip:hover:not(:disabled), .svc-chip:focus-visible { background: color-mix(in srgb, var(--sc) 12%, #fff); }
+.svc-chip.is-done:hover:not(:disabled) { background: var(--sc); filter: brightness(1.08); }
+.svc-chip:disabled { opacity: .55; cursor: default; }
 .svc-chip b { font-weight: 800; }
 .svc-chip.is-done { background: var(--sc); color: #fff; }
 .jbe-svc-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -1246,3 +1255,18 @@ tr.tl-shop-purchased td:not(.tl-shop-actions) { opacity: .6; }
 .ch-notes { font-size: .82rem; margin-top: 6px; display: grid; gap: 2px; }
 .ch-notes[hidden] { display: none; }
 @media (max-width: 640px) { .ch-event { margin-left: 4px; } .ch-sys { padding: 12px; } }
+
+/* Round 75: Service Call Checklist print options dialog */
+.svc-print-card { max-width: 440px; }
+.svc-print-h { margin: 12px 0 6px; font-size: .78rem; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+.svc-print-list { display: grid; gap: 6px; }
+.svc-print-opt { display: flex; align-items: center; gap: 10px; padding: 9px 12px; min-height: 44px; border: 1.5px solid var(--line); border-radius: 10px; cursor: pointer; font-size: .92rem; font-weight: 600; background: #fff; }
+.svc-print-opt input { width: 20px; height: 20px; flex: 0 0 auto; margin: 0; accent-color: var(--sc, var(--navy)); }
+.svc-print-opt span { flex: 1; }
+.svc-print-opt small { font-weight: 400; color: var(--muted); font-size: .76rem; text-align: right; }
+.svc-print-opt:has(input:checked) { border-color: var(--sc, var(--navy)); background: #f3f8fd; }
+.svc-print-pb { margin-top: 10px; }
+.svc-print-card .modal-close-row .btn { min-height: 44px; }
+.svc-print-opt.stack { display: grid; grid-template-columns: 22px 1fr; align-items: center; column-gap: 10px; row-gap: 0; padding: 7px 12px; min-height: 0; }
+.svc-print-opt.stack input { grid-row: 1 / span 2; }
+.svc-print-opt.stack span, .svc-print-opt.stack small { grid-column: 2; text-align: left; }
