@@ -910,6 +910,14 @@ ul.why-list li svg { flex: 0 0 auto; width: 19px; height: 19px; color: var(--ok)
 .rc-summary-card .rc-sc-label { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .3px; }
 .rc-summary-card .rc-sc-value { font-size: 1.6rem; font-weight: 700; margin-top: 4px; }
 .rc-summary-card .rc-sc-sub { color: var(--muted); font-size: .8rem; margin-top: 2px; }
+/* Round 69: clickable summary tiles */
+button.rc-summary-btn { font: inherit; color: inherit; text-align: left; cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .1s; }
+button.rc-summary-btn:hover { border-color: #1a6b5a; box-shadow: 0 4px 14px rgba(15,36,57,.14); transform: translateY(-1px); }
+button.rc-summary-btn:active { transform: translateY(0); }
+button.rc-summary-btn:focus-visible { outline: 3px solid #1a6b5a; outline-offset: 2px; }
+.rc-summary-btn .rc-sc-go { margin-top: 8px; font-size: .78rem; font-weight: 700; color: #1a6b5a; }
+button.rc-summary-warn { border-color: #e0b63a; background: #fffbea; }
+button.rc-summary-warn .rc-sc-go { color: #8a6500; }
 
 @media (max-width: 640px) {
   .rc-receipt-row { flex-direction: column; align-items: flex-start; }

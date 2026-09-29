@@ -318,19 +318,36 @@ function _rcDownloadPdf(bucket) {
 function _rcRenderOverview() {
   const rows = _rcApplyClientFilters(_rcAllRows);
   const s = saaReceiptsSummary(rows);
+  // Round 69 (2026-09-28): the Receipts / Tools / Supplies / Needs Review
+  // tiles are buttons that jump to the matching tab. Needs Review ticks the
+  // "Needs review only" filter and opens the first bucket that has any
+  // unconfirmed line items. Total Spend is informational (plain tile).
+  const reviewBucket = SAA_RECEIPT_BUCKETS.find((b) => rows.some((r) => r.auto_tagged && (r.bucket || "receipts") === b)) || "receipts";
   const cards = [
     { label: "Total Spend", value: _rcMoney(s.grandTotal), sub: `${s.count} line item${s.count === 1 ? "" : "s"}` },
-    { label: "Receipts", value: _rcMoney(s.byBucket.receipts.total), sub: `${s.byBucket.receipts.count} line items` },
-    { label: "Tools", value: _rcMoney(s.byBucket.tools.total), sub: `${s.byBucket.tools.count} line items` },
-    { label: "Supplies", value: _rcMoney(s.byBucket.supplies.total), sub: `${s.byBucket.supplies.count} line items` },
-    { label: "Needs Review", value: String(s.needsReview), sub: "auto-tagged, unconfirmed" },
+    { label: "Receipts", value: _rcMoney(s.byBucket.receipts.total), sub: `${s.byBucket.receipts.count} line items`, tab: "receipts" },
+    { label: "Tools", value: _rcMoney(s.byBucket.tools.total), sub: `${s.byBucket.tools.count} line items`, tab: "tools" },
+    { label: "Supplies", value: _rcMoney(s.byBucket.supplies.total), sub: `${s.byBucket.supplies.count} line items`, tab: "supplies" },
+    { label: "Needs Review", value: String(s.needsReview), sub: "auto-tagged, unconfirmed", tab: reviewBucket, review: true, warn: s.needsReview > 0 },
   ];
-  document.getElementById("rc-summary-cards").innerHTML = cards.map((c) => `
-<div class="rc-summary-card">
+  const host = document.getElementById("rc-summary-cards");
+  host.innerHTML = cards.map((c) => {
+    const inner = `
   <div class="rc-sc-label">${_rcEsc(c.label)}</div>
   <div class="rc-sc-value">${c.value}</div>
-  <div class="rc-sc-sub">${_rcEsc(c.sub)}</div>
-</div>`).join("");
+  <div class="rc-sc-sub">${_rcEsc(c.sub)}</div>` + (c.tab ? `
+  <div class="rc-sc-go">${c.review ? "Review now" : "Open"} &rarr;</div>` : "");
+    return c.tab
+      ? `<button type="button" class="rc-summary-card rc-summary-btn${c.warn ? " rc-summary-warn" : ""}" data-tab="${c.tab}"${c.review ? ' data-review="1"' : ""}>${inner}</button>`
+      : `<div class="rc-summary-card">${inner}</div>`;
+  }).join("");
+  host.querySelectorAll(".rc-summary-btn").forEach((b) => {
+    b.addEventListener("click", () => {
+      if (b.dataset.review) document.getElementById("rc-needs-review-only").checked = true;
+      _rcSwitchTab(b.dataset.tab);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  });
 
   const catGroups = saaReceiptsByCategory(rows);
   document.getElementById("rc-category-tbody").innerHTML = catGroups.map((g) => `
