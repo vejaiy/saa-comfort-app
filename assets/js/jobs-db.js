@@ -1020,27 +1020,33 @@ async function saaJobsFetchLatestEquipment(customerId) {
  *  added for this customer yet). */
 const SAA_EQUIPMENT_TYPES = [["condenser", "Condenser"], ["coil", "Coil"], ["furnace", "Furnace / Air Handler"]];
 
-async function saaJobsFetchEquipmentByType(customerId) {
+async function saaJobsFetchEquipmentByType(customerId, systemId) {
+  // Round 71 (2026-09-29): equipment belongs to ONE System (equipment.system_id),
+  // never to the whole customer -- a customer's different systems (different
+  // jobs) each have their own Condenser / Coil / Furnace. No customer-level
+  // fallback: a System with nothing entered shows empty cards.
+  const byType = { condenser: null, coil: null, furnace: null };
+  if (!systemId) return byType;
   const { data, error } = await _saaClient
     .from("equipment")
     .select("*")
-    .eq("customer_id", customerId)
+    .eq("system_id", systemId)
     .in("equipment_type", ["condenser", "coil", "furnace"])
     .order("created_at", { ascending: false });
   if (error) throw error;
-  const byType = { condenser: null, coil: null, furnace: null };
   (data || []).forEach((row) => { if (!byType[row.equipment_type]) byType[row.equipment_type] = row; });
   return byType;
 }
 
-/** Creates or updates that customer's current row for one equipment type.
- *  Does nothing to the other two types' rows. */
-async function saaJobsSaveEquipmentByType(customerId, equipmentType, fields) {
+/** Creates or updates that System's current row for one equipment type.
+ *  Does nothing to the other two types' rows (or to any other System's). */
+async function saaJobsSaveEquipmentByType(customerId, equipmentType, fields, systemId) {
   try {
+    if (!systemId) return { ok: false, error: "No System on this job." };
     const { data: existing, error: findErr } = await _saaClient
       .from("equipment")
       .select("id")
-      .eq("customer_id", customerId)
+      .eq("system_id", systemId)
       .eq("equipment_type", equipmentType)
       .order("created_at", { ascending: false })
       .limit(1);
@@ -1062,7 +1068,7 @@ async function saaJobsSaveEquipmentByType(customerId, equipmentType, fields) {
     } else {
       const { data: created, error } = await _saaClient
         .from("equipment")
-        .insert(Object.assign({ customer_id: customerId, equipment_type: equipmentType }, row))
+        .insert(Object.assign({ customer_id: customerId, system_id: systemId, equipment_type: equipmentType }, row))
         .select("id")
         .single();
       if (error) throw error;
@@ -1080,13 +1086,13 @@ async function saaJobsSaveEquipmentByType(customerId, equipmentType, fields) {
  *  A LOCKED record is never touched (returns { ok:true, skipped:"locked" }).
  *  Used by the Service Call Checklist to drop model numbers / OEM straight
  *  into the Condenser / Coil / Furnace cards. */
-async function saaJobsPatchEquipmentByType(customerId, equipmentType, fields) {
+async function saaJobsPatchEquipmentByType(customerId, equipmentType, fields, systemId) {
   try {
-    if (!customerId) return { ok: false, error: "No customer on this job." };
+    if (!customerId || !systemId) return { ok: false, error: "No customer / System on this job." };
     const { data: existing, error: findErr } = await _saaClient
       .from("equipment")
       .select("id,locked")
-      .eq("customer_id", customerId)
+      .eq("system_id", systemId)
       .eq("equipment_type", equipmentType)
       .order("created_at", { ascending: false })
       .limit(1);
@@ -1100,7 +1106,7 @@ async function saaJobsPatchEquipmentByType(customerId, equipmentType, fields) {
     }
     const { data: created, error } = await _saaClient
       .from("equipment")
-      .insert(Object.assign({ customer_id: customerId, equipment_type: equipmentType, warranty_status: "unknown" }, patch))
+      .insert(Object.assign({ customer_id: customerId, system_id: systemId, equipment_type: equipmentType, warranty_status: "unknown" }, patch))
       .select("id")
       .single();
     if (error) throw error;

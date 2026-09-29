@@ -338,7 +338,7 @@ async function _svcSaveNow() {
   const customerId = ev.customer_id || (typeof _jbCurrentJob !== "undefined" && _jbCurrentJob ? _jbCurrentJob.customer_id : null);
   if (customerId && typeof saaJobsPatchEquipmentByType === "function") {
     for (const type of Object.keys(eqPatch)) {
-      const er = await saaJobsPatchEquipmentByType(customerId, type, eqPatch[type]);
+      const er = await saaJobsPatchEquipmentByType(customerId, type, eqPatch[type], systemId);
       if (!er.ok) { _svcSetState("error", "Saved, but equipment not updated: " + er.error); return; }
       _svcSysTouched = true;
     }

@@ -2787,7 +2787,7 @@ async function jbMirrorEquipmentToSystem() {
  *  Checklist writes model numbers into them). */
 async function jbReloadEquipment() {
   if (!_jbCurrentJob || !_jbCurrentJob.customer_id) return;
-  _jbEquipByType = await saaJobsFetchEquipmentByType(_jbCurrentJob.customer_id);
+  _jbEquipByType = await saaJobsFetchEquipmentByType(_jbCurrentJob.customer_id, _jbCurrentJob.system_id);
   jbRenderAllEquipment();
   jbRenderSystemSummary();
 }
@@ -3660,7 +3660,7 @@ async function jbOpenDetail(jobId) {
   document.getElementById("jbd-quote-search").value = "";
   document.getElementById("jbd-quote-results").hidden = true;
 
-  _jbEquipByType = job.customer_id ? await saaJobsFetchEquipmentByType(job.customer_id) : { condenser: null, coil: null, furnace: null };
+  _jbEquipByType = job.customer_id ? await saaJobsFetchEquipmentByType(job.customer_id, job.system_id) : { condenser: null, coil: null, furnace: null };
   document.querySelectorAll(".jb-eq-block .jb-eq-fields").forEach((el) => { delete el.dataset.opened; });
   jbRenderAllEquipment();
 
@@ -3787,9 +3787,9 @@ async function jbSaveDetail(opts) {
     await saaJobsSaveEquipmentByType(job.customer_id, type, {
       brand, model, serialNumber: serial, refrigerantType: refrigerant,
       tonnage: tonnage || null, installYear: installYear || null, warrantyStatus: warranty,
-    });
+    }, job.system_id);
   }
-  _jbEquipByType = await saaJobsFetchEquipmentByType(job.customer_id);
+  _jbEquipByType = await saaJobsFetchEquipmentByType(job.customer_id, job.system_id);
   jbRenderAllEquipment();
   // Round 69: System & Equipment is one section -- its System fields save
   // with the rest of the card, then mirror the equipment cards onto the System.
