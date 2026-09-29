@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Customers | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260929c">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260929d">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260929c"></script>
-<script src="../assets/js/supabase-config.js?v=20260929c"></script>
-<script src="../assets/js/auth.js?v=20260929c"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260929d"></script>
+<script src="../assets/js/supabase-config.js?v=20260929d"></script>
+<script src="../assets/js/auth.js?v=20260929d"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -60,7 +60,7 @@
 
 <div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Customers</div>
 <div class="page-title-row"><h1>Customers</h1><a class="page-close-btn" href="dashboard.html" title="Close" aria-label="Close">&times;</a><script>(function(){try{var a=document.currentScript.previousElementSibling;var r=new URLSearchParams(location.search).get("return");if(!r||!/^[A-Za-z0-9_-]+\.html(\?[^#]*)?$/.test(r))return;a.href=r;a.title="Back to Job Card";a.setAttribute("aria-label","Back to Job Card");a.addEventListener("click",function(e){if(history.length<=1){e.preventDefault();try{window.close();}catch(x){}setTimeout(function(){location.href=r;},300);}});}catch(e){}})();</script></div>
-<div class="note-box blue">Every customer on file. Click a row to open their profile — contact info, systems, and every job, in one place.</div>
+<div class="note-box blue">Every customer on file. Click a row to open their profile &mdash; contact info, systems and the most recent job. Use <b>Historic Events</b> in the profile for every past job and event.</div>
 
 <div class="jobs-toolbar">
   <input type="text" id="cust-search" placeholder="Name, phone, email, or address&hellip;" style="flex:1;min-width:220px">
@@ -76,7 +76,7 @@
   <div class="jobs-table-wrap">
     <table class="jobs-table">
       <thead>
-        <tr><th>Name</th><th>Phone</th><th>Email</th><th>Billing Address</th><th>City</th><th>Zip</th><th>Systems</th><th>Jobs</th><th>Added</th></tr>
+        <tr><th>Name</th><th>Phone</th><th>Email</th><th>Billing Address</th><th>City</th><th>Zip</th><th>System 1</th><th>System 2</th><th>Added</th></tr>
       </thead>
       <tbody id="cust-tbody"></tbody>
     </table>
@@ -134,8 +134,13 @@
     <h4 style="margin:16px 0 6px">Systems <span class="muted" id="cp-sys-count" style="font-weight:400"></span></h4>
     <ul class="cp-list cp-list-clickable" id="cp-systems" style="margin:0;padding:0;list-style:none"></ul>
 
-    <h4 style="margin:16px 0 6px">Jobs <span class="muted" id="cp-job-count" style="font-weight:400"></span></h4>
+    <h4 style="margin:16px 0 6px">Recent Job</h4>
     <ul class="cp-list cp-list-clickable" id="cp-jobs" style="margin:0;padding:0;list-style:none"></ul>
+
+    <div style="margin-top:14px">
+      <a class="btn btn-navy btn-sm" id="cp-history-btn" href="customer-history.html">&#128340; Historic Events</a>
+      <span class="muted" style="font-size:.8rem;margin-left:8px">every past job and event for this customer</span>
+    </div>
 
     <div class="modal-close-row">
       <button type="button" class="btn btn-ghost btn-sm" id="cp-close-btn-2">Close</button>
@@ -144,10 +149,10 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260929c"></script>
-<script src="../assets/js/worksheet.js?v=20260929c"></script>
-<script src="../assets/js/jobs-db.js?v=20260929c"></script>
-<script src="../assets/js/customers-db.js?v=20260929c"></script>
+<script src="../assets/js/pricing-data.js?v=20260929d"></script>
+<script src="../assets/js/worksheet.js?v=20260929d"></script>
+<script src="../assets/js/jobs-db.js?v=20260929d"></script>
+<script src="../assets/js/customers-db.js?v=20260929d"></script>
 <script>
   function _custEsc(s) {
     return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -178,6 +183,22 @@
     });
   }
 
+  /** Round 73: one cell of the System 1 / System 2 columns -- the tonnage of
+   *  that customer's Nth active system. System 2's cell also says "+N more"
+   *  when a customer has more than two active systems. */
+  function _custSysLabel(sys) {
+    const t = saaSystemTonnageLabel(sys.tonnage_value);
+    return t ? _custEsc(t) : '<span class="muted" title="System on file, tonnage not entered yet">Tonnage not set</span>';
+  }
+  function _custSysCell(c, i) {
+    const list = c.activeSystems || [];
+    const sys = list[i];
+    if (!sys) return "&mdash;";
+    let html = _custSysLabel(sys);
+    if (i === 1 && list.length > 2) html += ` <span class="muted">+${list.length - 2} more</span>`;
+    return html;
+  }
+
   function renderCustomers() {
     const rows = _custFilteredRows();
     _custLastRows = rows;
@@ -194,8 +215,8 @@
         <td>${_custEsc(c.billing_address) || "&mdash;"}</td>
         <td>${_custEsc(c.billing_city) || "&mdash;"}</td>
         <td>${_custEsc(c.billing_zip) || "&mdash;"}</td>
-        <td>${c.systemCount || 0}</td>
-        <td>${c.jobCount || 0}${c.currentJobCount ? ` (${c.currentJobCount} current)` : ""}</td>
+        <td>${_custSysCell(c, 0)}</td>
+        <td>${_custSysCell(c, 1)}</td>
         <td>${_custDate(c.created_at)}</td>
       </tr>`).join("");
 
@@ -215,37 +236,41 @@
     document.getElementById("cp-contact").textContent = [c.phone ? saaFormatPhone(c.phone) : null, c.email].filter(Boolean).join(" · ") || "No phone or email on file";
     document.getElementById("cp-address").textContent = [c.billing_address, [c.billing_city, c.billing_state, c.billing_zip].filter(Boolean).join(", ")].filter(Boolean).join(", ") || "No address on file";
 
+    // Round 73: ACTIVE systems only, labelled System 1 / System 2 ... with tonnage,
+    // each linked to its current Job (click opens that Job Card). The Jobs list is
+    // gone -- just the single most recent job (no events) further down; every past
+    // job/event is on the Historic Events page.
     document.getElementById("cp-sys-count").textContent = profile.systems.length ? `(${profile.systems.length})` : "";
-    // Round 48 follow-up (2026-09-24), per Vijayan: "Make sure system
-    // information is linked with customer information in customer tab
-    // view." Each System now shows the one Job it's permanently tied to
-    // (job.system_id), same "Customer -> System -> Job" chain the rest of
-    // the app already follows, and clicking it opens that Job Card --
-    // matching the Jobs list right below, which was already clickable.
     document.getElementById("cp-systems").innerHTML = profile.systems.length
-      ? profile.systems.map((s) => `<li data-job-id="${s.job ? s.job.id : ""}" style="padding:6px 0;border-bottom:1px solid #f0f3f6;${s.job ? "cursor:pointer" : ""}">
-          <div style="font-weight:600">${_custEsc(s.system_name || "System")}</div>
-          <div class="muted" style="font-size:.8rem">${[s.manufacturer, s.tonnage ? s.tonnage + " ton" : null, s.system_location].filter(Boolean).join(" · ") || "&mdash;"}</div>
-          <div class="muted" style="font-size:.8rem">${s.job
-            ? `${_custEsc(s.job.job_number)} <span class="jb-badge">${_custJobStatusLabel[s.job.status] || s.job.status}</span>${s.job.is_current === false ? ' <span class="jb-badge">Historical</span>' : ""}`
+      ? profile.systems.map((s, i) => {
+          const job = s.currentJob || s.latestJob;
+          const nm = s.system_name && s.system_name !== "System" ? ` &mdash; ${_custEsc(s.system_name)}` : "";
+          const tons = saaSystemTonnageLabel(s.tonnage_value);
+          return `<li data-job-id="${job ? job.id : ""}" style="padding:6px 0;border-bottom:1px solid #f0f3f6;${job ? "cursor:pointer" : ""}">
+          <div style="font-weight:600">System ${i + 1}${nm}</div>
+          <div class="muted" style="font-size:.8rem">${[s.manufacturer, tons || null, s.system_location].filter(Boolean).map(_custEsc).join(" &middot; ") || "Details not entered yet"}</div>
+          <div class="muted" style="font-size:.8rem">${job
+            ? `${_custEsc(job.job_number)} <span class="jb-badge">${_custJobStatusLabel[job.status] || job.status}</span>${job.is_current === false ? ' <span class="jb-badge">Historical</span>' : ""}`
             : "No job linked yet"}</div>
-        </li>`).join("")
+        </li>`;
+        }).join("")
       : `<li class="muted" style="padding:4px 0">No systems on file.</li>`;
     document.getElementById("cp-systems").querySelectorAll("li[data-job-id]").forEach((li) => {
       if (!li.dataset.jobId) return;
       li.addEventListener("click", () => window.open(`jobs.html?job=${encodeURIComponent(li.dataset.jobId)}`, "_blank", "noopener"));
     });
 
-    document.getElementById("cp-job-count").textContent = profile.jobs.length ? `(${profile.jobs.length})` : "";
-    document.getElementById("cp-jobs").innerHTML = profile.jobs.length
-      ? profile.jobs.map((j) => `<li data-job-id="${j.id}" style="padding:6px 0;border-bottom:1px solid #f0f3f6;cursor:pointer">
-          <div style="font-weight:600">${_custEsc(j.job_number || saaJobTypeLabel(j.job_type))} <span class="jb-badge">${_custJobStatusLabel[j.status] || j.status}</span>${j.is_current === false ? ' <span class="jb-badge">Historical</span>' : ""}</div>
-          <div class="muted" style="font-size:.8rem">${_custEsc(j.title) || saaJobTypeLabel(j.job_type)} &middot; ${_custDate(j.scheduled_date || j.created_at)}</div>
-        </li>`).join("")
+    const rj = profile.recentJob;
+    document.getElementById("cp-jobs").innerHTML = rj
+      ? `<li data-job-id="${rj.id}" style="padding:6px 0;cursor:pointer">
+          <div style="font-weight:600">${_custEsc(rj.job_number || saaJobTypeLabel(rj.job_type))} <span class="jb-badge">${_custJobStatusLabel[rj.status] || rj.status}</span>${rj.is_current === false ? ' <span class="jb-badge">Historical</span>' : ""}</div>
+          <div class="muted" style="font-size:.8rem">${_custEsc(rj.title) || saaJobTypeLabel(rj.job_type)} &middot; ${_custDate(rj.scheduled_date || rj.created_at)}</div>
+        </li>`
       : `<li class="muted" style="padding:4px 0">No jobs on file.</li>`;
     document.getElementById("cp-jobs").querySelectorAll("li[data-job-id]").forEach((li) => {
       li.addEventListener("click", () => window.open(`jobs.html?job=${encodeURIComponent(li.dataset.jobId)}`, "_blank", "noopener"));
     });
+    document.getElementById("cp-history-btn").href = `customer-history.html?customer=${encodeURIComponent(customerId)}`;
 
     document.getElementById("cust-profile-modal").hidden = false;
   }
@@ -335,7 +360,7 @@
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }
   document.getElementById("cust-download-btn").addEventListener("click", () => {
-    const header = ["Name", "Phone", "Email", "Billing Address", "City", "State", "Zip", "Systems", "Jobs", "Current Jobs", "Added"];
+    const header = ["Name", "Phone", "Email", "Billing Address", "City", "State", "Zip", "System 1 Tonnage", "System 2 Tonnage", "Other Systems", "Added"];
     const lines = [header.map(_custCsvField).join(",")];
     _custLastRows.forEach((c) => {
       lines.push([
@@ -346,9 +371,9 @@
         c.billing_city || "",
         c.billing_state || "",
         c.billing_zip || "",
-        c.systemCount || 0,
-        c.jobCount || 0,
-        c.currentJobCount || 0,
+        (c.activeSystems && c.activeSystems[0] && c.activeSystems[0].tonnage_value) || "",
+        (c.activeSystems && c.activeSystems[1] && c.activeSystems[1].tonnage_value) || "",
+        Math.max(0, ((c.activeSystems || []).length) - 2),
         (c.created_at || "").slice(0, 10),
       ].map(_custCsvField).join(","));
     });

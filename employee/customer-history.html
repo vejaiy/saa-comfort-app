@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Historic Events | Employee | SAA Comfort Air LLC</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260929d">
+
+<style>body.emp-shell{visibility:hidden}</style>
+</head>
+<body class="emp-shell">
+<script src="../assets/js/vendor/supabase.js?v=20260929d"></script>
+<script src="../assets/js/supabase-config.js?v=20260929d"></script>
+<script src="../assets/js/auth.js?v=20260929d"></script>
+<script>saaRequireAuth();</script>
+<header class="emp-header">
+  <div class="container">
+    <div>
+      <a class="brand" href="dashboard.html" style="font-size:1rem">
+        <span class="mark" style="width:34px;height:34px;font-size:.62rem;letter-spacing:-0.3px">SAA</span>
+        <span>Employee Tools</span>
+      </a>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select onchange="if(this.value) window.location.href=this.value" style="width:auto;min-width:170px">
+        <option value="">Jump to page&hellip;</option>
+        <option value="dashboard.html">Dashboard</option>
+        <option value="calendar.html">Dispatch Calendar</option>
+        <option value="quotation.html">Create Quote</option>
+        <option value="repair.html">Repair</option>
+        <option value="condenser-change.html">Condenser Change</option>
+        <option value="coil-change.html">Coil Change</option>
+        <option value="furnace-change.html">Furnace Change</option>
+        <option value="plenum-change.html">Plenum Change</option>
+        <option value="drainline-maintenance.html">Drainline Maintenance</option>
+        <option value="duct-cleaning.html">Duct Cleaning</option>
+        <option value="labor.html">Labor</option>
+        <option value="inspection.html">Inspection / QC</option>
+        <option value="maintenance-plan.html">Maintenance Plan</option>
+        <option value="custom-solutions.html">Custom HVAC Solutions</option>
+        <option value="jobs.html">Jobs</option>
+        <option value="quotes.html">Quotes</option>
+        <option value="customers.html" selected>Customers</option>
+        <option value="bill-of-material.html">Bill of Material</option>
+        <option value="invoices.html">Invoices</option>
+        <option value="payments.html">Payments</option>
+        <option value="mileage.html">Mileage</option>
+        <option value="instruction-manual.html">Instruction Manual</option>
+        <option value="tool-list.html">Tool List</option>
+        <option value="receipts.html">Receipts</option>
+      </select>
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">Dashboard</a>
+      <a class="btn btn-ghost btn-sm" href="../index.html">Public Site</a>
+      <button class="btn btn-outline btn-sm" onclick="saaLogout()">Log out</button>
+    </div>
+  </div>
+</header>
+<main class="container" style="padding:26px 20px 60px">
+
+<div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; <a href="customers.html">Customers</a> &rsaquo; Historic Events</div>
+<div class="page-title-row"><h1 id="ch-title">Historic Events</h1><a class="page-close-btn" href="customers.html" title="Back to Customers" aria-label="Back to Customers">&times;</a><script>(function(){try{var a=document.currentScript.previousElementSibling;var r=new URLSearchParams(location.search).get("return");if(!r||!/^[A-Za-z0-9_-]+\.html(\?[^#]*)?$/.test(r))return;a.href=r;a.title="Back to Job Card";a.setAttribute("aria-label","Back to Job Card");a.addEventListener("click",function(e){if(history.length<=1){e.preventDefault();try{window.close();}catch(x){}setTimeout(function(){location.href=r;},300);}});}catch(e){}})();</script></div>
+<p class="muted" id="ch-contact" style="margin:-6px 0 4px"></p>
+<p class="muted" id="ch-summary" style="margin:0 0 14px;font-size:.88rem"></p>
+<div class="jobs-toolbar" style="margin-bottom:6px">
+  <a class="btn btn-ghost btn-sm" href="customers.html">&larr; Back to Customers</a>
+  <label class="muted" style="font-size:.85rem;display:flex;align-items:center;gap:6px;margin-left:auto"><input type="checkbox" id="ch-show-notes" checked> Show notes &amp; work performed</label>
+</div>
+<div id="ch-body"><p class="muted" style="padding:30px;text-align:center">Loading&hellip;</p></div>
+
+</main>
+<script src="../assets/js/pricing-data.js?v=20260929d"></script>
+<script src="../assets/js/worksheet.js?v=20260929d"></script>
+<script src="../assets/js/systems-db.js?v=20260929d"></script>
+<script src="../assets/js/events-db.js?v=20260929d"></script>
+<script src="../assets/js/jobs-db.js?v=20260929d"></script>
+<script src="../assets/js/customers-db.js?v=20260929d"></script>
+<script>
+  function _chEsc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function _chDate(iso) {
+    if (!iso) return "&mdash;";
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? "&mdash;" : d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+  function _chWhen(ts) {
+    const wc = saaEventsWallClock(ts);   // naive wall-clock, never shifted by timezone
+    if (!wc || isNaN(wc.local.getTime())) return "Unscheduled";
+    return wc.local.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) + " &middot; " +
+      wc.local.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
+  const _chJobStatus = Object.fromEntries(SAA_JOBS_STATUS_OPTIONS);
+
+  function _chEventHtml(e, techName) {
+    const techs = [e.assigned_technician_id, e.assigned_technician_id_2, e.assigned_technician_id_3].filter(Boolean).map((id) => techName[id]).filter(Boolean);
+    const done = e.completed_at ? _chDate(e.completed_at) : "";
+    const notes = [
+      e.reason ? `<div><b>Reason:</b> ${_chEsc(e.reason)}</div>` : "",
+      e.description ? `<div><b>Description:</b> ${_chEsc(e.description)}</div>` : "",
+      e.work_performed ? `<div><b>Work performed:</b> ${_chEsc(e.work_performed)}</div>` : "",
+      e.parts_used ? `<div><b>Parts:</b> ${_chEsc(e.parts_used)}</div>` : "",
+      e.technician_notes ? `<div><b>Technician notes:</b> ${_chEsc(e.technician_notes)}</div>` : "",
+      e.customer_notes ? `<div><b>Customer notes:</b> ${_chEsc(e.customer_notes)}</div>` : "",
+    ].join("");
+    return `<div class="ch-event">
+      <div class="ch-event-head">
+        <a href="jobs.html?job=${encodeURIComponent(e.job_id)}&event=${encodeURIComponent(e.id)}" target="_blank" rel="noopener" class="ch-event-num">${_chEsc(e.event_number || "Event")}</a>
+        <span class="jb-event-badge evt-${_chEsc(e.event_status)}">${_chEsc(saaEventStatusLabel(e.event_status))}</span>
+        <span>${_chEsc(saaEventTypeLabel(e.event_type))}</span>
+        <span class="muted">${_chWhen(e.scheduled_start)}</span>
+      </div>
+      <div class="muted ch-event-meta">Technician: ${_chEsc(techs.join(", ") || "None")}${done ? ` &middot; Completed ${done}` : ""}</div>
+      ${notes ? `<div class="ch-notes">${notes}</div>` : ""}
+    </div>`;
+  }
+
+  function _chJobHtml(j, events, techName) {
+    const evs = events.filter((e) => e.job_id === j.id);
+    return `<div class="ch-job">
+      <div class="ch-job-head">
+        <a href="jobs.html?job=${encodeURIComponent(j.id)}" target="_blank" rel="noopener" class="ch-job-num">${_chEsc(j.job_number || "Job")}</a>
+        <span class="jb-badge">${_chEsc(_chJobStatus[j.status] || j.status)}</span>
+        ${j.is_current === false ? '<span class="jb-badge">Historical</span>' : '<span class="jb-badge ch-current">Current</span>'}
+        <span class="muted">${_chEsc(saaJobTypeLabel(j.job_type))}${j.title ? " &middot; " + _chEsc(j.title) : ""} &middot; ${_chDate(j.created_at)}</span>
+      </div>
+      ${evs.length ? evs.map((e) => _chEventHtml(e, techName)).join("") : '<div class="muted" style="font-size:.82rem;padding:4px 0 2px">No events recorded for this job.</div>'}
+    </div>`;
+  }
+
+  function _chRender(h) {
+    const c = h.customer;
+    const name = [c.first_name, c.last_name].filter(Boolean).join(" ") || "(no name)";
+    document.getElementById("ch-title").textContent = "Historic Events — " + name;
+    document.title = "Historic Events — " + name;
+    document.getElementById("ch-contact").textContent = [c.phone ? saaFormatPhone(c.phone) : null, c.email,
+      [c.billing_address, [c.billing_city, c.billing_state, c.billing_zip].filter(Boolean).join(", ")].filter(Boolean).join(", ")].filter(Boolean).join(" · ");
+    document.getElementById("ch-summary").textContent =
+      `${h.jobs.length} job${h.jobs.length === 1 ? "" : "s"} · ${h.events.length} event${h.events.length === 1 ? "" : "s"} · ${h.activeSystems.length} active system${h.activeSystems.length === 1 ? "" : "s"}`;
+    const techName = Object.fromEntries((h.technicians || []).map((t) => [t.id, t.name]));
+
+    const activeIds = new Map(h.activeSystems.map((s, i) => [s.id, i + 1]));
+    const groups = h.activeSystems.map((s) => {
+      const jobs = h.jobs.filter((j) => j.system_id === s.id);
+      const nm = s.system_name && s.system_name !== "System" ? ` — ${_chEsc(s.system_name)}` : "";
+      const meta = [s.manufacturer, s.tonnage_value ? saaSystemTonnageLabel(s.tonnage_value) : null, s.system_location].filter(Boolean).map(_chEsc).join(" · ");
+      return jobs.length ? `<section class="ch-sys card">
+        <h3>System ${activeIds.get(s.id)}${nm}</h3>${meta ? `<div class="muted" style="font-size:.82rem;margin:-4px 0 8px">${meta}</div>` : ""}
+        ${jobs.map((j) => _chJobHtml(j, h.events, techName)).join("")}
+      </section>` : "";
+    });
+    // Everything else -- jobs on the empty placeholder system records left behind when a
+    // visit was converted to a historical Event, or jobs with no system -- in one card.
+    const earlier = h.jobs.filter((j) => !activeIds.has(j.system_id));
+    const other = earlier.length ? `<section class="ch-sys card"><h3>Earlier jobs</h3><div class="muted" style="font-size:.82rem;margin:-4px 0 8px">Past visits converted to historical events, or not tied to a system that has details on file.</div>${earlier.map((j) => _chJobHtml(j, h.events, techName)).join("")}</section>` : "";
+    const html = groups.join("") + other;
+    document.getElementById("ch-body").innerHTML = html || '<p class="muted" style="padding:30px;text-align:center">No jobs or events on file for this customer yet.</p>';
+    applyNotesToggle();
+  }
+
+  function applyNotesToggle() {
+    const on = document.getElementById("ch-show-notes").checked;
+    document.querySelectorAll("#ch-body .ch-notes").forEach((el) => { el.hidden = !on; });
+  }
+  document.getElementById("ch-show-notes").addEventListener("change", applyNotesToggle);
+
+  (async function init() {
+    const id = new URLSearchParams(location.search).get("customer");
+    if (!id) { document.getElementById("ch-body").innerHTML = '<p class="muted" style="padding:30px;text-align:center">No customer selected. <a href="customers.html">Back to Customers</a></p>'; return; }
+    try {
+      const h = await saaCustomersFetchHistory(id);
+      if (!h.customer) { document.getElementById("ch-body").innerHTML = '<p class="muted" style="padding:30px;text-align:center">Customer not found. <a href="customers.html">Back to Customers</a></p>'; return; }
+      _chRender(h);
+    } catch (e) {
+      document.getElementById("ch-body").innerHTML = '<p style="padding:30px;text-align:center;color:#b3261e">Could not load history: ' + _chEsc(e.message || e) + '</p>';
+    }
+  })();
+</script>
+</body>
+</html>

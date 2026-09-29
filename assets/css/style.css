@@ -1229,3 +1229,20 @@ tr.tl-shop-purchased td:not(.tl-shop-actions) { opacity: .6; }
 .jb-syseq-section .jb-syseq-status:has(#jbd-sys-status:empty) { display: none; }
 .jb-syseq-section .jb-eq-block { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
 .jb-syseq-section .jb-eq-block + .jb-eq-block { margin-top: 10px; }
+
+/* Round 73: Historic Events page */
+.ch-sys { margin-top: 14px; padding: 16px 18px; }
+.ch-sys h3 { margin: 0 0 8px; }
+.ch-job { border-top: 1px solid var(--line); padding: 10px 0 6px; }
+.ch-sys h3 + .ch-job, .ch-sys h3 + div + .ch-job { border-top: none; padding-top: 2px; }
+.ch-job-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .9rem; }
+.ch-job-num { font-weight: 800; color: var(--navy, #0f2439); text-decoration: none; }
+.ch-job-num:hover, .ch-event-num:hover { text-decoration: underline; }
+.jb-badge.ch-current { background: #e4f4ec; color: #1c7c4d; }
+.ch-event { margin: 8px 0 0 14px; padding: 8px 12px; border-left: 3px solid #cfd8de; background: #fbfcfd; border-radius: 0 8px 8px 0; }
+.ch-event-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .86rem; }
+.ch-event-num { font-weight: 700; text-decoration: none; color: #1a6b5a; }
+.ch-event-meta { font-size: .78rem; margin-top: 2px; }
+.ch-notes { font-size: .82rem; margin-top: 6px; display: grid; gap: 2px; }
+.ch-notes[hidden] { display: none; }
+@media (max-width: 640px) { .ch-event { margin-left: 4px; } .ch-sys { padding: 12px; } }
