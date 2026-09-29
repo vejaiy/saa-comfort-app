@@ -298,10 +298,12 @@ function _svcSysValue(item, val) {
   return String(val).trim() || null;
 }
 
-function _svcQueueSave() {
+function _svcQueueSave(delayMs) {
   _svcSetState("pending", "Unsaved changes…");
   clearTimeout(_svcTimer);
-  _svcTimer = setTimeout(() => { _svcTimer = null; _svcChain = _svcChain.then(_svcSaveNow).catch(() => {}); }, 500);
+  // Round 72: taps save fast (500ms); typed text waits 2s after the last
+  // keystroke so the save never lands mid-word.
+  _svcTimer = setTimeout(() => { _svcTimer = null; _svcChain = _svcChain.then(_svcSaveNow).catch(() => {}); }, delayMs || 500);
 }
 
 async function _svcSaveNow() {
@@ -515,7 +517,7 @@ function _svcOnBodyInput(e) {
     if (item.sys) _svcSysPending[item.k] = true;
     row.classList.toggle("is-set", !!val);
     _svcRefreshCounts();
-    _svcQueueSave();
+    _svcQueueSave(2000);
   }
 }
 

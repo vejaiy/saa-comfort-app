@@ -1812,7 +1812,11 @@ function jbeRenderInvoiceBox(event, invoice, payments) {
 
 /* ============================== Equipment (Condenser / Coil / Furnace) ============================== */
 
-function jbRenderEquipmentBlock(type, label) {
+/** keepValues (Round 72): after an autosave the fields already hold what the
+ *  user typed -- rewriting them from the database could overwrite characters
+ *  typed while the save was in flight, so only the buttons/lock are refreshed.
+ *  The field being typed in is never overwritten either way. */
+function jbRenderEquipmentBlock(type, label, keepValues) {
   const block = document.querySelector(`.jb-eq-block[data-eqtype="${type}"]`);
   if (!block) return;
   const row = _jbEquipByType[type];
@@ -1828,18 +1832,23 @@ function jbRenderEquipmentBlock(type, label) {
   lockBtn.classList.toggle("jb-locked", locked);
   if (!fields.dataset.opened) fields.hidden = !hasData;
 
-  block.querySelector(".jb-eq-brand").value = row ? row.brand || "" : "";
-  block.querySelector(".jb-eq-model").value = row ? row.model || "" : "";
-  block.querySelector(".jb-eq-serial").value = row ? row.serial_number || "" : "";
-  block.querySelector(".jb-eq-refrigerant").value = row ? row.refrigerant_type || "" : "";
-  block.querySelector(".jb-eq-tonnage").value = row ? row.tonnage || "" : "";
-  block.querySelector(".jb-eq-installyear").value = row ? row.install_year || "" : "";
-  block.querySelector(".jb-eq-warranty").value = row ? row.warranty_status || "unknown" : "unknown";
+  const setVal = (sel, v) => {
+    const el = block.querySelector(sel);
+    if (!el || keepValues || document.activeElement === el) return;
+    el.value = v;
+  };
+  setVal(".jb-eq-brand", row ? row.brand || "" : "");
+  setVal(".jb-eq-model", row ? row.model || "" : "");
+  setVal(".jb-eq-serial", row ? row.serial_number || "" : "");
+  setVal(".jb-eq-refrigerant", row ? row.refrigerant_type || "" : "");
+  setVal(".jb-eq-tonnage", row ? row.tonnage || "" : "");
+  setVal(".jb-eq-installyear", row ? row.install_year || "" : "");
+  setVal(".jb-eq-warranty", row ? row.warranty_status || "unknown" : "unknown");
   fields.querySelectorAll("input, select").forEach((el) => { el.disabled = locked; });
 }
 
-function jbRenderAllEquipment() {
-  SAA_EQUIPMENT_TYPES.forEach(([type, label]) => jbRenderEquipmentBlock(type, label));
+function jbRenderAllEquipment(keepValues) {
+  SAA_EQUIPMENT_TYPES.forEach(([type, label]) => jbRenderEquipmentBlock(type, label, keepValues));
   if (typeof jbRenderSystemSummary === "function") jbRenderSystemSummary();
 }
 
@@ -3145,7 +3154,7 @@ function _jbeScheduleAutosave(delayMs) {
   if (!_jbeIsAutosaving()) return;
   clearTimeout(_jbeAutosaveTimer);
   _jbeSetSaveState("pending", "Unsaved changes…");
-  _jbeAutosaveTimer = setTimeout(() => { _jbeAutosaveTimer = null; _jbeQueueAutosave(); }, delayMs == null ? 1000 : delayMs);
+  _jbeAutosaveTimer = setTimeout(() => { _jbeAutosaveTimer = null; _jbeQueueAutosave(); }, delayMs == null ? 2500 : delayMs);
 }
 
 function _jbeQueueAutosave() {
@@ -3790,7 +3799,7 @@ async function jbSaveDetail(opts) {
     }, job.system_id);
   }
   _jbEquipByType = await saaJobsFetchEquipmentByType(job.customer_id, job.system_id);
-  jbRenderAllEquipment();
+  jbRenderAllEquipment(true); // Round 72: never rewrite what is being typed
   // Round 69: System & Equipment is one section -- its System fields save
   // with the rest of the card, then mirror the equipment cards onto the System.
   await jbSaveSystem();
@@ -3876,7 +3885,7 @@ async function jbSaveDetail(opts) {
  *  can't outlive it (jbCloseDetail flushes with a real save first anyway,
  *  and jbSaveDetail clears any pending timer the instant it runs). */
 function jbScheduleAutosave(delayMs) {
-  if (typeof delayMs !== "number") delayMs = 1000; // called directly as an event listener -> the Event object arrives here
+  if (typeof delayMs !== "number") delayMs = 2500; // called directly as an event listener -> the Event object arrives here
   const modal = document.getElementById("jb-detail-modal");
   if (!_jbCurrentJob || !modal || modal.hidden) return;
   clearTimeout(_jbAutosaveTimer);
@@ -4138,12 +4147,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const el = document.getElementById(id);
     // Round 60: picks save almost immediately, typing ~1s after a pause.
     const isPick = el.tagName === "SELECT" || el.type === "date" || el.type === "time";
-    el.addEventListener("input", () => jbScheduleAutosave(isPick ? 400 : 1000));
+    el.addEventListener("input", () => jbScheduleAutosave(isPick ? 400 : 2500));
     el.addEventListener("change", () => jbScheduleAutosave(isPick ? 250 : 150));
   });
   document.querySelectorAll(".jb-eq-fields input, .jb-eq-fields select").forEach((el) => {
     const isPick = el.tagName === "SELECT" || el.type === "date";
-    el.addEventListener("input", () => jbScheduleAutosave(isPick ? 400 : 1000));
+    el.addEventListener("input", () => jbScheduleAutosave(isPick ? 400 : 2500));
     el.addEventListener("change", () => jbScheduleAutosave(isPick ? 250 : 150));
   });
 
@@ -4246,7 +4255,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const el = document.getElementById(id);
     if (!el) return;
     const isPick = el.tagName === "SELECT" || el.type === "date" || el.type === "time";
-    el.addEventListener("input", () => _jbeScheduleAutosave(isPick ? 400 : 1000));
+    el.addEventListener("input", () => _jbeScheduleAutosave(isPick ? 400 : 2500));
     el.addEventListener("change", () => _jbeScheduleAutosave(isPick ? 250 : 150));
   });
 
