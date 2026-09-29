@@ -1221,3 +1221,11 @@ tr.tl-shop-purchased td:not(.tl-shop-actions) { opacity: .6; }
   .svc-toggle button { min-width: 52px; padding: 0 8px; }
   .svc-card select.svc-sel-input, .svc-text:not(.svc-half) input.svc-in { flex-basis: 50%; width: 50%; }
 }
+
+/* Round 69: System & Equipment is one section */
+.jb-syseq-section h4 { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.jb-syseq-section .jb-system-box { margin-bottom: 8px; }
+.jb-syseq-section .jb-syseq-status { min-height: 0; }
+.jb-syseq-section .jb-syseq-status:has(#jbd-sys-status:empty) { display: none; }
+.jb-syseq-section .jb-eq-block { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
+.jb-syseq-section .jb-eq-block + .jb-eq-block { margin-top: 10px; }

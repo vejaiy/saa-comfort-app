@@ -420,7 +420,7 @@ function _jbEsc(s) {
  *  once here, not per jbOpenDetail call. A click inside an actual control
  *  in a title bar (the Equipment section's own "Bill of Material" link)
  *  is left alone rather than also toggling the section. */
-const JB_SECTIONS_COLLAPSED_BY_DEFAULT = ["Equipment", "Diagnosis", "Photos", "Warranty Documents", "Inspection", "Receipts", "Customer Signature", "Notes"];
+const JB_SECTIONS_COLLAPSED_BY_DEFAULT = ["Diagnosis", "Photos", "Warranty Documents", "Inspection", "Receipts", "Customer Signature", "Notes"];
 function _jbWireSectionToggles() {
   document.querySelectorAll(".jb-detail-card .drawer-section > h4").forEach((h4) => {
     const title = h4.textContent.trim();
@@ -1840,6 +1840,7 @@ function jbRenderEquipmentBlock(type, label) {
 
 function jbRenderAllEquipment() {
   SAA_EQUIPMENT_TYPES.forEach(([type, label]) => jbRenderEquipmentBlock(type, label));
+  if (typeof jbRenderSystemSummary === "function") jbRenderSystemSummary();
 }
 
 /** Wired once on load: the Add/Edit toggle just shows/hides that type's
@@ -2697,74 +2698,98 @@ async function jbeCalculateMileageSlot(n) {
 const SAA_SYSTEM_TYPE_OPTION_PAIRS = SAA_SYSTEM_TYPE_OPTIONS.map((v) => [v, v]);
 const SAA_SYSTEM_ORIENTATION_OPTION_PAIRS = [["", "—"]].concat(SAA_SYSTEM_ORIENTATION_OPTIONS.map((v) => [v, v]));
 
-async function jbRenderSystemSection(job) {
-  _jbSystem = job.system_id ? await saaSystemsFetchById(job.system_id) : null;
-
+/** Round 69: one-line summary under the System & Equipment heading. Reads
+ *  the Condenser / Coil / Furnace cards first (the one place these facts are
+ *  entered) and falls back to the System's own mirrored columns for older
+ *  Systems that were filled in before the two sections were merged. */
+function jbRenderSystemSummary() {
   const box = document.getElementById("jbd-system-box");
+  if (!box) return;
   if (!_jbSystem) {
     box.innerHTML = `<span class="muted" style="font-size:.85rem">No System on file for this job yet.</span>`;
-  } else {
-    const bits = [_jbSystem.manufacturer, _jbSystem.model_number ? `#${_jbSystem.model_number}` : null, _jbSystem.tonnage ? `${_jbSystem.tonnage}T` : null].filter(Boolean).join(" · ");
-    box.innerHTML = `<div class="jb-system-name">${_jbSystem.system_name || "System"}</div>` +
-      (bits ? `<div class="jb-system-meta">${bits}</div>` : "");
+    return;
   }
+  const eq = ["condenser", "coil", "furnace"].map((t) => _jbEquipByType[t]).filter(Boolean);
+  const pick = (k, sysVal) => (eq.find((r) => r[k]) || {})[k] || sysVal || "";
+  const brand = pick("brand", _jbSystem.manufacturer);
+  const ton = pick("tonnage", _jbSystem.tonnage);
+  const ref = pick("refrigerant_type", _jbSystem.refrigerant);
+  const bits = [brand, _jbSystem.model_number ? `#${_jbSystem.model_number}` : "", ton ? `${ton}T` : "", ref].filter(Boolean).map(_jbEsc).join(" · ");
+  box.innerHTML = `<div class="jb-system-name">${_jbEsc(_jbSystem.system_name || "System")}</div>` +
+    (bits ? `<div class="jb-system-meta">${bits}</div>` : "");
+}
+
+async function jbRenderSystemSection(job) {
+  _jbSystem = job.system_id ? await saaSystemsFetchById(job.system_id) : null;
 
   document.getElementById("jbd-sys-type").innerHTML = `<option value="">—</option>` + _jbOptionsHtml(SAA_SYSTEM_TYPE_OPTION_PAIRS, _jbSystem ? _jbSystem.system_type : "");
   document.getElementById("jbd-sys-orientation").innerHTML = _jbOptionsHtml(SAA_SYSTEM_ORIENTATION_OPTION_PAIRS, _jbSystem ? _jbSystem.system_orientation : "");
   document.getElementById("jbd-sys-name").value = (_jbSystem && _jbSystem.system_name) || "";
-  document.getElementById("jbd-sys-manufacturer").value = (_jbSystem && _jbSystem.manufacturer) || "";
-  document.getElementById("jbd-sys-tonnage").value = (_jbSystem && _jbSystem.tonnage) || "";
-  document.getElementById("jbd-sys-refrigerant").value = (_jbSystem && _jbSystem.refrigerant) || "";
   document.getElementById("jbd-sys-install-date").value = (_jbSystem && _jbSystem.install_date) || "";
   document.getElementById("jbd-sys-location").value = (_jbSystem && _jbSystem.system_location) || "";
-  document.getElementById("jbd-sys-warranty").value = (_jbSystem && _jbSystem.warranty_info) || "";
-  // Round 68: model numbers (also filled in by the Service Call Checklist).
-  document.getElementById("jbd-sys-cond-model").value = (_jbSystem && _jbSystem.outdoor_unit) || "";
-  document.getElementById("jbd-sys-coil-model").value = (_jbSystem && _jbSystem.coil) || "";
-  document.getElementById("jbd-sys-fc-model").value = (_jbSystem && _jbSystem.indoor_unit) || "";
-  document.getElementById("jbd-sys-furn-model").value = (_jbSystem && _jbSystem.furnace_air_handler) || "";
   document.getElementById("jbd-sys-status").textContent = "";
+  jbRenderSystemSummary();
 }
 
+/** Saves the System's own fields (name / type / location / orientation /
+ *  install date). Runs as part of every Job Card save (autosave included) --
+ *  there is no separate "Save System" button anymore (Round 69). */
 async function jbSaveSystem() {
-  if (!_jbCurrentJob || !_jbSystem) return;
-  const btn = document.getElementById("jbd-sys-save-btn");
-  const msg = document.getElementById("jbd-sys-status");
-  btn.disabled = true;
+  if (!_jbCurrentJob || !_jbSystem) return { ok: true };
   const res = await saaSystemsUpdate(_jbSystem.id, {
     system_name: document.getElementById("jbd-sys-name").value.trim() || "System",
     system_type: document.getElementById("jbd-sys-type").value || null,
-    // Round 48 follow-up: model_number/serial_number are intentionally NOT
-    // sent here anymore (removed from this box -- see the field markup in
-    // templates.py) so this save can never overwrite/null out a value
-    // already sitting in a System's own DB columns from before this
-    // change; saaSystemsUpdate() only touches the keys present in this
-    // object.
-    manufacturer: document.getElementById("jbd-sys-manufacturer").value.trim() || null,
-    tonnage: document.getElementById("jbd-sys-tonnage").value || null,
-    refrigerant: document.getElementById("jbd-sys-refrigerant").value.trim() || null,
-    install_date: document.getElementById("jbd-sys-install-date").value || null,
     system_location: document.getElementById("jbd-sys-location").value.trim() || null,
     system_orientation: document.getElementById("jbd-sys-orientation").value || null,
-    warranty_info: document.getElementById("jbd-sys-warranty").value.trim() || null,
-    outdoor_unit: document.getElementById("jbd-sys-cond-model").value.trim() || null,
-    coil: document.getElementById("jbd-sys-coil-model").value.trim() || null,
-    indoor_unit: document.getElementById("jbd-sys-fc-model").value.trim() || null,
-    furnace_air_handler: document.getElementById("jbd-sys-furn-model").value.trim() || null,
+    install_date: document.getElementById("jbd-sys-install-date").value || null,
   });
-  btn.disabled = false;
   if (res.ok) {
-    // jbRenderSystemSection re-populates every field from the DB (and
-    // clears jbd-sys-status itself, since it's also used when a fresh Job
-    // is opened) -- so the "System saved." message has to be set AFTER
-    // that call runs, not before, or this re-render wipes it immediately.
-    await jbRenderSystemSection(_jbCurrentJob);
-    msg.textContent = "System saved.";
-    msg.style.color = "";
+    Object.assign(_jbSystem, {
+      system_name: document.getElementById("jbd-sys-name").value.trim() || "System",
+      system_type: document.getElementById("jbd-sys-type").value || null,
+      system_location: document.getElementById("jbd-sys-location").value.trim() || null,
+      system_orientation: document.getElementById("jbd-sys-orientation").value || null,
+      install_date: document.getElementById("jbd-sys-install-date").value || null,
+    });
+    jbRenderSystemSummary();
   } else {
+    const msg = document.getElementById("jbd-sys-status");
     msg.textContent = res.error;
     msg.style.color = "#b3261e";
   }
+  return res;
+}
+
+/** Round 69: the System's own manufacturer / tonnage / refrigerant / model
+ *  columns are a read-only mirror of the Condenser / Coil / Furnace cards, so
+ *  the two can never disagree. Only non-empty values are mirrored -- clearing
+ *  a card never blanks what an older System record already holds. */
+async function jbMirrorEquipmentToSystem() {
+  if (!_jbSystem) return;
+  const c = _jbEquipByType.condenser, co = _jbEquipByType.coil, f = _jbEquipByType.furnace;
+  const first = (k) => [c, co, f].map((r) => r && r[k]).find(Boolean) || null;
+  const patch = {};
+  const put = (col, v) => { if (v) patch[col] = v; };
+  put("manufacturer", first("brand"));
+  put("tonnage", first("tonnage"));
+  put("refrigerant", first("refrigerant_type"));
+  put("outdoor_unit", c && c.model);
+  put("coil", co && co.model);
+  put("furnace_air_handler", f && f.model);
+  put("indoor_unit", f && f.model);
+  if (!Object.keys(patch).length) return;
+  const res = await saaSystemsUpdate(_jbSystem.id, patch);
+  if (res.ok) Object.assign(_jbSystem, patch);
+  jbRenderSystemSummary();
+}
+
+/** Re-reads the three equipment cards from the DB (used after the Service Call
+ *  Checklist writes model numbers into them). */
+async function jbReloadEquipment() {
+  if (!_jbCurrentJob || !_jbCurrentJob.customer_id) return;
+  _jbEquipByType = await saaJobsFetchEquipmentByType(_jbCurrentJob.customer_id);
+  jbRenderAllEquipment();
+  jbRenderSystemSummary();
 }
 
 function _jbEventTimeLabel(iso) {
@@ -3766,6 +3791,10 @@ async function jbSaveDetail(opts) {
   }
   _jbEquipByType = await saaJobsFetchEquipmentByType(job.customer_id);
   jbRenderAllEquipment();
+  // Round 69: System & Equipment is one section -- its System fields save
+  // with the rest of the card, then mirror the equipment cards onto the System.
+  await jbSaveSystem();
+  await jbMirrorEquipmentToSystem();
 
   // Refresh the Invoice & Payment box so its "Use Quoted/Actual Amount"
   // buttons and the vs-Quote flag pick up the Quoted/Approved/Actual Cost
@@ -4101,6 +4130,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // jbd-completed/jbd-completed-time excluded (Round 55 follow-up) --
     // all disabled/auto-derived from the Job's current Event, same as
     // jbd-cost-material just above.
+    "jbd-sys-name", "jbd-sys-type", "jbd-sys-location", "jbd-sys-orientation", "jbd-sys-install-date", // Round 69: System fields autosave with the card
     "jbd-type", "jbd-priority", "jbd-tech", "jbd-address", "jbd-city", "jbd-state", "jbd-zip",
     "jbd-problem", "jbd-findings", "jbd-recommend", "jbd-sig-name", "jbd-sig-date", "jbd-notes",
     "jbd-mileage-miles", "jbd-mileage2-miles", "jbd-mileage3-miles", // Round 60: Technician 2/3 miles autosave too
@@ -4187,7 +4217,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("jb-insp-close-btn").addEventListener("click", () => { document.getElementById("jb-inspection-modal").hidden = true; });
 
   // Round 42 (2026-09-19): System section + Event History timeline wiring.
-  document.getElementById("jbd-sys-save-btn").addEventListener("click", jbSaveSystem);
   // Round 43: both buttons now drive the same "Start Next Job" flow (see
   // jbStartNextJob) -- the old "add a 2nd/3rd Event under this same still-
   // open Job" behavior is retired now that a Job is a single visit.

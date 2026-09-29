@@ -324,6 +324,25 @@ async function _svcSaveNow() {
   });
   _svcSysPending = {};
   const systemId = ev.system_id || (typeof _jbCurrentJob !== "undefined" && _jbCurrentJob ? _jbCurrentJob.system_id : null);
+  // Round 69: brand / model numbers belong to the Condenser / Coil / Furnace
+  // cards (System & Equipment is one section, entered once); the System's own
+  // manufacturer / model columns are only a mirror of those. So they are
+  // written to the equipment cards first, and mirrored to the System below.
+  const eqPatch = {};
+  const put = (type, col, v) => { if (v) (eqPatch[type] = eqPatch[type] || {})[col] = v; };
+  put("condenser", "brand", patch.manufacturer);
+  put("condenser", "model", patch.outdoor_unit);
+  put("coil", "model", patch.coil);
+  put("furnace", "model", patch.indoor_unit);
+  put("furnace", "model", patch.furnace_air_handler);
+  const customerId = ev.customer_id || (typeof _jbCurrentJob !== "undefined" && _jbCurrentJob ? _jbCurrentJob.customer_id : null);
+  if (customerId && typeof saaJobsPatchEquipmentByType === "function") {
+    for (const type of Object.keys(eqPatch)) {
+      const er = await saaJobsPatchEquipmentByType(customerId, type, eqPatch[type]);
+      if (!er.ok) { _svcSetState("error", "Saved, but equipment not updated: " + er.error); return; }
+      _svcSysTouched = true;
+    }
+  }
   if (Object.keys(patch).length && systemId && typeof saaSystemsUpdate === "function") {
     const sr = await saaSystemsUpdate(systemId, patch);
     if (!sr.ok) { _svcSetState("error", "Saved, but System not updated: " + sr.error); return; }
@@ -583,7 +602,10 @@ async function saaSvcClose() {
   modal.hidden = true;
   _svcEvent = null;
   if (typeof saaSvcRefreshEventSection === "function") saaSvcRefreshEventSection();
-  if (_svcSysTouched && typeof jbRenderSystemSection === "function" && typeof _jbCurrentJob !== "undefined" && _jbCurrentJob) jbRenderSystemSection(_jbCurrentJob);
+  if (_svcSysTouched && typeof _jbCurrentJob !== "undefined" && _jbCurrentJob) {
+    if (typeof jbRenderSystemSection === "function") jbRenderSystemSection(_jbCurrentJob);
+    if (typeof jbReloadEquipment === "function") jbReloadEquipment(); // Round 69: refresh the Condenser / Coil / Furnace cards
+  }
   _svcSysTouched = false;
 }
 

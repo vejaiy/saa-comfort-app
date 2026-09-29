@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260928e">
+<link rel="stylesheet" href="../assets/css/style.css?v=20260929a">
 <script>
 if (new URLSearchParams(location.search).get('embed') === '1') {
   document.documentElement.classList.add('saa-embed');
@@ -14,9 +14,9 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260928e"></script>
-<script src="../assets/js/supabase-config.js?v=20260928e"></script>
-<script src="../assets/js/auth.js?v=20260928e"></script>
+<script src="../assets/js/vendor/supabase.js?v=20260929a"></script>
+<script src="../assets/js/supabase-config.js?v=20260929a"></script>
+<script src="../assets/js/auth.js?v=20260929a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -382,57 +382,103 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
           <div id="jbd-customer"></div>
         </div>
 
-        <!-- Round 42 (2026-09-19): System -- the one piece of HVAC equipment
-             this Job is permanently attached to (Customer -> System -> Job ->
-             Event). Most jobs migrated from the old flat model still have a
-             generic, unfilled-in System record -- filling in manufacturer/
-             model/serial/etc. here is optional office cleanup, not required
-             for anything else on this page to work. -->
-        <div class="drawer-section">
-          <h4>System</h4>
-          <div id="jbd-system-box"></div>
+        <!-- Round 69 (2026-09-29), per Vijayan ("Equipment section and System
+             section are not sync. both should have same information...
+             remove duplicate information from the page and consolidate"):
+             System and Equipment are ONE section now. The System's own
+             facts (name, type, location, orientation, install date) sit on
+             top; everything about the physical units -- brand, model,
+             serial, tonnage, refrigerant, install year, warranty -- lives
+             in the Condenser / Coil / Furnace-Air Handler cards below and is
+             entered once. The System's manufacturer / tonnage / refrigerant
+             / model columns are mirrored from those cards on save (see
+             jbMirrorEquipmentToSystem in jobs.js), never typed twice. -->
+        <div class="drawer-section jb-syseq-section">
+          <h4>
+            System &amp; Equipment
+            <a class="btn btn-ghost btn-sm" id="jbd-eq-bom-btn" href="#" target="_blank" rel="noopener">🧰 Bill of Material</a>
+          </h4>
+          <div id="jbd-system-box" class="jb-system-box"></div>
           <div class="field-row">
             <div class="field"><label>System Name</label><input type="text" id="jbd-sys-name" placeholder="e.g. Upstairs 3-Ton"></div>
             <div class="field"><label>System Type</label><select id="jbd-sys-type"></select></div>
           </div>
-          <!-- Round 48 follow-up (2026-09-23), per Vijayan's annotated
-               screenshot (arrows at Model Number and Serial Number here):
-               those two duplicated the per-component Model/Serial fields
-               already captured more precisely down in the Bill of
-               Material's Condenser/Coil/Furnace cards below (a System can
-               be up to 3 physical units, each with its own model/serial --
-               one flat pair here never really fit). Removed from this box;
-               saaSystemsUpdate() below no longer sends these two keys at
-               all, so any value already saved in a System's own
-               model_number/serial_number columns (from before this
-               change) is left exactly as-is in the database -- just no
-               longer shown or editable from this box. -->
-          <div class="field-row">
-            <div class="field"><label>Manufacturer</label><input type="text" id="jbd-sys-manufacturer"></div>
-            <div class="field"><label>Tonnage</label><input type="number" step="0.5" id="jbd-sys-tonnage"></div>
-          </div>
-          <div class="field-row">
-            <div class="field"><label>Refrigerant</label><input type="text" id="jbd-sys-refrigerant" placeholder="e.g. R-410A"></div>
+          <div class="field-row field-row-3">
+            <div class="field"><label>Location</label><input type="text" id="jbd-sys-location" placeholder="e.g. Attic"></div>
+            <div class="field"><label>Orientation</label><select id="jbd-sys-orientation"></select></div>
             <div class="field"><label>Install Date</label><input type="date" id="jbd-sys-install-date"></div>
           </div>
-          <div class="field-row">
-            <div class="field"><label>Location</label><input type="text" id="jbd-sys-location" placeholder="e.g. Attic, side yard"></div>
-            <div class="field"><label>Orientation</label><select id="jbd-sys-orientation"></select></div>
+          <div class="jb-syseq-status"><span id="jbd-sys-status" class="muted" style="font-size:.82rem"></span></div>
+
+        <div class="jb-eq-block" data-eqtype="condenser">
+          <div class="jb-eq-head">
+            <button type="button" class="btn btn-ghost btn-sm jb-eq-toggle-btn">+ Add Condenser</button>
+            <button type="button" class="jb-eq-lock-btn" hidden></button>
           </div>
-          <div class="field"><label>Warranty Info</label><input type="text" id="jbd-sys-warranty"></div>
-          <!-- Round 68: model numbers -- filled in by the Service Call Checklist too. -->
-          <div class="field-row">
-            <div class="field"><label>Condenser Model #</label><input type="text" id="jbd-sys-cond-model" autocapitalize="characters"></div>
-            <div class="field"><label>Coil Model #</label><input type="text" id="jbd-sys-coil-model" autocapitalize="characters"></div>
+          <div class="jb-eq-fields" hidden>
+            <div class="field-row">
+              <div class="field"><label>Manufacturer</label><input type="text" class="jb-eq-brand"></div>
+              <div class="field"><label>Model</label><input type="text" class="jb-eq-model"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Serial Number</label><input type="text" class="jb-eq-serial"></div>
+              <div class="field"><label>Refrigerant</label><input type="text" class="jb-eq-refrigerant"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Tonnage</label><input type="number" step="0.5" class="jb-eq-tonnage"></div>
+              <div class="field"><label>Install Year</label><input type="number" class="jb-eq-installyear"></div>
+            </div>
+            <div class="field"><label>Warranty Status</label><select class="jb-eq-warranty">
+              <option value="unknown">Unknown</option><option value="active">Active</option><option value="expired">Expired</option>
+            </select></div>
           </div>
-          <div class="field-row">
-            <div class="field"><label>Fan Coil Model #</label><input type="text" id="jbd-sys-fc-model" autocapitalize="characters"></div>
-            <div class="field"><label>Furnace Model #</label><input type="text" id="jbd-sys-furn-model" autocapitalize="characters"></div>
+        </div>
+        <div class="jb-eq-block" data-eqtype="coil">
+          <div class="jb-eq-head">
+            <button type="button" class="btn btn-ghost btn-sm jb-eq-toggle-btn">+ Add Coil</button>
+            <button type="button" class="jb-eq-lock-btn" hidden></button>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
-            <button type="button" class="btn btn-ghost btn-sm" id="jbd-sys-save-btn">Save System</button>
-            <span id="jbd-sys-status" class="muted" style="font-size:.82rem"></span>
+          <div class="jb-eq-fields" hidden>
+            <div class="field-row">
+              <div class="field"><label>Manufacturer</label><input type="text" class="jb-eq-brand"></div>
+              <div class="field"><label>Model</label><input type="text" class="jb-eq-model"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Serial Number</label><input type="text" class="jb-eq-serial"></div>
+              <div class="field"><label>Refrigerant</label><input type="text" class="jb-eq-refrigerant"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Tonnage</label><input type="number" step="0.5" class="jb-eq-tonnage"></div>
+              <div class="field"><label>Install Year</label><input type="number" class="jb-eq-installyear"></div>
+            </div>
+            <div class="field"><label>Warranty Status</label><select class="jb-eq-warranty">
+              <option value="unknown">Unknown</option><option value="active">Active</option><option value="expired">Expired</option>
+            </select></div>
           </div>
+        </div>
+        <div class="jb-eq-block" data-eqtype="furnace">
+          <div class="jb-eq-head">
+            <button type="button" class="btn btn-ghost btn-sm jb-eq-toggle-btn">+ Add Furnace / Air Handler</button>
+            <button type="button" class="jb-eq-lock-btn" hidden></button>
+          </div>
+          <div class="jb-eq-fields" hidden>
+            <div class="field-row">
+              <div class="field"><label>Manufacturer</label><input type="text" class="jb-eq-brand"></div>
+              <div class="field"><label>Model</label><input type="text" class="jb-eq-model"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Serial Number</label><input type="text" class="jb-eq-serial"></div>
+              <div class="field"><label>Refrigerant</label><input type="text" class="jb-eq-refrigerant"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Tonnage</label><input type="number" step="0.5" class="jb-eq-tonnage"></div>
+              <div class="field"><label>Install Year</label><input type="number" class="jb-eq-installyear"></div>
+            </div>
+            <div class="field"><label>Warranty Status</label><select class="jb-eq-warranty">
+              <option value="unknown">Unknown</option><option value="active">Active</option><option value="expired">Expired</option>
+            </select></div>
+          </div>
+        </div>
         </div>
 
         <!-- Round 42 (2026-09-19): Event History -- every visit against
@@ -507,83 +553,6 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
             <div class="field"><label>State</label><input type="text" id="jbd-state" maxlength="2" style="text-transform:uppercase"></div>
             <div class="field"><label>ZIP</label><input type="text" id="jbd-zip"></div>
           </div>
-        </div>
-
-        <div class="drawer-section">
-          <h4>
-            Equipment
-            <a class="btn btn-ghost btn-sm" id="jbd-eq-bom-btn" href="#" target="_blank" rel="noopener">🧰 Bill of Material</a>
-          </h4>
-
-        <div class="jb-eq-block" data-eqtype="condenser">
-          <div class="jb-eq-head">
-            <button type="button" class="btn btn-ghost btn-sm jb-eq-toggle-btn">+ Add Condenser</button>
-            <button type="button" class="jb-eq-lock-btn" hidden></button>
-          </div>
-          <div class="jb-eq-fields" hidden>
-            <div class="field-row">
-              <div class="field"><label>Manufacturer</label><input type="text" class="jb-eq-brand"></div>
-              <div class="field"><label>Model</label><input type="text" class="jb-eq-model"></div>
-            </div>
-            <div class="field-row">
-              <div class="field"><label>Serial Number</label><input type="text" class="jb-eq-serial"></div>
-              <div class="field"><label>Refrigerant</label><input type="text" class="jb-eq-refrigerant"></div>
-            </div>
-            <div class="field-row">
-              <div class="field"><label>Tonnage</label><input type="number" step="0.5" class="jb-eq-tonnage"></div>
-              <div class="field"><label>Install Year</label><input type="number" class="jb-eq-installyear"></div>
-            </div>
-            <div class="field"><label>Warranty Status</label><select class="jb-eq-warranty">
-              <option value="unknown">Unknown</option><option value="active">Active</option><option value="expired">Expired</option>
-            </select></div>
-          </div>
-        </div>
-        <div class="jb-eq-block" data-eqtype="coil">
-          <div class="jb-eq-head">
-            <button type="button" class="btn btn-ghost btn-sm jb-eq-toggle-btn">+ Add Coil</button>
-            <button type="button" class="jb-eq-lock-btn" hidden></button>
-          </div>
-          <div class="jb-eq-fields" hidden>
-            <div class="field-row">
-              <div class="field"><label>Manufacturer</label><input type="text" class="jb-eq-brand"></div>
-              <div class="field"><label>Model</label><input type="text" class="jb-eq-model"></div>
-            </div>
-            <div class="field-row">
-              <div class="field"><label>Serial Number</label><input type="text" class="jb-eq-serial"></div>
-              <div class="field"><label>Refrigerant</label><input type="text" class="jb-eq-refrigerant"></div>
-            </div>
-            <div class="field-row">
-              <div class="field"><label>Tonnage</label><input type="number" step="0.5" class="jb-eq-tonnage"></div>
-              <div class="field"><label>Install Year</label><input type="number" class="jb-eq-installyear"></div>
-            </div>
-            <div class="field"><label>Warranty Status</label><select class="jb-eq-warranty">
-              <option value="unknown">Unknown</option><option value="active">Active</option><option value="expired">Expired</option>
-            </select></div>
-          </div>
-        </div>
-        <div class="jb-eq-block" data-eqtype="furnace">
-          <div class="jb-eq-head">
-            <button type="button" class="btn btn-ghost btn-sm jb-eq-toggle-btn">+ Add Furnace</button>
-            <button type="button" class="jb-eq-lock-btn" hidden></button>
-          </div>
-          <div class="jb-eq-fields" hidden>
-            <div class="field-row">
-              <div class="field"><label>Manufacturer</label><input type="text" class="jb-eq-brand"></div>
-              <div class="field"><label>Model</label><input type="text" class="jb-eq-model"></div>
-            </div>
-            <div class="field-row">
-              <div class="field"><label>Serial Number</label><input type="text" class="jb-eq-serial"></div>
-              <div class="field"><label>Refrigerant</label><input type="text" class="jb-eq-refrigerant"></div>
-            </div>
-            <div class="field-row">
-              <div class="field"><label>Tonnage</label><input type="number" step="0.5" class="jb-eq-tonnage"></div>
-              <div class="field"><label>Install Year</label><input type="number" class="jb-eq-installyear"></div>
-            </div>
-            <div class="field"><label>Warranty Status</label><select class="jb-eq-warranty">
-              <option value="unknown">Unknown</option><option value="active">Active</option><option value="expired">Expired</option>
-            </select></div>
-          </div>
-        </div>
         </div>
 
         <div class="drawer-section">
@@ -1027,21 +996,21 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260928e"></script>
-<script src="../assets/js/worksheet.js?v=20260928e"></script>
-<script src="../assets/js/systems-db.js?v=20260928e"></script>
-<script src="../assets/js/events-db.js?v=20260928e"></script>
-<script src="../assets/js/calendar-db.js?v=20260928e"></script>
-<script src="../assets/js/jobs-db.js?v=20260928e"></script>
-<script src="../assets/js/job-photos-db.js?v=20260928e"></script>
-<script src="../assets/js/warranty-files-db.js?v=20260928e"></script>
-<script src="../assets/js/camera-capture.js?v=20260928e"></script>
-<script src="../assets/js/print-invoice.js?v=20260928e"></script>
-<script src="../assets/js/maps-config.js?v=20260928e"></script>
-<script src="../assets/js/mileage-db.js?v=20260928e"></script>
-<script src="../assets/js/jobs.js?v=20260928e"></script>
-<script src="../assets/js/print-service-checklist.js?v=20260928e"></script>
-<script src="../assets/js/service-checklist.js?v=20260928e"></script>
-<script src="../assets/js/calendar.js?v=20260928e"></script>
+<script src="../assets/js/pricing-data.js?v=20260929a"></script>
+<script src="../assets/js/worksheet.js?v=20260929a"></script>
+<script src="../assets/js/systems-db.js?v=20260929a"></script>
+<script src="../assets/js/events-db.js?v=20260929a"></script>
+<script src="../assets/js/calendar-db.js?v=20260929a"></script>
+<script src="../assets/js/jobs-db.js?v=20260929a"></script>
+<script src="../assets/js/job-photos-db.js?v=20260929a"></script>
+<script src="../assets/js/warranty-files-db.js?v=20260929a"></script>
+<script src="../assets/js/camera-capture.js?v=20260929a"></script>
+<script src="../assets/js/print-invoice.js?v=20260929a"></script>
+<script src="../assets/js/maps-config.js?v=20260929a"></script>
+<script src="../assets/js/mileage-db.js?v=20260929a"></script>
+<script src="../assets/js/jobs.js?v=20260929a"></script>
+<script src="../assets/js/print-service-checklist.js?v=20260929a"></script>
+<script src="../assets/js/service-checklist.js?v=20260929a"></script>
+<script src="../assets/js/calendar.js?v=20260929a"></script>
 </body>
 </html>

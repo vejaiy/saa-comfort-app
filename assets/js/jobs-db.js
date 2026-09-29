@@ -1018,7 +1018,7 @@ async function saaJobsFetchLatestEquipment(customerId) {
  *  system component instead of a single generic "equipment" blob. Returns
  *  the most recent row of each type (or null if that type hasn't been
  *  added for this customer yet). */
-const SAA_EQUIPMENT_TYPES = [["condenser", "Condenser"], ["coil", "Coil"], ["furnace", "Furnace"]];
+const SAA_EQUIPMENT_TYPES = [["condenser", "Condenser"], ["coil", "Coil"], ["furnace", "Furnace / Air Handler"]];
 
 async function saaJobsFetchEquipmentByType(customerId) {
   const { data, error } = await _saaClient
@@ -1068,6 +1068,43 @@ async function saaJobsSaveEquipmentByType(customerId, equipmentType, fields) {
       if (error) throw error;
       return { ok: true, id: created.id };
     }
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+/** Round 69: partial update of one equipment record -- only the keys present
+ *  in `fields` (brand / model / serial_number / ...) are written, everything
+ *  else on the row is left alone (saaJobsSaveEquipmentByType above rewrites
+ *  every column). Creates the row when the customer has none of that type yet.
+ *  A LOCKED record is never touched (returns { ok:true, skipped:"locked" }).
+ *  Used by the Service Call Checklist to drop model numbers / OEM straight
+ *  into the Condenser / Coil / Furnace cards. */
+async function saaJobsPatchEquipmentByType(customerId, equipmentType, fields) {
+  try {
+    if (!customerId) return { ok: false, error: "No customer on this job." };
+    const { data: existing, error: findErr } = await _saaClient
+      .from("equipment")
+      .select("id,locked")
+      .eq("customer_id", customerId)
+      .eq("equipment_type", equipmentType)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (findErr) throw findErr;
+    const patch = Object.assign({}, fields, { updated_at: new Date().toISOString() });
+    if (existing && existing.length) {
+      if (existing[0].locked) return { ok: true, skipped: "locked" };
+      const { error } = await _saaClient.from("equipment").update(patch).eq("id", existing[0].id);
+      if (error) throw error;
+      return { ok: true, id: existing[0].id };
+    }
+    const { data: created, error } = await _saaClient
+      .from("equipment")
+      .insert(Object.assign({ customer_id: customerId, equipment_type: equipmentType, warranty_status: "unknown" }, patch))
+      .select("id")
+      .single();
+    if (error) throw error;
+    return { ok: true, id: created.id };
   } catch (e) {
     return { ok: false, error: (e && e.message) || String(e) };
   }
