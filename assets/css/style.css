@@ -1270,3 +1270,23 @@ tr.tl-shop-purchased td:not(.tl-shop-actions) { opacity: .6; }
 .svc-print-opt.stack { display: grid; grid-template-columns: 22px 1fr; align-items: center; column-gap: 10px; row-gap: 0; padding: 7px 12px; min-height: 0; }
 .svc-print-opt.stack input { grid-row: 1 / span 2; }
 .svc-print-opt.stack span, .svc-print-opt.stack small { grid-column: 2; text-align: left; }
+
+/* Round 76: Expenses tab on the Receipts page */
+.ex-toolbar { align-items: center; }
+.ex-toolbar select { min-height: 40px; }
+.ex-table .ex-amt { font-weight: 700; white-space: nowrap; }
+.ex-table { white-space: normal; min-width: 1000px; }
+.ex-badge-ok { background: #dff3e4; color: #1e7a3c; }
+.ex-modal { max-height: 90vh; }
+.ex-checks { display: grid; gap: 8px; margin: 6px 0 12px; }
+.ex-check { display: flex; align-items: flex-start; gap: 10px; font-size: .92rem; font-weight: 600; cursor: pointer; line-height: 1.3; min-height: 28px; }
+.ex-check input { width: 20px; height: 20px; flex: 0 0 auto; margin: 1px 0 0; }
+#ex-files-existing { display: grid; gap: 6px; margin-bottom: 8px; }
+#ex-files-existing:empty { display: none; }
+.ex-file { display: flex; align-items: center; gap: 8px; }
+.ex-file-view { flex: 1; text-align: left; min-height: 40px; }
+.ex-file-x { width: 34px; height: 34px; border-radius: 50%; border: 1px solid #f0c4c0; background: #fff; color: #b3261e; font-size: 1.1rem; cursor: pointer; padding: 0; flex: 0 0 auto; }
+.ex-delete-btn { color: #b3261e; border-color: #f0c4c0; margin-left: auto; }
+@media (max-width: 600px) { .ex-toolbar select, .ex-toolbar .btn-navy { flex: 1 1 45%; } }
+.ex-modal input[type="date"], .ex-modal input[type="number"], .ex-modal input[type="text"], .ex-modal select, .ex-modal input[type="file"] { width: 100%; box-sizing: border-box; min-height: 44px; font-size: 16px; }
+.ex-modal input[type="checkbox"] { width: 20px; min-height: 0; }

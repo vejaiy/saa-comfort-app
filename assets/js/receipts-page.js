@@ -328,6 +328,11 @@ function _rcRenderOverview() {
     { label: "Receipts", value: _rcMoney(s.byBucket.receipts.total), sub: `${s.byBucket.receipts.count} line items`, tab: "receipts" },
     { label: "Tools", value: _rcMoney(s.byBucket.tools.total), sub: `${s.byBucket.tools.count} line items`, tab: "tools" },
     { label: "Supplies", value: _rcMoney(s.byBucket.supplies.total), sub: `${s.byBucket.supplies.count} line items`, tab: "supplies" },
+    // Round 76: Expenses (food, travel, subcontract, ...) are tracked separately from receipt line items.
+    ...(typeof _exAll !== "undefined" && typeof saaExpensesSummary === "function" ? [(() => {
+      const es = saaExpensesSummary(_exAll);
+      return { label: "Expenses", value: _rcMoney(es.total), sub: `${es.count} expense${es.count === 1 ? "" : "s"}`, tab: "expenses" };
+    })()] : []),
     { label: "Needs Review", value: String(s.needsReview), sub: "auto-tagged, unconfirmed", tab: reviewBucket, review: true, warn: s.needsReview > 0 },
   ];
   const host = document.getElementById("rc-summary-cards");
@@ -365,6 +370,7 @@ function _rcRenderOverview() {
 
 function _rcRenderActiveTab() {
   if (_rcActiveTab === "overview") _rcRenderOverview();
+  else if (_rcActiveTab === "expenses") { if (typeof saaExpensesRender === "function") saaExpensesRender(); } // Round 76
   else _rcRenderBucketTab(_rcActiveTab);
 }
 
