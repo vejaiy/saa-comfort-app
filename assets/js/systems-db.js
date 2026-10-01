@@ -39,7 +39,12 @@ const SAA_SYSTEM_TYPE_OPTIONS = [
   "Other",
 ];
 
-const SAA_SYSTEM_ORIENTATION_OPTIONS = ["Upflow", "Downflow", "Horizontal"];
+// Round 78 (2026-10-01): Location + Orientation are drop-down picks, each with
+// a default (Attic / Horizontal Left).
+const SAA_SYSTEM_LOCATION_OPTIONS = ["Attic", "Closet", "Closet tight", "Garage", "Difficult Access"];
+const SAA_SYSTEM_LOCATION_DEFAULT = "Attic";
+const SAA_SYSTEM_ORIENTATION_OPTIONS = ["Horizontal", "Horizontal Left", "Horizontal Right", "Up-flow", "Downflow"];
+const SAA_SYSTEM_ORIENTATION_DEFAULT = "Horizontal Left";
 
 /** Every System on file for one customer, newest first — backs the
  *  Customer page's "Systems" section (each row shows its own Job #
@@ -122,8 +127,8 @@ async function saaSystemsCreateWithJob(customerId, systemFields, jobFields) {
         tonnage: (systemFields && systemFields.tonnage) || null,
         refrigerant: (systemFields && systemFields.refrigerant) || null,
         install_date: (systemFields && systemFields.installDate) || null,
-        system_location: (systemFields && systemFields.systemLocation) || null,
-        system_orientation: (systemFields && systemFields.systemOrientation) || null,
+        system_location: (systemFields && systemFields.systemLocation) || SAA_SYSTEM_LOCATION_DEFAULT,
+        system_orientation: (systemFields && systemFields.systemOrientation) || SAA_SYSTEM_ORIENTATION_DEFAULT,
         indoor_unit: (systemFields && systemFields.indoorUnit) || null,
         outdoor_unit: (systemFields && systemFields.outdoorUnit) || null,
         coil: (systemFields && systemFields.coil) || null,

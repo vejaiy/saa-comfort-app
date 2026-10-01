@@ -2676,7 +2676,20 @@ async function jbeCalculateMileageSlot(n) {
  * no re-picking Customer/System/Job, per spec. */
 
 const SAA_SYSTEM_TYPE_OPTION_PAIRS = SAA_SYSTEM_TYPE_OPTIONS.map((v) => [v, v]);
-const SAA_SYSTEM_ORIENTATION_OPTION_PAIRS = [["", "—"]].concat(SAA_SYSTEM_ORIENTATION_OPTIONS.map((v) => [v, v]));
+const SAA_SYSTEM_ORIENTATION_OPTION_PAIRS = SAA_SYSTEM_ORIENTATION_OPTIONS.map((v) => [v, v]);
+const SAA_SYSTEM_LOCATION_OPTION_PAIRS = SAA_SYSTEM_LOCATION_OPTIONS.map((v) => [v, v]);
+
+/** Options for a pick list whose stored value may be older free text (e.g.
+ *  "Walkin Attic", or "Upflow" from before Round 78): an unknown stored value
+ *  is kept as an extra option so it is never silently lost. An empty value
+ *  selects the list's default. */
+function _jbPickHtml(pairs, value, def) {
+  let v = value || def;
+  if (v === "Upflow") v = "Up-flow";
+  const known = pairs.some(([pv]) => pv === v);
+  const extra = known ? "" : `<option value="${_jbEsc(v)}" selected>${_jbEsc(v)}</option>`;
+  return _jbOptionsHtml(pairs, v) + extra;
+}
 
 /** Round 69: one-line summary under the System & Equipment heading. Reads
  *  the Condenser / Coil / Furnace cards first (the one place these facts are
@@ -2703,10 +2716,10 @@ async function jbRenderSystemSection(job) {
   _jbSystem = job.system_id ? await saaSystemsFetchById(job.system_id) : null;
 
   document.getElementById("jbd-sys-type").innerHTML = `<option value="">—</option>` + _jbOptionsHtml(SAA_SYSTEM_TYPE_OPTION_PAIRS, _jbSystem ? _jbSystem.system_type : "");
-  document.getElementById("jbd-sys-orientation").innerHTML = _jbOptionsHtml(SAA_SYSTEM_ORIENTATION_OPTION_PAIRS, _jbSystem ? _jbSystem.system_orientation : "");
+  document.getElementById("jbd-sys-orientation").innerHTML = _jbPickHtml(SAA_SYSTEM_ORIENTATION_OPTION_PAIRS, _jbSystem && _jbSystem.system_orientation, SAA_SYSTEM_ORIENTATION_DEFAULT);
+  document.getElementById("jbd-sys-location").innerHTML = _jbPickHtml(SAA_SYSTEM_LOCATION_OPTION_PAIRS, _jbSystem && _jbSystem.system_location, SAA_SYSTEM_LOCATION_DEFAULT);
   document.getElementById("jbd-sys-name").value = (_jbSystem && _jbSystem.system_name) || "";
   document.getElementById("jbd-sys-install-date").value = (_jbSystem && _jbSystem.install_date) || "";
-  document.getElementById("jbd-sys-location").value = (_jbSystem && _jbSystem.system_location) || "";
   document.getElementById("jbd-sys-status").textContent = "";
   jbRenderSystemSummary();
 }

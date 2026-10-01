@@ -313,7 +313,7 @@ function _svcSetState(state, text) {
 function _svcSysValue(item, val) {
   if (val === undefined || val === null || val === "") return null;
   if (item.k === "cond.oem") return _svcOptLabel(item, val);
-  if (item.sys === "system_orientation") return val === "upflow" ? "Upflow" : val === "downflow" ? "Downflow" : "Horizontal";
+  if (item.sys === "system_orientation") return { upflow: "Up-flow", downflow: "Downflow", horizontal_left: "Horizontal Left", horizontal_right: "Horizontal Right" }[val] || "Horizontal";
   return String(val).trim() || null;
 }
 
