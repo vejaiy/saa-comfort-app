@@ -5,7 +5,7 @@
    any category you add. Filters, totals, by-category table, months,
    reimbursement tracking, receipt photos / PDFs, Excel + PDF downloads.
    Depends on receipts-db.js, expenses-db.js and receipts-page.js globals
-   (_rcEsc, _rcMoney, _rcJobOptions, _rcCsvField, _rcSwitchTab, ...).
+   (_rcEsc, _rcMoney, _rcJobOptions, _rcDownloadXlsx, _rcSwitchTab, ...).
    ============================================================ */
 
 let _exAll = [];
@@ -51,6 +51,10 @@ function _exFilters() {
     search: document.getElementById("rc-search").value,
     jobLabel: _exJobLabel,
   };
+}
+// Newest first (Round 77: descending is the default everywhere).
+function _exNewestFirst(rows) {
+  return rows.slice().sort((a, b) => (b.expense_date || "").localeCompare(a.expense_date || ""));
 }
 function _exFiltered() { return saaExpensesFilter(_exAll, _exFilters()); }
 
@@ -125,7 +129,7 @@ function saaExpensesRender() {
   document.getElementById("ex-empty").hidden = rows.length > 0;
   wrap.innerHTML = saaExpensesGroupByMonth(rows).map((m) => {
     const total = m.rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-    const sorted = m.rows.slice().sort((a, b) => (a.expense_date || "").localeCompare(b.expense_date || ""));
+    const sorted = _exNewestFirst(m.rows);
     return `
 <div class="rc-month-header" data-month="${m.key}">
   <span>${_rcEsc(m.label)} <span class="muted">(${m.rows.length} expense${m.rows.length === 1 ? "" : "s"})</span></span>
@@ -163,34 +167,70 @@ function _exPeriodLabel() {
   return sel.options[sel.selectedIndex].textContent;
 }
 
-function _exDownloadCsv() {
-  const rows = _exFiltered().slice().sort((a, b) => (a.expense_date || "").localeCompare(b.expense_date || ""));
-  const header = ["Date", "Payee", "Description", "Category", "Applies To", "Amount", "Payment Method", "Paid By",
-    "Reimbursable", "Reimbursed", "Reimbursed On", "Tax Deductible", "Tax Category", "Notes"];
-  const lines = [header.map(_rcCsvField).join(",")];
-  let total = 0;
-  rows.forEach((e) => {
-    total += Number(e.amount) || 0;
-    lines.push([
-      _exFullDate(e.expense_date), e.vendor, e.description, e.category, _exAppliesTo(e), e.amount, e.payment_method, e.paid_by,
-      e.reimbursable ? "Yes" : "No", e.reimbursable ? (e.reimbursed ? "Yes" : "No") : "", e.reimbursed_on ? _exFullDate(e.reimbursed_on) : "",
-      e.tax_deductible ? "Yes" : "No", e.tax_category, e.notes,
-    ].map(_rcCsvField).join(","));
-  });
-  if (rows.length) lines.push(["", "", "", "", "Total", total.toFixed(2), "", "", "", "", "", "", "", ""].join(","));
-  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `SAA-expenses-${_exPeriodLabel().replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+// The Expenses tab's period dropdown as a date-key prefix + label.
+function _exPeriodSpec() {
+  const v = document.getElementById("ex-f-period").value;
+  const now = new Date();
+  const ym = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  if (v === "this_month") { const k = ym(now); return { prefix: k, label: saaReceiptMonthLabel(k) }; }
+  if (v === "last_month") { const k = ym(new Date(now.getFullYear(), now.getMonth() - 1, 1)); return { prefix: k, label: saaReceiptMonthLabel(k) }; }
+  if (v === "this_year") { const k = String(now.getFullYear()); return { prefix: k, label: k }; }
+  return { prefix: "", label: "All time" };
+}
+
+// The Expenses sheet of the Excel workbook. rowsOverride = already-filtered
+// rows (the Expenses tab's own filters); otherwise every expense in the
+// period (honouring the page's search box).
+function saaExpensesBuildSheet(spec, rowsOverride) {
+  let rows = rowsOverride;
+  if (!rows) {
+    const search = (document.getElementById("rc-search") || {}).value || "";
+    rows = saaExpensesFilter(_exAll, { search, jobLabel: _exJobLabel });
+    if (spec.prefix) rows = rows.filter((e) => (e.expense_date || "").startsWith(spec.prefix));
+  }
+  rows = _exNewestFirst(rows);
+  const yn = (b) => (b ? "Yes" : "No");
+  const flags = rows.map((e) => (saaExpenseOwed(e) ? "warn" : null));
+  return {
+    name: "Expenses",
+    tabColor: "7030A0",
+    title: `SAA Comfort Air LLC \u2014 ${spec.label} Expenses`,
+    subtitle: `Period: ${spec.label}   |   Generated ${saaXlsxTodayLabel()}   |   ${rows.length} expense${rows.length === 1 ? "" : "s"}, newest first   |   Yellow = owed back to whoever paid personally`,
+    freezeCols: 2,
+    totals: true,
+    emptyText: `No expenses for ${spec.label}.`,
+    columns: [
+      { header: "Date", width: 12.5, type: "date" },
+      { header: "Payee", width: 22 },
+      { header: "Description", width: 40, type: "wrap" },
+      { header: "Category", width: 22 },
+      { header: "Applies To", width: 30 },
+      { header: "Amount", width: 13, type: "money", total: true },
+      { header: "Paid By", width: 20 },
+      { header: "Payment Method", width: 18 },
+      { header: "Reimbursable", width: 13, type: "center" },
+      { header: "Reimbursed", width: 12, type: "center" },
+      { header: "Reimbursed On", width: 13.5, type: "date" },
+      { header: "Tax Deductible", width: 13, type: "center" },
+      { header: "Tax Category", width: 22 },
+      { header: "Notes", width: 36, type: "wrap" },
+    ],
+    rows: rows.map((e) => [
+      e.expense_date, e.vendor, e.description, e.category, _exAppliesTo(e), e.amount, e.paid_by, e.payment_method,
+      yn(e.reimbursable), e.reimbursable ? yn(e.reimbursed) : "", e.reimbursed_on, yn(e.tax_deductible), e.tax_category, e.notes,
+    ]),
+    flags,
+  };
+}
+
+// Expenses-tab button: the same 4-tab workbook, Expenses tab first, using the
+// Expenses tab's own filters for that sheet.
+function _exDownloadXlsx() {
+  _rcDownloadXlsx(_exPeriodSpec(), { first: "expenses", expenseRows: _exFiltered() });
 }
 
 function _exDownloadPdf() {
-  const rows = _exFiltered().slice().sort((a, b) => (a.expense_date || "").localeCompare(b.expense_date || ""));
+  const rows = _exNewestFirst(_exFiltered());
   printReceipts({
     bucketLabel: "Expenses",
     periodLabel: _exPeriodLabel(),
@@ -394,7 +434,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!document.getElementById("ex-overlay")) return;
   document.getElementById("ex-add-btn").addEventListener("click", () => _exOpenModal(null));
   ["ex-f-period", "ex-f-category", "ex-f-scope", "ex-f-owed"].forEach((id) => document.getElementById(id).addEventListener("change", saaExpensesRender));
-  document.getElementById("ex-dl-csv").addEventListener("click", _exDownloadCsv);
+  document.getElementById("ex-dl-xlsx").addEventListener("click", _exDownloadXlsx);
   document.getElementById("ex-dl-pdf").addEventListener("click", _exDownloadPdf);
   document.getElementById("rc-clear-btn").addEventListener("click", () => {
     document.getElementById("ex-f-period").value = "all";

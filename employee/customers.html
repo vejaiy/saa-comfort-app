@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Customers | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260930a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261001a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260930a"></script>
-<script src="../assets/js/supabase-config.js?v=20260930a"></script>
-<script src="../assets/js/auth.js?v=20260930a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261001a"></script>
+<script src="../assets/js/supabase-config.js?v=20261001a"></script>
+<script src="../assets/js/auth.js?v=20261001a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -149,10 +149,11 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260930a"></script>
-<script src="../assets/js/worksheet.js?v=20260930a"></script>
-<script src="../assets/js/jobs-db.js?v=20260930a"></script>
-<script src="../assets/js/customers-db.js?v=20260930a"></script>
+<script src="../assets/js/pricing-data.js?v=20261001a"></script>
+<script src="../assets/js/worksheet.js?v=20261001a"></script>
+<script src="../assets/js/xlsx-export.js?v=20261001a"></script>
+<script src="../assets/js/jobs-db.js?v=20261001a"></script>
+<script src="../assets/js/customers-db.js?v=20261001a"></script>
 <script>
   function _custEsc(s) {
     return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -355,37 +356,34 @@
     renderCustomers();
   });
 
-  function _custCsvField(v) {
-    const s = String(v == null ? "" : v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  }
   document.getElementById("cust-download-btn").addEventListener("click", () => {
-    const header = ["Name", "Phone", "Email", "Billing Address", "City", "State", "Zip", "System 1 Tonnage", "System 2 Tonnage", "Other Systems", "Added"];
-    const lines = [header.map(_custCsvField).join(",")];
-    _custLastRows.forEach((c) => {
-      lines.push([
-        [c.first_name, c.last_name].filter(Boolean).join(" "),
-        c.phone ? saaFormatPhone(c.phone) : "",
-        c.email || "",
-        c.billing_address || "",
-        c.billing_city || "",
-        c.billing_state || "",
-        c.billing_zip || "",
-        (c.activeSystems && c.activeSystems[0] && c.activeSystems[0].tonnage_value) || "",
-        (c.activeSystems && c.activeSystems[1] && c.activeSystems[1].tonnage_value) || "",
-        Math.max(0, ((c.activeSystems || []).length) - 2),
-        (c.created_at || "").slice(0, 10),
-      ].map(_custCsvField).join(","));
-    });
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `SAA-customers-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    const rows = _custLastRows.map((c) => [
+      [c.first_name, c.last_name].filter(Boolean).join(" "),
+      c.phone ? saaFormatPhone(c.phone) : "",
+      c.email || "",
+      c.billing_address || "",
+      c.billing_city || "",
+      c.billing_state || "",
+      c.billing_zip || "",
+      (c.activeSystems && c.activeSystems[0] && c.activeSystems[0].tonnage_value) || "",
+      (c.activeSystems && c.activeSystems[1] && c.activeSystems[1].tonnage_value) || "",
+      Math.max(0, ((c.activeSystems || []).length) - 2),
+      (c.created_at || "").slice(0, 10),
+    ]);
+    saaXlsxDownload("SAA-customers-" + saaXlsxStamp(), [{
+      name: "Customers", tabColor: "2F5496",
+      title: "SAA Comfort Air LLC — Customers",
+      subtitle: "Generated " + saaXlsxTodayLabel() + "   |   " + rows.length + " customer" + (rows.length === 1 ? "" : "s") + " (as filtered on screen)",
+      freezeCols: 1, emptyText: "No customers match the current search.",
+      columns: [
+        { header: "Name", width: 26 }, { header: "Phone", width: 16, type: "center" }, { header: "Email", width: 30 },
+        { header: "Billing Address", width: 34 }, { header: "City", width: 16 }, { header: "State", width: 8, type: "center" },
+        { header: "Zip", width: 9, type: "center" }, { header: "System 1 Tonnage", width: 12, type: "center" },
+        { header: "System 2 Tonnage", width: 12, type: "center" }, { header: "Other Systems", width: 10, type: "int" },
+        { header: "Added", width: 13, type: "date" },
+      ],
+      rows,
+    }]);
   });
 
   (async function init() {

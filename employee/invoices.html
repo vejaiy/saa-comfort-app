@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Invoices | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260930a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261001a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260930a"></script>
-<script src="../assets/js/supabase-config.js?v=20260930a"></script>
-<script src="../assets/js/auth.js?v=20260930a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261001a"></script>
+<script src="../assets/js/supabase-config.js?v=20261001a"></script>
+<script src="../assets/js/auth.js?v=20261001a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -87,11 +87,12 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260930a"></script>
-<script src="../assets/js/worksheet.js?v=20260930a"></script>
-<script src="../assets/js/jobs-db.js?v=20260930a"></script>
-<script src="../assets/js/events-db.js?v=20260930a"></script>
-<script src="../assets/js/invoices-db.js?v=20260930a"></script>
+<script src="../assets/js/pricing-data.js?v=20261001a"></script>
+<script src="../assets/js/worksheet.js?v=20261001a"></script>
+<script src="../assets/js/xlsx-export.js?v=20261001a"></script>
+<script src="../assets/js/jobs-db.js?v=20261001a"></script>
+<script src="../assets/js/events-db.js?v=20261001a"></script>
+<script src="../assets/js/invoices-db.js?v=20261001a"></script>
 <script>
   // Same document-status labels the Job Card's own Invoice Status select
   // uses (_jbInvoiceLabel in jobs.js) -- kept as a local copy here rather
@@ -194,37 +195,38 @@
 
   // Same CSV-via-Blob approach as the Tool List / Mileage / Jobs pages --
   // opens straight into Excel, no extra library needed.
-  function _invCsvField(v) {
-    const s = String(v == null ? "" : v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  }
   document.getElementById("inv-download-btn").addEventListener("click", () => {
-    const header = ["Invoice #", "Date", "Customer", "Job / Event", "Amount", "Total Due", "Paid", "Balance", "Status", "Payment"];
-    const lines = [header.map(_invCsvField).join(",")];
-    _invLastRows.forEach((r) => {
+    const flags = [];
+    const rows = _invLastRows.map((r) => {
       const balance = (Number(r.totalDue) || 0) - (Number(r.amountPaid) || 0);
-      lines.push([
+      flags.push(balance > 0.005 ? "warn" : null);
+      return [
         r.invoice_number,
         r.issue_date || (r.created_at || "").slice(0, 10),
         r.customer ? [r.customer.first_name, r.customer.last_name].filter(Boolean).join(" ") : "",
         r.event ? (r.event.event_number || saaEventTypeLabel(r.event.event_type)) : (r.job ? (r.job.job_number || saaJobTypeLabel(r.job.job_type)) : ""),
-        fmtMoney(r.amount_total),
-        fmtMoney(r.totalDue),
-        fmtMoney(r.amountPaid),
-        fmtMoney(balance),
+        Number(r.amount_total) || 0,
+        Number(r.totalDue) || 0,
+        Number(r.amountPaid) || 0,
+        balance,
         _invStatusLabel[r.status] || r.status || "",
         _invPayLabel[r.paymentStatus] || r.paymentStatus || "",
-      ].map(_invCsvField).join(","));
+      ];
     });
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `SAA-invoices-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    saaXlsxDownload("SAA-invoices-" + saaXlsxStamp(), [{
+      name: "Invoices", tabColor: "2F5496",
+      title: "SAA Comfort Air LLC — Invoices",
+      subtitle: "Generated " + saaXlsxTodayLabel() + "   |   " + rows.length + " invoice" + (rows.length === 1 ? "" : "s") + " (as filtered on screen)   |   Yellow = balance still due",
+      freezeCols: 1, totals: true, emptyText: "No invoices match the current filters.",
+      columns: [
+        { header: "Invoice #", width: 16 }, { header: "Date", width: 13, type: "date" }, { header: "Customer", width: 26 },
+        { header: "Job / Event", width: 20 }, { header: "Amount", width: 13, type: "money", total: true },
+        { header: "Total Due", width: 13, type: "money", total: true }, { header: "Paid", width: 13, type: "money", total: true },
+        { header: "Balance", width: 13, type: "money", total: true }, { header: "Status", width: 14, type: "center" },
+        { header: "Payment", width: 14, type: "center" },
+      ],
+      rows, flags,
+    }]);
   });
 
   renderInvoices();

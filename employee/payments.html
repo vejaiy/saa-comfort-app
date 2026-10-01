@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Payments | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260930a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261001a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260930a"></script>
-<script src="../assets/js/supabase-config.js?v=20260930a"></script>
-<script src="../assets/js/auth.js?v=20260930a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261001a"></script>
+<script src="../assets/js/supabase-config.js?v=20261001a"></script>
+<script src="../assets/js/auth.js?v=20261001a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -88,10 +88,11 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260930a"></script>
-<script src="../assets/js/worksheet.js?v=20260930a"></script>
-<script src="../assets/js/jobs-db.js?v=20260930a"></script>
-<script src="../assets/js/payments-db.js?v=20260930a"></script>
+<script src="../assets/js/pricing-data.js?v=20261001a"></script>
+<script src="../assets/js/worksheet.js?v=20261001a"></script>
+<script src="../assets/js/xlsx-export.js?v=20261001a"></script>
+<script src="../assets/js/jobs-db.js?v=20261001a"></script>
+<script src="../assets/js/payments-db.js?v=20261001a"></script>
 <script>
   function _payEsc(s) {
     return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -165,34 +166,29 @@
 
   // Same CSV-via-Blob approach as the Tool List / Mileage / Jobs / Invoices
   // pages -- opens straight into Excel, no extra library needed.
-  function _payCsvField(v) {
-    const s = String(v == null ? "" : v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  }
   document.getElementById("pay-download-btn").addEventListener("click", () => {
-    const header = ["Date", "Customer", "Job", "Invoice #", "Amount", "Method", "Reference #", "Notes"];
-    const lines = [header.map(_payCsvField).join(",")];
-    _payLastRows.forEach((r) => {
-      lines.push([
-        r.payment_date,
-        r.customer ? [r.customer.first_name, r.customer.last_name].filter(Boolean).join(" ") : "",
-        r.job ? (r.job.job_number || saaJobTypeLabel(r.job.job_type)) : "",
-        r.invoice ? r.invoice.invoice_number : "",
-        fmtMoney(r.amount),
-        r.method,
-        r.reference_number,
-        r.notes,
-      ].map(_payCsvField).join(","));
-    });
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `SAA-payments-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    const rows = _payLastRows.map((r) => [
+      r.payment_date,
+      r.customer ? [r.customer.first_name, r.customer.last_name].filter(Boolean).join(" ") : "",
+      r.job ? (r.job.job_number || saaJobTypeLabel(r.job.job_type)) : "",
+      r.invoice ? r.invoice.invoice_number : "",
+      Number(r.amount) || 0,
+      r.method,
+      r.reference_number,
+      r.notes,
+    ]);
+    saaXlsxDownload("SAA-payments-" + saaXlsxStamp(), [{
+      name: "Payments", tabColor: "548235",
+      title: "SAA Comfort Air LLC — Payments",
+      subtitle: "Generated " + saaXlsxTodayLabel() + "   |   " + rows.length + " payment" + (rows.length === 1 ? "" : "s") + " (as filtered on screen)",
+      freezeCols: 1, totals: true, emptyText: "No payments match the current filters.",
+      columns: [
+        { header: "Date", width: 13, type: "date" }, { header: "Customer", width: 26 }, { header: "Job", width: 20 },
+        { header: "Invoice #", width: 16 }, { header: "Amount", width: 13, type: "money", total: true },
+        { header: "Method", width: 16, type: "center" }, { header: "Reference #", width: 18 }, { header: "Notes", width: 40, type: "wrap" },
+      ],
+      rows,
+    }]);
   });
 
   renderPayments();

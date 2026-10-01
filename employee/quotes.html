@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quotes | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260930a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261001a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260930a"></script>
-<script src="../assets/js/supabase-config.js?v=20260930a"></script>
-<script src="../assets/js/auth.js?v=20260930a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261001a"></script>
+<script src="../assets/js/supabase-config.js?v=20261001a"></script>
+<script src="../assets/js/auth.js?v=20261001a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -95,10 +95,11 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260930a"></script>
-<script src="../assets/js/worksheet.js?v=20260930a"></script>
-<script src="../assets/js/jobs-db.js?v=20260930a"></script>
-<script src="../assets/js/quotes-db.js?v=20260930a"></script>
+<script src="../assets/js/pricing-data.js?v=20261001a"></script>
+<script src="../assets/js/worksheet.js?v=20261001a"></script>
+<script src="../assets/js/xlsx-export.js?v=20261001a"></script>
+<script src="../assets/js/jobs-db.js?v=20261001a"></script>
+<script src="../assets/js/quotes-db.js?v=20261001a"></script>
 <script>
   // Round 44: quote status isn't editable from this list (same "read here,
   // edit on the worksheet" split as the Invoices list) -- a plain label
@@ -191,34 +192,29 @@
     renderQuotes();
   });
 
-  function _qCsvField(v) {
-    const s = String(v == null ? "" : v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  }
   document.getElementById("q-download-btn").addEventListener("click", () => {
-    const header = ["Quote #", "Date", "Customer", "Type", "Job Address", "Linked Job", "Total", "Status"];
-    const lines = [header.map(_qCsvField).join(",")];
-    _qLastRows.forEach((q) => {
-      lines.push([
-        q.quote_number,
-        (q.created_at || "").slice(0, 10),
-        q.customer ? [q.customer.first_name, q.customer.last_name].filter(Boolean).join(" ") : "",
-        saaJobTypeLabel(q.quote_type),
-        q.job_address || "",
-        q.job ? (q.job.job_number || saaJobTypeLabel(q.job.job_type)) : "",
-        fmtMoney(q.total),
-        _qStatusLabel[q.status] || q.status || "",
-      ].map(_qCsvField).join(","));
-    });
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `SAA-quotes-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    const rows = _qLastRows.map((q) => [
+      q.quote_number,
+      (q.created_at || "").slice(0, 10),
+      q.customer ? [q.customer.first_name, q.customer.last_name].filter(Boolean).join(" ") : "",
+      saaJobTypeLabel(q.quote_type),
+      q.job_address || "",
+      q.job ? (q.job.job_number || saaJobTypeLabel(q.job.job_type)) : "",
+      Number(q.total) || 0,
+      _qStatusLabel[q.status] || q.status || "",
+    ]);
+    saaXlsxDownload("SAA-quotes-" + saaXlsxStamp(), [{
+      name: "Quotes", tabColor: "2F5496",
+      title: "SAA Comfort Air LLC — Quotes",
+      subtitle: "Generated " + saaXlsxTodayLabel() + "   |   " + rows.length + " quote" + (rows.length === 1 ? "" : "s") + " (as filtered on screen)",
+      freezeCols: 1, totals: true, emptyText: "No quotes match the current filters.",
+      columns: [
+        { header: "Quote #", width: 16 }, { header: "Date", width: 13, type: "date" }, { header: "Customer", width: 26 },
+        { header: "Type", width: 22 }, { header: "Job Address", width: 36, type: "wrap" }, { header: "Linked Job", width: 18 },
+        { header: "Total", width: 14, type: "money", total: true }, { header: "Status", width: 14, type: "center" },
+      ],
+      rows,
+    }]);
   });
 
   (async function init() {

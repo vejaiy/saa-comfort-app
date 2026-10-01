@@ -146,11 +146,6 @@ async function _mpLoadEntries() {
 
 let _mpLastTaxSummary = null;
 
-function _mpCsvField(v) {
-  const s = String(v == null ? "" : v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 async function _mpRunTaxSummary() {
   const yearInput = document.getElementById("mp-tax-year");
   const resultsEl = document.getElementById("mp-tax-results");
@@ -194,18 +189,17 @@ async function _mpRunTaxSummary() {
 function _mpDownloadTaxCsv() {
   if (!_mpLastTaxSummary) return;
   const { year, rows, grandTotal, tripCountTotal } = _mpLastTaxSummary;
-  const lines = [["Technician", "Trips", "Total Miles"].join(",")];
-  rows.forEach((r) => lines.push([_mpCsvField(r.technicianName), r.tripCount, r.miles.toFixed(1)].join(",")));
-  lines.push([_mpCsvField("Company Total"), tripCountTotal, grandTotal.toFixed(1)].join(","));
-  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `SAA-mileage-tax-summary-${year}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  saaXlsxDownload("SAA-mileage-tax-summary-" + year, [{
+    name: "Mileage " + year, tabColor: "548235",
+    title: "SAA Comfort Air LLC \u2014 " + year + " Mileage Tax Summary",
+    subtitle: "Generated " + saaXlsxTodayLabel() + "   |   miles by technician, most miles first",
+    totals: true,
+    columns: [
+      { header: "Technician", width: 28 }, { header: "Trips", width: 10, type: "int", total: true },
+      { header: "Total Miles", width: 14, type: "num", total: true },
+    ],
+    rows: rows.map((r) => [r.technicianName, r.tripCount, Math.round(r.miles * 10) / 10]),
+  }]);
 }
 
 document.addEventListener("DOMContentLoaded", async () => {

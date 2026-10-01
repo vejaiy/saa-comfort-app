@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Furnace Change | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260930a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261001a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260930a"></script>
-<script src="../assets/js/supabase-config.js?v=20260930a"></script>
-<script src="../assets/js/auth.js?v=20260930a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261001a"></script>
+<script src="../assets/js/supabase-config.js?v=20261001a"></script>
+<script src="../assets/js/auth.js?v=20261001a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -67,8 +67,9 @@
 <div id="ws-table"></div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260930a"></script>
-<script src="../assets/js/worksheet.js?v=20260930a"></script>
+<script src="../assets/js/pricing-data.js?v=20261001a"></script>
+<script src="../assets/js/worksheet.js?v=20261001a"></script>
+<script src="../assets/js/xlsx-export.js?v=20261001a"></script>
 <script>
   // Round 41 (2026-09-18), per Vijayan's reference spreadsheet: added a
   // Configuration picker -- see the configOptions doc comment on
@@ -98,16 +99,11 @@
   // includedFirst layout (Included, Item, Category, Unit, Qty, Unit $,
   // Ext.), and the filename includes the currently-selected Configuration
   // so an exported file is traceable to which parts list it came from.
-  function _wsCsvField(v) {
-    const s = String(v == null ? "" : v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  }
   document.getElementById('ws-download-btn').addEventListener('click', () => {
     const mountEl = document.getElementById('ws-table');
-    const header = ["Included", "Item", "Category", "Unit", "Qty", "Unit $", "Ext."];
-    const lines = [header.map(_wsCsvField).join(",")];
+    const rows = [], flags = [];
     mountEl.querySelectorAll("tbody tr[data-row]").forEach((tr) => {
-      const included = tr.querySelector(".row-toggle").checked ? "Yes" : "No";
+      const on = tr.querySelector(".row-toggle").checked;
       const itemInput = tr.querySelector(".item-input");
       let item;
       if (itemInput) {
@@ -121,20 +117,25 @@
       const catInput = tr.querySelector(".cat-input");
       const category = catInput ? catInput.value : (tr.children[2].textContent || "").trim();
       const unit = (tr.children[3].textContent || "").trim();
-      const qty = tr.querySelector(".qty").value;
-      const price = tr.querySelector(".price").value;
-      const ext = tr.querySelector(".ext").textContent.trim();
-      lines.push([included, item, category, unit, qty, price, ext].map(_wsCsvField).join(","));
+      const qty = Number(tr.querySelector(".qty").value) || 0;
+      const price = Number(tr.querySelector(".price").value) || 0;
+      const ext = Number(String(tr.querySelector(".ext").textContent).replace(/[^0-9.\-]/g, "")) || 0;
+      rows.push([on ? "Yes" : "No", item, category, unit, qty, price, ext]);
+      flags.push(on ? null : "mute");
     });
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `SAA-furnace-change-${wsTable.getConfigValue() || "config"}-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    const config = wsTable.getConfigValue() || "config";
+    saaXlsxDownload("SAA-furnace-change-" + config + "-" + saaXlsxStamp(), [{
+      name: "Worksheet", tabColor: "C55A11",
+      title: "SAA Comfort Air LLC — Furnace Change (" + config + ")",
+      subtitle: "Generated " + saaXlsxTodayLabel() + "   |   " + rows.length + " lines   |   Grey = not included (left out of the total)",
+      freezeCols: 2, totals: true, totalIf: { col: 0, equals: "Yes" },
+      columns: [
+        { header: "Included", width: 10, type: "center" }, { header: "Item", width: 50, type: "wrap" }, { header: "Category", width: 22 },
+        { header: "Unit", width: 9, type: "center" }, { header: "Qty", width: 9, type: "int" },
+        { header: "Unit $", width: 13, type: "money" }, { header: "Ext.", width: 14, type: "money", total: true },
+      ],
+      rows, flags,
+    }]);
   });
 </script>
 </body>

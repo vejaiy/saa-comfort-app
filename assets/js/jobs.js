@@ -596,114 +596,85 @@ async function jbLoadAll() {
 // as two sections of one CSV file -- this app has no xlsx/multi-sheet
 // library, so a blank-line-separated section is the same pattern used
 // nowhere else yet but reads cleanly in Excel/Sheets either way).
-function _jbCsvField(v) {
-  const s = String(v == null ? "" : v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+// Round 77 (2026-10-01): the three downloads are now real, formatted .xlsx
+// files (see xlsx-export.js) -- "All" is ONE workbook with a Jobs tab and an
+// Events tab instead of two CSV sections. Dates are real Excel dates, Quote $
+// is real currency, headers are frozen, columns are sized to their content.
+
+function _jbQuoteNum(v) { return Number(v) || 0; }
+
+function _jbJobSheet(rows) {
+  const data = rows.map((j) => {
+    const amt = _jbQuoteAmount(j);
+    return [
+      _jbJobNum(j), j.created_at, j.scheduled_date, _jbCustName(j.customer),
+      j.customer && j.customer.phone ? saaFormatPhone(j.customer.phone) : "",
+      [j.job_address, j.job_city].filter(Boolean).join(", "),
+      saaJobTypeLabel(j.job_type), _jbPriorityLabel[j.priority] || j.priority || "",
+      _jbTechDisplayNames(j), _jbJobStatusLabel(j), _jbPaymentLabel[j.paymentStatus] || "",
+      _jbQuoteNum(amt != null ? amt : 0),
+    ];
+  });
+  return {
+    name: "Jobs", tabColor: "2F5496",
+    title: "SAA Comfort Air LLC \u2014 Jobs",
+    subtitle: `Generated ${saaXlsxTodayLabel()}   |   ${data.length} job${data.length === 1 ? "" : "s"} (as filtered / sorted on screen)`,
+    freezeCols: 1, totals: true, emptyText: "No jobs match the current filters.",
+    columns: [
+      { header: "Job #", width: 20 }, { header: "Date Received", width: 14, type: "date" }, { header: "Scheduled", width: 14, type: "date" },
+      { header: "Customer", width: 24 }, { header: "Phone", width: 15, type: "center" }, { header: "Service Address", width: 36, type: "wrap" },
+      { header: "Job Type", width: 22 }, { header: "Priority", width: 11, type: "center" }, { header: "Technician", width: 20 },
+      { header: "Status", width: 16, type: "center" }, { header: "Payment", width: 14, type: "center" },
+      { header: "Quote $", width: 13, type: "money", total: true },
+    ],
+    rows: data,
+  };
 }
-
-function _jbTriggerCsvDownload(lines, filenameStem) {
-  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${filenameStem}-${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-const _JB_JOBS_CSV_HEADER = ["Job #", "Date Received", "Scheduled", "Customer", "Phone", "Service Address", "Job Type", "Priority", "Technician", "Status", "Payment", "Quote $"];
-
-function _jbJobCsvRow(j) {
-  const amt = _jbQuoteAmount(j);
-  return [
-    _jbJobNum(j),
-    _jbFormatDate(j.created_at),
-    _jbFormatDate(j.scheduled_date),
-    _jbCustName(j.customer),
-    j.customer && j.customer.phone ? saaFormatPhone(j.customer.phone) : "",
-    [j.job_address, j.job_city].filter(Boolean).join(", "),
-    saaJobTypeLabel(j.job_type),
-    _jbPriorityLabel[j.priority] || j.priority || "",
-    _jbTechDisplayNames(j),
-    _jbJobStatusLabel(j),
-    _jbPaymentLabel[j.paymentStatus] || "",
-    // Round 48 follow-up (2026-09-23): matches the on-screen Quote $
-    // column -- $0.00, not blank, when this Job has no quote/invoice.
-    fmtMoney(amt != null ? amt : 0),
-  ];
-}
-
-function _jbBuildJobsCsvLines(rows) {
-  const lines = [_JB_JOBS_CSV_HEADER.map(_jbCsvField).join(",")];
-  rows.forEach((j) => lines.push(_jbJobCsvRow(j).map(_jbCsvField).join(",")));
-  return lines;
-}
-
-/** Same column order as the Jobs export -- Vijayan: "Display event columns
- *  similar to Jobs" -- but each row is one EVENT (one visit), not one Job.
- *  "Date Received" stays the parent Job's intake date (an Event doesn't
- *  have its own intake), while Scheduled/Technician/Status come from the
- *  Event's own fields (its own visit time, whoever was actually assigned
- *  to THAT visit, and that visit's own Completed/Scheduled/etc. status --
- *  not the parent Job's, since a multi-visit Job's Events can each be at a
- *  different stage). Service Address prefers the Event's own Service
- *  Address (Round 42 gave Events their own) and falls back to the Job's.
- *  Customer/Phone/Priority/Payment are Job/Customer-level facts, so every
- *  Event under the same Job repeats the same value -- but Job Type and
- *  Quote $ are each Event's OWN values (Round 48 follow-up, 2026-09-23/24:
- *  both used to repeat the parent Job's own value on every row here
- *  instead, same bug in each case -- see _jbEventQuoteAmount for Quote $;
- *  Job Type now reads the Event's own event_type via saaEventTypeLabel,
- *  same as the on-screen expand rows). Leads with Event # (mirroring
- *  "Job #" leading the Jobs export) plus the parent Job # so an Events
- *  export row can always be traced back. */
-const _JB_EVENTS_CSV_HEADER = ["Event #", "Job #", "Date Received", "Scheduled", "Customer", "Phone", "Service Address", "Job Type", "Priority", "Technician", "Status", "Payment", "Quote $"];
 
 function _jbEventTechNames(e) {
   const names = [e.technician, e.technician2, e.technician3].filter(Boolean).map((t) => t.name);
   return names.length ? names.join(", ") : "None";
 }
 
-function _jbEventCsvRow(job, e) {
-  const amt = _jbEventQuoteAmount(e);
-  const eventAddress = [e.service_address, e.service_city].filter(Boolean).join(", ");
-  return [
-    e.event_number || "",
-    _jbJobNum(job),
-    _jbFormatDate(job.created_at),
-    _jbEventTimeLabel(e.scheduled_start),
-    _jbCustName(job.customer),
+/** Same column order as the Jobs sheet -- Vijayan: "Display event columns
+ *  similar to Jobs" -- but each row is one EVENT (one visit), newest visit
+ *  first. "Date Received" is the parent Job's intake date; Scheduled /
+ *  Technician / Status / Job Type / Quote $ are the Event's own values
+ *  (see Round 48 notes); Customer / Phone / Priority / Payment are
+ *  Job-level facts repeated on every Event under that Job. */
+function _jbEventSheet(rows) {
+  const flat = [];
+  rows.forEach((job) => (job.events || []).forEach((e) => flat.push({ job, e })));
+  flat.sort((x, y) => String(y.e.scheduled_start || "").localeCompare(String(x.e.scheduled_start || "")));
+  const data = flat.map(({ job, e }) => [
+    e.event_number || "", _jbJobNum(job), job.created_at, e.scheduled_start, _jbCustName(job.customer),
     job.customer && job.customer.phone ? saaFormatPhone(job.customer.phone) : "",
-    eventAddress || [job.job_address, job.job_city].filter(Boolean).join(", "),
-    saaEventTypeLabel(e.event_type),
-    _jbPriorityLabel[job.priority] || job.priority || "",
-    _jbEventTechNames(e),
-    saaEventStatusLabel(e.event_status),
-    _jbPaymentLabel[job.paymentStatus] || "",
-    fmtMoney(amt),
-  ];
+    [e.service_address, e.service_city].filter(Boolean).join(", ") || [job.job_address, job.job_city].filter(Boolean).join(", "),
+    saaEventTypeLabel(e.event_type), _jbPriorityLabel[job.priority] || job.priority || "",
+    _jbEventTechNames(e), saaEventStatusLabel(e.event_status), _jbPaymentLabel[job.paymentStatus] || "",
+    _jbQuoteNum(_jbEventQuoteAmount(e)),
+  ]);
+  return {
+    name: "Events", tabColor: "C55A11",
+    title: "SAA Comfort Air LLC \u2014 Events",
+    subtitle: `Generated ${saaXlsxTodayLabel()}   |   ${data.length} event${data.length === 1 ? "" : "s"}, newest visit first`,
+    freezeCols: 1, totals: true, emptyText: "No events under the current filters.",
+    columns: [
+      { header: "Event #", width: 18 }, { header: "Job #", width: 20 }, { header: "Date Received", width: 14, type: "date" },
+      { header: "Scheduled", width: 21, type: "datetime" }, { header: "Customer", width: 24 }, { header: "Phone", width: 15, type: "center" },
+      { header: "Service Address", width: 36, type: "wrap" }, { header: "Job Type", width: 22 }, { header: "Priority", width: 11, type: "center" },
+      { header: "Technician", width: 20 }, { header: "Status", width: 16, type: "center" }, { header: "Payment", width: 14, type: "center" },
+      { header: "Quote $", width: 13, type: "money", total: true },
+    ],
+    rows: data,
+  };
 }
 
-function _jbBuildEventsCsvLines(rows) {
-  const lines = [_JB_EVENTS_CSV_HEADER.map(_jbCsvField).join(",")];
-  rows.forEach((j) => (j.events || []).forEach((e) => lines.push(_jbEventCsvRow(j, e).map(_jbCsvField).join(","))));
-  return lines;
-}
-
-function jbDownloadJobsCsv() {
-  _jbTriggerCsvDownload(_jbBuildJobsCsvLines(jbApplyFilters()), "SAA-jobs");
-}
-
-function jbDownloadEventsCsv() {
-  _jbTriggerCsvDownload(_jbBuildEventsCsvLines(jbApplyFilters()), "SAA-events");
-}
-
+function jbDownloadJobsCsv() { saaXlsxDownload("SAA-jobs-" + saaXlsxStamp(), [_jbJobSheet(jbApplyFilters())]); }
+function jbDownloadEventsCsv() { saaXlsxDownload("SAA-events-" + saaXlsxStamp(), [_jbEventSheet(jbApplyFilters())]); }
 function jbDownloadAllCsv() {
   const rows = jbApplyFilters();
-  const lines = ["JOBS", ..._jbBuildJobsCsvLines(rows), "", "EVENTS", ..._jbBuildEventsCsvLines(rows)];
-  _jbTriggerCsvDownload(lines, "SAA-jobs-and-events");
+  saaXlsxDownload("SAA-jobs-and-events-" + saaXlsxStamp(), [_jbJobSheet(rows), _jbEventSheet(rows)]);
 }
 
 function _jbToggleDownloadMenu(forceOpen) {

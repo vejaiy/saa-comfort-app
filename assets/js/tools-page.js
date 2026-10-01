@@ -136,37 +136,23 @@ function _tlPrintList() {
   });
 }
 
-// Same CSV-via-Blob approach as the Mileage page's tax-summary export
-// (_mpDownloadTaxCsv in mileage-page.js) -- opens straight into Excel,
-// no extra library needed.
-function _tlCsvField(v) {
-  const s = String(v == null ? "" : v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
+// Round 77: real formatted .xlsx (see xlsx-export.js), same rows as on screen.
 function _tlDownloadCsv() {
-  const header = ["Item", "Category", "Type", "Qty on Hand", "Unit", "Last Purchased", "Notes"];
-  const lines = [header.map(_tlCsvField).join(",")];
-  _tlLastInventoryRows.forEach((r) => {
-    lines.push([
-      _tlCsvField(r.item_name),
-      _tlCsvField(r.category),
-      _tlCsvField(_tlTypeLabel(r.type)),
-      _tlCsvField(r.quantity_on_hand),
-      _tlCsvField(r.unit_of_measure),
-      _tlCsvField(r.last_purchase_date),
-      _tlCsvField(r.notes),
-    ].join(","));
-  });
-  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `SAA-tool-list-${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  const rows = _tlLastInventoryRows.map((r) => [
+    r.item_name, r.category, _tlTypeLabel(r.type), r.quantity_on_hand, r.unit_of_measure, r.last_purchase_date, r.notes,
+  ]);
+  saaXlsxDownload("SAA-tool-list-" + saaXlsxStamp(), [{
+    name: "Tool List", tabColor: "C55A11",
+    title: "SAA Comfort Air LLC \u2014 Tool List",
+    subtitle: "Generated " + saaXlsxTodayLabel() + "   |   " + rows.length + " item" + (rows.length === 1 ? "" : "s") + " (as filtered on screen)",
+    freezeCols: 1, emptyText: "No tools match the current filters.",
+    columns: [
+      { header: "Item", width: 38, type: "wrap" }, { header: "Category", width: 22 }, { header: "Type", width: 14, type: "center" },
+      { header: "Qty on Hand", width: 12, type: "int" }, { header: "Unit", width: 10, type: "center" },
+      { header: "Last Purchased", width: 15, type: "date" }, { header: "Notes", width: 44, type: "wrap" },
+    ],
+    rows,
+  }]);
 }
 
 document.getElementById("tl-print-btn").addEventListener("click", _tlPrintList);

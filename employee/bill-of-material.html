@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bill of Material | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260930a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261001a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260930a"></script>
-<script src="../assets/js/supabase-config.js?v=20260930a"></script>
-<script src="../assets/js/auth.js?v=20260930a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261001a"></script>
+<script src="../assets/js/supabase-config.js?v=20261001a"></script>
+<script src="../assets/js/auth.js?v=20261001a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -116,12 +116,13 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260930a"></script>
-<script src="../assets/js/worksheet.js?v=20260930a"></script>
-<script src="../assets/js/events-db.js?v=20260930a"></script>
-<script src="../assets/js/jobs-db.js?v=20260930a"></script>
-<script src="../assets/js/bom-db.js?v=20260930a"></script>
-<script src="../assets/js/print-bom.js?v=20260930a"></script>
+<script src="../assets/js/pricing-data.js?v=20261001a"></script>
+<script src="../assets/js/worksheet.js?v=20261001a"></script>
+<script src="../assets/js/xlsx-export.js?v=20261001a"></script>
+<script src="../assets/js/events-db.js?v=20261001a"></script>
+<script src="../assets/js/jobs-db.js?v=20261001a"></script>
+<script src="../assets/js/bom-db.js?v=20261001a"></script>
+<script src="../assets/js/print-bom.js?v=20261001a"></script>
 <script>
   let _bomJob = null;
 
@@ -332,10 +333,6 @@
   // Blob approach as the Tool List / Mileage pages -- opens straight into
   // Excel. Exports exactly the itemized list currently on screen for this
   // job, in the same section order the table/print view shows.
-  function _bomCsvField(v) {
-    const s = String(v == null ? "" : v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  }
   document.getElementById("bom-download-btn").addEventListener("click", () => {
     if (!_bomJob) return;
     const items = saaBomCombinedItems(_bomJob);
@@ -345,24 +342,22 @@
       (bySection[sec] = bySection[sec] || []).push(it);
     });
     const order = BOM_SECTION_ORDER.concat(Object.keys(bySection).filter((s) => !BOM_SECTION_ORDER.includes(s)));
-    const header = ["Section", "Description", "Unit", "Qty"];
-    const lines = [header.map(_bomCsvField).join(",")];
+    const rows = [];
     order.forEach((sec) => {
-      const list = bySection[sec];
-      if (!list || !list.length) return;
-      list.forEach((it) => {
-        lines.push([sec, it.description, it.unit || "ea", it.qty].map(_bomCsvField).join(","));
-      });
+      (bySection[sec] || []).forEach((it) => rows.push([sec, it.description, it.unit || "ea", it.qty]));
     });
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `SAA-bom-${_bomEntityNum(_bomJob)}-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    const num = _bomEntityNum(_bomJob);
+    saaXlsxDownload("SAA-bom-" + num + "-" + saaXlsxStamp(), [{
+      name: "Bill of Material", tabColor: "C55A11",
+      title: "SAA Comfort Air LLC — Bill of Material " + num,
+      subtitle: "Generated " + saaXlsxTodayLabel() + "   |   " + rows.length + " item" + (rows.length === 1 ? "" : "s") + ", grouped by section",
+      emptyText: "No items on this bill of material yet.",
+      columns: [
+        { header: "Section", width: 26 }, { header: "Description", width: 56, type: "wrap" },
+        { header: "Unit", width: 9, type: "center" }, { header: "Qty", width: 9, type: "int" },
+      ],
+      rows,
+    }]);
   });
 
   document.getElementById("bom-order-btn").addEventListener("click", async () => {

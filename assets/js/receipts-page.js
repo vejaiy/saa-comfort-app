@@ -21,13 +21,19 @@ function _rcDate(s) {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 function _rcProjectLabel(r) {
-  if (r.job && r.event) return `${r.job.job_number} — ${r.event.event_number}`;
+  if (r.job && r.event) return `${r.job.job_number} / ${r.event.event_number}`;
   if (r.job) return r.job.job_number;
   if (r.customer) return `${r.customer.first_name} ${r.customer.last_name}`;
   return r.project_label || "Unassigned";
 }
 function _rcBucketLabel(b) {
   return b === "receipts" ? "Receipts" : b === "tools" ? "Tools" : b === "supplies" ? "Supplies" : (b || "");
+}
+
+// Newest first (Round 77, per Vijayan: "in webview and excel make descending
+// order as default"). Same-day rows keep a stable, predictable order.
+function _rcSortNewestFirst(rows) {
+  return rows.slice().sort((a, b) => (b.r_received_at || "").localeCompare(a.r_received_at || ""));
 }
 
 let _rcAllRows = []; // all line items
@@ -163,9 +169,9 @@ function _rcRenderBucketTab(bucket) {
   wrap.innerHTML = months.map((m) => {
     const total = m.rows.reduce((sum, r) => sum + (saaLineTotal(r) || 0), 0);
     const receiptCount = new Set(m.rows.map((r) => r.receipt_id)).size;
-    // Flat, spreadsheet-style rows sorted oldest-to-newest within the month
-    // (matches Vijayan's own tracking sheet), not grouped by receipt.
-    const sortedRows = m.rows.slice().sort((a, b) => (a.r_received_at || "").localeCompare(b.r_received_at || ""));
+    // Flat, spreadsheet-style rows, NEWEST first within the month (Round 77;
+    // the month groups themselves are newest first too), not grouped by receipt.
+    const sortedRows = _rcSortNewestFirst(m.rows);
     return `
 <div class="rc-month-header" data-month="${m.key}">
   <span>${m.label} <span class="muted">(${m.rows.length} line item${m.rows.length === 1 ? "" : "s"} / ${receiptCount} receipt${receiptCount === 1 ? "" : "s"})</span></span>
@@ -228,72 +234,103 @@ function _rcPopulateDownloadPeriod(bucket) {
   if (prev && keys.includes(prev)) valueSel.value = prev;
 }
 
-// The rows + a human period label for the selected bucket/period, sorted
-// oldest-to-newest (matches the on-screen month groups' own row order).
-function _rcSelectedExportRows(bucket) {
+// The period chosen in a bucket's "Download" dropdowns, as a date-key prefix
+// ('' = all time, 'YYYY' = a year, 'YYYY-MM' = a month) + a human label.
+function _rcPeriodSpec(bucket) {
   const typeSel = document.getElementById(`rc-dl-period-type-${bucket}`);
   const valueSel = document.getElementById(`rc-dl-period-value-${bucket}`);
   const mode = typeSel.value;
+  if (mode === "month" && valueSel.value) return { prefix: valueSel.value, label: saaReceiptMonthLabel(valueSel.value) };
+  if (mode === "year" && valueSel.value) return { prefix: valueSel.value, label: valueSel.value };
+  return { prefix: "", label: "All time" };
+}
+
+// Line items of one bucket inside a period, newest first.
+function _rcRowsForPeriod(bucket, spec) {
   let rows = _rcBucketRowsForDownload(bucket);
-  let periodLabel = "All time";
-  if (mode === "month" && valueSel.value) {
-    rows = rows.filter((r) => saaReceiptMonthKey(r) === valueSel.value);
-    periodLabel = saaReceiptMonthLabel(valueSel.value);
-  } else if (mode === "year" && valueSel.value) {
-    rows = rows.filter((r) => saaReceiptMonthKey(r).slice(0, 4) === valueSel.value);
-    periodLabel = valueSel.value;
-  }
-  rows = rows.slice().sort((a, b) => (a.r_received_at || "").localeCompare(b.r_received_at || ""));
-  return { rows, periodLabel };
+  if (spec.prefix) rows = rows.filter((r) => saaReceiptMonthKey(r).startsWith(spec.prefix));
+  return _rcSortNewestFirst(rows);
 }
 
-function _rcCsvField(v) {
-  const s = String(v == null ? "" : v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+// The rows + a human period label for the selected bucket/period, newest first
+// (matches the on-screen month groups' own row order).
+function _rcSelectedExportRows(bucket) {
+  const spec = _rcPeriodSpec(bucket);
+  return { rows: _rcRowsForPeriod(bucket, spec), periodLabel: spec.label };
 }
 
-function _rcDownloadCsv(bucket) {
-  const { rows, periodLabel } = _rcSelectedExportRows(bucket);
-  const header = ["Date", "Vendor", "Store Location", "Item Description", "Category", "Job / Project",
-    "Specification", "Qty", "Unit Price", "Item Total", "Sales Tax", "Subtotal", "Payment Method", "Receipt / Order Number"];
-  const lines = [header.map(_rcCsvField).join(",")];
-  const totals = { item_total: 0, sales_tax: 0, subtotal: 0 };
-  rows.forEach((r) => {
+/* ---- Excel workbook (Round 77): Receipts / Tools / Supplies / Expenses tabs ---- */
+
+// A line with no usable amount (phone-photo placeholder, or never filled in).
+function _rcNoAmount(r) {
+  return r.item_total == null || (Number(r.item_total) === 0 && /phone photo/i.test(r.item_description || ""));
+}
+
+function _rcLineItemSheet(bucket, rows, periodLabel) {
+  const label = _rcBucketLabel(bucket);
+  const titleWord = bucket === "receipts" ? "Purchase Receipts" : label;
+  const flags = [], flagText = [];
+  const data = rows.map((r) => {
     const subtotal = saaLineTotal(r);
-    totals.item_total += Number(r.item_total) || 0;
-    totals.sales_tax += Number(r.sales_tax) || 0;
-    totals.subtotal += subtotal || 0;
-    lines.push([
-      _rcCsvField(_rcFullDate(r.r_received_at)),
-      _rcCsvField(r.r_vendor),
-      _rcCsvField(r.r_store_location),
-      _rcCsvField(r.item_description),
-      _rcCsvField(r.category || "Uncategorized"),
-      _rcCsvField(_rcProjectLabel(r)),
-      _rcCsvField(r.specification),
-      _rcCsvField(r.qty),
-      _rcCsvField(r.unit_price),
-      _rcCsvField(r.item_total),
-      _rcCsvField(r.sales_tax),
-      _rcCsvField(subtotal),
-      _rcCsvField(r.r_payment_method),
-      _rcCsvField(r.r_receipt_number),
-    ].join(","));
+    let f = null, t = "";
+    if (r.auto_tagged) { f = "warn"; t = "Needs review"; }
+    if (_rcNoAmount(r)) { f = "warn"; t = t ? t + " / No amount" : "No amount"; }
+    if (!f && subtotal != null && subtotal < 0) { f = "neg"; t = "Return"; }
+    flags.push(f); flagText.push(t);
+    return [
+      r.r_received_at, r.r_vendor, r.r_store_location, r.item_description, r.category || "Uncategorized",
+      _rcProjectLabel(r), r.specification, r.qty, r.unit_price, r.item_total, r.sales_tax, subtotal,
+      r.r_payment_method, r.r_receipt_number, r.notes, t,
+    ];
   });
-  if (rows.length) {
-    lines.push(["", "", "", "", "", "", "", "", "Total", _rcCsvField(totals.item_total), _rcCsvField(totals.sales_tax), _rcCsvField(totals.subtotal), "", ""].join(","));
-  }
-  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  const periodSlug = periodLabel.replace(/\s+/g, "-").toLowerCase();
-  a.download = `SAA-receipts-${bucket}-${periodSlug}-${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  return {
+    name: label,
+    tabColor: bucket === "receipts" ? "2F5496" : bucket === "tools" ? "C55A11" : "548235",
+    title: `SAA Comfort Air LLC \u2014 ${periodLabel} ${titleWord}`,
+    subtitle: `Period: ${periodLabel}   |   Generated ${saaXlsxTodayLabel()}   |   ${rows.length} line item${rows.length === 1 ? "" : "s"}, newest first   |   Subtotal = Item Total + Sales Tax   |   Yellow = needs review / no amount, red = return`,
+    freezeCols: 2,
+    totals: true,
+    emptyText: `No ${label.toLowerCase()} for ${periodLabel}.`,
+    columns: [
+      { header: "Date", width: 12.5, type: "date" },
+      { header: "Vendor", width: 18 },
+      { header: "Store Location", width: 30, type: "wrap" },
+      { header: "Item Description", width: 42, type: "wrap" },
+      { header: "Category", width: 22 },
+      { header: "Job / Project", width: 34 },
+      { header: "Specification", width: 24, type: "wrap" },
+      { header: "Qty", width: 7, type: "int" },
+      { header: "Unit Price", width: 12, type: "money" },
+      { header: "Item Total", width: 13, type: "money", total: true },
+      { header: "Sales Tax", width: 11, type: "money", total: true },
+      { header: "Subtotal", width: 13, type: "money", total: true },
+      { header: "Payment Method", width: 16 },
+      { header: "Receipt / Order Number", width: 20 },
+      { header: "Notes", width: 34, type: "wrap" },
+      { header: "Flag", width: 25 },
+    ],
+    rows: data,
+    flags,
+  };
 }
+
+// One workbook with a tab per bucket + Expenses, all for one period.
+// opts.first = "expenses" puts the Expenses tab first (Expenses-tab button).
+function _rcDownloadXlsx(spec, opts) {
+  opts = opts || {};
+  const sheets = {};
+  ["receipts", "tools", "supplies"].forEach((b) => {
+    sheets[b] = _rcLineItemSheet(b, _rcRowsForPeriod(b, spec), spec.label);
+  });
+  if (typeof saaExpensesBuildSheet === "function") {
+    sheets.expenses = saaExpensesBuildSheet(spec, opts.expenseRows);
+  }
+  const order = opts.first === "expenses" ? ["expenses", "receipts", "tools", "supplies"] : ["receipts", "tools", "supplies", "expenses"];
+  saaXlsxDownload(`SAA-purchases-and-expenses-${spec.label.replace(/\s+/g, "-").toLowerCase()}-${saaXlsxStamp()}.xlsx`,
+    order.map((k) => sheets[k]).filter(Boolean));
+}
+
+function _rcDownloadExcel(bucket) { _rcDownloadXlsx(_rcPeriodSpec(bucket)); }
 
 function _rcDownloadPdf(bucket) {
   const { rows, periodLabel } = _rcSelectedExportRows(bucket);
@@ -476,7 +513,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   SAA_RECEIPT_BUCKETS.forEach((bucket) => {
     document.getElementById(`rc-dl-period-type-${bucket}`).addEventListener("change", () => _rcPopulateDownloadPeriod(bucket));
-    document.getElementById(`rc-dl-csv-${bucket}`).addEventListener("click", () => _rcDownloadCsv(bucket));
+    document.getElementById(`rc-dl-xlsx-${bucket}`).addEventListener("click", () => _rcDownloadExcel(bucket));
     document.getElementById(`rc-dl-pdf-${bucket}`).addEventListener("click", () => _rcDownloadPdf(bucket));
   });
   document.getElementById("rc-search").addEventListener("input", () => { clearTimeout(window._rcSearchT); window._rcSearchT = setTimeout(_rcLoadAll, 250); });

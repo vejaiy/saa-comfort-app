@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Receipts | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20260930a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261001a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20260930a"></script>
-<script src="../assets/js/supabase-config.js?v=20260930a"></script>
-<script src="../assets/js/auth.js?v=20260930a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261001a"></script>
+<script src="../assets/js/supabase-config.js?v=20261001a"></script>
+<script src="../assets/js/auth.js?v=20261001a"></script>
 <script>saaRequireAuth();</script>
 <header class="emp-header">
   <div class="container">
@@ -114,7 +114,7 @@
       </select>
     </label>
     <select id="rc-dl-period-value-receipts" style="display:none"></select>
-    <button type="button" class="btn btn-ghost btn-sm" id="rc-dl-csv-receipts">Download Excel</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="rc-dl-xlsx-receipts" title="One Excel file with Receipts, Tools, Supplies and Expenses tabs for the chosen period">Download Excel</button>
     <button type="button" class="btn btn-ghost btn-sm" id="rc-dl-pdf-receipts">Download PDF</button>
   </div>
   <div id="rc-months-receipts"></div>
@@ -131,7 +131,7 @@
       </select>
     </label>
     <select id="rc-dl-period-value-tools" style="display:none"></select>
-    <button type="button" class="btn btn-ghost btn-sm" id="rc-dl-csv-tools">Download Excel</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="rc-dl-xlsx-tools" title="One Excel file with Receipts, Tools, Supplies and Expenses tabs for the chosen period">Download Excel</button>
     <button type="button" class="btn btn-ghost btn-sm" id="rc-dl-pdf-tools">Download PDF</button>
   </div>
   <div id="rc-months-tools"></div>
@@ -148,7 +148,7 @@
       </select>
     </label>
     <select id="rc-dl-period-value-supplies" style="display:none"></select>
-    <button type="button" class="btn btn-ghost btn-sm" id="rc-dl-csv-supplies">Download Excel</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="rc-dl-xlsx-supplies" title="One Excel file with Receipts, Tools, Supplies and Expenses tabs for the chosen period">Download Excel</button>
     <button type="button" class="btn btn-ghost btn-sm" id="rc-dl-pdf-supplies">Download PDF</button>
   </div>
   <div id="rc-months-supplies"></div>
@@ -174,7 +174,7 @@
     </select>
     <label style="display:flex;align-items:center;gap:6px;font-size:.85rem" class="muted"><input type="checkbox" id="ex-f-owed"> Owed back only</label>
     <span style="margin-left:auto;display:flex;gap:6px">
-      <button type="button" class="btn btn-ghost btn-sm" id="ex-dl-csv">Download Excel</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="ex-dl-xlsx" title="One Excel file with Receipts, Tools, Supplies and Expenses tabs">Download Excel</button>
       <button type="button" class="btn btn-ghost btn-sm" id="ex-dl-pdf">Download PDF</button>
     </span>
   </div>
@@ -277,12 +277,13 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20260930a"></script>
-<script src="../assets/js/worksheet.js?v=20260930a"></script>
-<script src="../assets/js/receipts-db.js?v=20260930a"></script>
-<script src="../assets/js/print-receipts.js?v=20260930a"></script>
-<script src="../assets/js/receipts-page.js?v=20260930a"></script>
-<script src="../assets/js/expenses-db.js?v=20260930a"></script>
-<script src="../assets/js/expenses-page.js?v=20260930a"></script>
+<script src="../assets/js/pricing-data.js?v=20261001a"></script>
+<script src="../assets/js/worksheet.js?v=20261001a"></script>
+<script src="../assets/js/xlsx-export.js?v=20261001a"></script>
+<script src="../assets/js/receipts-db.js?v=20261001a"></script>
+<script src="../assets/js/print-receipts.js?v=20261001a"></script>
+<script src="../assets/js/receipts-page.js?v=20261001a"></script>
+<script src="../assets/js/expenses-db.js?v=20261001a"></script>
+<script src="../assets/js/expenses-page.js?v=20261001a"></script>
 </body>
 </html>
