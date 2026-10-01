@@ -490,6 +490,21 @@ async function _rcSaveEdit() {
   await _rcLoadAll();
 }
 
+async function _rcDeleteEdit() {
+  const overlay = document.getElementById("rc-edit-overlay");
+  const id = overlay.dataset.id;
+  const li = _rcAllRows.find((x) => x.id === id);
+  if (!li) return;
+  const name = li.item_description || "this line item";
+  if (!window.confirm(`Delete "${name}" permanently?\n\nThis cannot be undone.`)) return;
+  const statusEl = document.getElementById("rc-edit-status");
+  statusEl.textContent = "Deleting…";
+  const res = await saaLineItemDelete(id);
+  if (res.error) { statusEl.textContent = res.error; return; }
+  overlay.hidden = true;
+  await _rcLoadAll();
+}
+
 /* ---- Wiring ---- */
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -526,6 +541,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   document.getElementById("rc-edit-close").addEventListener("click", () => { document.getElementById("rc-edit-overlay").hidden = true; });
   document.getElementById("rc-edit-save").addEventListener("click", _rcSaveEdit);
+  document.getElementById("rc-edit-delete").addEventListener("click", _rcDeleteEdit);
 
   // The Overview tab starts marked "active" in the generated markup, but
   // every tab panel starts with the `hidden` attribute set (so a tab

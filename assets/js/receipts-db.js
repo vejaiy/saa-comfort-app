@@ -151,6 +151,31 @@ async function saaLineItemUpdate(id, patch) {
 
 // Tax-inclusive line total -- null when the amount hasn't been read yet
 // (a photo receipt pending manual entry).
+/** Round 79 (2026-10-01): permanently deletes one line item. If it was the
+ *  last line on its receipt, the receipt row (and any attached files) goes
+ *  with it so no empty receipt is left behind. Only ever called from the Edit
+ *  Line Item modal's Delete button, after the user confirms. */
+async function saaLineItemDelete(id) {
+  try {
+    const { data: li, error: e1 } = await _saaClient.from("receipt_line_items").select("id,receipt_id").eq("id", id).single();
+    if (e1) throw e1;
+    const { error: e2 } = await _saaClient.from("receipt_line_items").delete().eq("id", id);
+    if (e2) throw e2;
+    const { data: rest, error: e3 } = await _saaClient.from("receipt_line_items").select("id").eq("receipt_id", li.receipt_id).limit(1);
+    if (e3) throw e3;
+    if (!rest || !rest.length) {
+      const { data: rc } = await _saaClient.from("receipts").select("file_paths").eq("id", li.receipt_id).single();
+      const paths = (rc && rc.file_paths) || [];
+      if (paths.length) await _saaClient.storage.from("receipt-files").remove(paths);
+      const { error: e4 } = await _saaClient.from("receipts").delete().eq("id", li.receipt_id);
+      if (e4) throw e4;
+    }
+    return { ok: true };
+  } catch (e) {
+    return { error: (e && e.message) || String(e) };
+  }
+}
+
 function saaLineTotal(li) {
   if (li.item_total == null) return null;
   return Number(li.item_total) + Number(li.sales_tax || 0);
