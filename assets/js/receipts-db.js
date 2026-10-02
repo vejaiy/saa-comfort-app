@@ -117,11 +117,17 @@ async function saaReceiptsFetchEventPickerOptions() {
     .select("id, event_number, job_id, event_type, scheduled_start")
     .order("scheduled_start", { ascending: false });
   if (error) { console.error(error); return []; }
-  return (data || []).map((e) => ({
-    event_id: e.id,
-    job_id: e.job_id,
-    label: e.event_number + (e.event_type ? " — " + e.event_type : ""),
-  }));
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return (data || []).map((e) => {
+    const typeLabel = e.event_type ? (typeof saaEventTypeLabel === "function" ? saaEventTypeLabel(e.event_type) : e.event_type) : "";
+    const m = String(e.scheduled_start || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const when = m ? `${MON[+m[2] - 1]} ${+m[3]}, ${m[1]}` : "";
+    return {
+      event_id: e.id,
+      job_id: e.job_id,
+      label: e.event_number + [typeLabel, when].filter(Boolean).map((x) => " \u2014 " + x).join(""),
+    };
+  });
 }
 
 /* ---- Writes ---- */

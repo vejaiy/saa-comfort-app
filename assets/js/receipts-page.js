@@ -46,13 +46,32 @@ let _rcActiveTab = "overview";
 // still one of that Job's Events (e.g. re-opening a row that's already
 // event-linked) -- otherwise resets to blank, since a leftover Event from a
 // DIFFERENT Job never makes sense once the Job selection changes.
-function _rcRefreshEventOptionsForJob(jobId, selectedEventId) {
-  const sel = document.getElementById("rc-edit-event");
-  const matches = jobId ? _rcEventOptions.filter((o) => o.job_id === jobId) : [];
-  sel.innerHTML = `<option value="">&mdash; Not linked to a specific event &mdash;</option>` +
-    matches.map((o) => `<option value="${o.event_id}">${_rcEsc(o.label)}</option>`).join("");
-  sel.value = (selectedEventId && matches.some((o) => o.event_id === selectedEventId)) ? selectedEventId : "";
-  sel.disabled = !jobId;
+// Round 80 (2026-10-01), per Vijayan ("change to show event list"): ONE
+// Job / Event picker. Each job is listed with its own Events indented right
+// under it (newest first); picking a job links the line to the whole job,
+// picking an Event links it to that Event (and its job). Values: "<job id>"
+// or "evt:<event id>".
+function _rcFillJobEventSelect() {
+  const sel = document.getElementById("rc-edit-job");
+  let html = `<option value="">&mdash; Not linked to a job &mdash;</option>`;
+  _rcJobOptions.forEach((j) => {
+    html += `<option value="${j.job_id}">${_rcEsc(j.label)}</option>`;
+    _rcEventOptions.filter((e) => e.job_id === j.job_id).forEach((e) => {
+      html += `<option value="evt:${e.event_id}">&nbsp;&nbsp;&nbsp;&nbsp;&#8627; ${_rcEsc(e.label)}</option>`;
+    });
+  });
+  sel.innerHTML = html;
+}
+function _rcJobEventValue(jobId, eventId) {
+  if (eventId && _rcEventOptions.some((e) => e.event_id === eventId)) return "evt:" + eventId;
+  return jobId || "";
+}
+function _rcParseJobEvent(val) {
+  if (val && val.startsWith("evt:")) {
+    const ev = _rcEventOptions.find((e) => e.event_id === val.slice(4));
+    return { job_id: ev ? ev.job_id : null, event_id: ev ? ev.event_id : null };
+  }
+  return { job_id: val || null, event_id: null };
 }
 
 function _rcFilters() {
@@ -447,8 +466,7 @@ function _rcOpenEdit(id) {
   document.getElementById("rc-edit-amount").value = li.item_total == null ? "" : li.item_total;
   document.getElementById("rc-edit-tax").value = li.sales_tax == null ? "" : li.sales_tax;
   document.getElementById("rc-edit-notes").value = li.notes || "";
-  document.getElementById("rc-edit-job").value = li.job_id || "";
-  _rcRefreshEventOptionsForJob(li.job_id || "", li.event_id || "");
+  document.getElementById("rc-edit-job").value = _rcJobEventValue(li.job_id, li.event_id);
   document.getElementById("rc-edit-view-email").href = li.r_gmail_view_url || "#";
   document.getElementById("rc-edit-status").textContent = "";
   document.getElementById("rc-edit-overlay").hidden = false;
@@ -459,9 +477,8 @@ async function _rcSaveEdit() {
   const id = overlay.dataset.id;
   const statusEl = document.getElementById("rc-edit-status");
   statusEl.textContent = "Saving…";
-  const jobSel = document.getElementById("rc-edit-job");
-  const eventSel = document.getElementById("rc-edit-event");
-  const jobOpt = _rcJobOptions.find((o) => o.job_id === jobSel.value);
+  const picked = _rcParseJobEvent(document.getElementById("rc-edit-job").value);
+  const jobOpt = _rcJobOptions.find((o) => o.job_id === picked.job_id);
   const catSelVal = document.getElementById("rc-edit-category-select").value;
   const category = catSelVal === RC_NEW_CATEGORY_VALUE
     ? document.getElementById("rc-edit-category-new").value.trim()
@@ -474,13 +491,13 @@ async function _rcSaveEdit() {
     item_total: document.getElementById("rc-edit-amount").value,
     sales_tax: document.getElementById("rc-edit-tax").value,
     notes: document.getElementById("rc-edit-notes").value,
-    job_id: jobSel.value || null,
+    job_id: picked.job_id,
     // Round 51: which of that Job's own Events (visits) this line belongs
     // to, if any -- the select is already scoped to the current Job (see
     // _rcRefreshEventOptionsForJob), so its value is never a stale/foreign
     // Event id. Saving this fires the DB trigger that recalculates both
     // the Job's and the Event's Actual Material Cost automatically.
-    event_id: eventSel.value || null,
+    event_id: picked.event_id,
     customer_id: jobOpt ? jobOpt.customer_id : null,
     project_label: jobOpt ? null : undefined,
   };
@@ -512,16 +529,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     saaReceiptsFetchJobPickerOptions(),
     saaReceiptsFetchEventPickerOptions(),
   ]);
-  const jobSel = document.getElementById("rc-edit-job");
-  _rcJobOptions.forEach((o) => {
-    const opt = document.createElement("option");
-    opt.value = o.job_id;
-    opt.textContent = o.label;
-    jobSel.appendChild(opt);
-  });
-  // Changing the Job resets the Event picker to that Job's own Events --
-  // an Event from whatever Job was previously selected never carries over.
-  jobSel.addEventListener("change", () => _rcRefreshEventOptionsForJob(jobSel.value || "", ""));
+  _rcFillJobEventSelect();
 
   document.querySelectorAll("#rc-tabs .cal-view-btn").forEach((b) => {
     b.addEventListener("click", () => _rcSwitchTab(b.dataset.tab));
