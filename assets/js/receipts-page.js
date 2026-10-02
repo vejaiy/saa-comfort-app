@@ -410,18 +410,85 @@ function _rcRenderOverview() {
     });
   });
 
+  // Round 81 (2026-10-02), per Vijayan ("make each one selectable to look at
+  // details"): every By Category / By Job-Project row is tappable and opens
+  // the line items behind it right underneath; tap again to close. Open rows
+  // stay open when the page refreshes after an edit.
   const catGroups = saaReceiptsByCategory(rows);
-  document.getElementById("rc-category-tbody").innerHTML = catGroups.map((g) => `
-<tr><td>${_rcEsc(g.category)}</td><td>${g.count}</td><td>${_rcMoney(g.total)}</td></tr>`).join("")
+  document.getElementById("rc-category-tbody").innerHTML = catGroups.map((g) =>
+    _rcDrillRowHtml("cat:" + g.category, _rcEsc(g.category), g, 3, "category")).join("")
     || `<tr><td colspan="3" class="muted" style="text-align:center;padding:20px">No line items match your filters.</td></tr>`;
 
   const projGroups = saaReceiptsByProject(rows);
-  document.getElementById("rc-project-tbody").innerHTML = projGroups.map((g) => `
-<tr>
-  <td>${_rcEsc(g.label)}</td><td>${g.count}</td><td>${_rcMoney(g.total)}</td>
-  <td>${g.job_id ? `<a class="btn btn-ghost btn-sm" href="jobs.html?job=${g.job_id}">Open Job &rarr;</a>` : ""}</td>
-</tr>`).join("")
+  document.getElementById("rc-project-tbody").innerHTML = projGroups.map((g) =>
+    _rcDrillRowHtml("proj:" + g.label, _rcEsc(g.label), g, 4, "project",
+      g.job_id ? `<a class="btn btn-ghost btn-sm" href="jobs.html?job=${g.job_id}">Open Job &rarr;</a>` : "")).join("")
     || `<tr><td colspan="4" class="muted" style="text-align:center;padding:20px">No line items match your filters.</td></tr>`;
+
+  ["rc-category-tbody", "rc-project-tbody"].forEach((id) => document.getElementById(id).closest("table").classList.add("rc-drill-host"));
+  document.querySelectorAll("#rc-category-tbody .rc-drill-row, #rc-project-tbody .rc-drill-row").forEach((tr) => {
+    const toggle = () => _rcToggleDrill(tr);
+    tr.addEventListener("click", (ev) => { if (!ev.target.closest("a")) toggle(); });
+    tr.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(); } });
+  });
+  document.querySelectorAll(".rc-drill-detail .rc-edit-btn").forEach((b) => b.addEventListener("click", () => _rcOpenEdit(b.dataset.id)));
+}
+
+const _rcOpenDrills = new Set();
+
+function _rcDrillDetailHtml(g, mode) {
+  const rows = _rcSortNewestFirst(g.rows);
+  const other = mode === "category" ? "Job / Project" : "Category";
+  return `
+<div class="jobs-table-wrap rc-drill-scroll">
+  <table class="jobs-table rc-drill-table">
+    <thead><tr><th>Date</th><th>Vendor</th><th>Item Description</th><th>${other}</th><th>Type</th><th>Qty</th><th>Item Total</th><th>Sales Tax</th><th>Subtotal</th><th></th></tr></thead>
+    <tbody>${rows.map((r) => {
+      const sub = saaLineTotal(r);
+      return `<tr>
+        <td>${_rcFullDate(r.r_received_at)}</td>
+        <td>${_rcEsc(r.r_vendor) || "&mdash;"}</td>
+        <td>${_rcEsc(r.item_description)}${r.auto_tagged ? ` <span class="rc-badge rc-badge-review">needs review</span>` : ""}</td>
+        <td>${mode === "category" ? _rcEsc(_rcProjectLabel(r)) : _rcEsc(r.category || "Uncategorized")}</td>
+        <td>${_rcEsc(_rcBucketLabel(r.bucket))}</td>
+        <td>${r.qty == null ? "" : r.qty}</td>
+        <td>${r.item_total == null ? "&mdash;" : _rcMoney(r.item_total)}</td>
+        <td>${r.sales_tax == null ? "" : _rcMoney(r.sales_tax)}</td>
+        <td>${sub == null ? "&mdash;" : _rcMoney(sub)}</td>
+        <td><button type="button" class="btn btn-ghost btn-sm rc-edit-btn" data-id="${r.id}">Edit</button></td>
+      </tr>`;
+    }).join("")}</tbody>
+  </table>
+</div>`;
+}
+
+function _rcDrillRowHtml(key, labelHtml, g, colspan, mode, extraCell) {
+  const open = _rcOpenDrills.has(key);
+  const detail = `<tr class="rc-drill-detail" data-drill="${_rcEsc(key)}"${open ? "" : " hidden"}><td colspan="${colspan}">${open ? _rcDrillDetailHtml(g, mode) : ""}</td></tr>`;
+  g._mode = mode;
+  _rcDrillGroups[key] = g;
+  return `<tr class="rc-drill-row${open ? " rc-drill-open" : ""}" data-drill="${_rcEsc(key)}" tabindex="0" role="button" aria-expanded="${open}">
+  <td><span class="rc-drill-caret">&#9656;</span> ${labelHtml}</td><td>${g.count}</td><td>${_rcMoney(g.total)}</td>${extraCell != null ? `<td>${extraCell}</td>` : ""}
+</tr>${detail}`;
+}
+const _rcDrillGroups = {};
+
+function _rcToggleDrill(tr) {
+  const key = tr.dataset.drill;
+  const detail = tr.parentElement.querySelector(`.rc-drill-detail[data-drill="${CSS.escape(key)}"]`);
+  const g = _rcDrillGroups[key];
+  if (!detail || !g) return;
+  const open = detail.hidden;            // currently closed -> opening
+  if (open) {
+    detail.firstElementChild.innerHTML = _rcDrillDetailHtml(g, g._mode);
+    detail.querySelectorAll(".rc-edit-btn").forEach((b) => b.addEventListener("click", () => _rcOpenEdit(b.dataset.id)));
+    _rcOpenDrills.add(key);
+  } else {
+    _rcOpenDrills.delete(key);
+  }
+  detail.hidden = !open;
+  tr.classList.toggle("rc-drill-open", open);
+  tr.setAttribute("aria-expanded", String(open));
 }
 
 function _rcRenderActiveTab() {

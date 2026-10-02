@@ -234,14 +234,15 @@ function saaReceiptsSummary(rows) {
   return { byBucket, grandTotal, count: rows.length, needsReview };
 }
 
-// [{ category, count, total }], highest total first
+// [{ category, count, total, rows }], highest total first
 function saaReceiptsByCategory(rows) {
   const groups = {};
   rows.forEach((r) => {
     const key = r.category || "Uncategorized";
-    const g = groups[key] || (groups[key] = { category: key, count: 0, total: 0 });
+    const g = groups[key] || (groups[key] = { category: key, count: 0, total: 0, rows: [] });
     g.count += 1;
     g.total += saaLineTotal(r) || 0;
+    g.rows.push(r);
   });
   return Object.values(groups).sort((a, b) => b.total - a.total);
 }
@@ -256,10 +257,11 @@ function saaReceiptsByProject(rows) {
   rows.forEach((r) => {
     const key = r.event_id || r.job_id || r.customer_id || r.project_label || "Unassigned";
     let label = (r.job && r.job.job_number) || (r.customer && (r.customer.first_name + " " + r.customer.last_name)) || r.project_label || "Unassigned";
-    if (r.job && r.event) label += " — " + r.event.event_number;
-    const g = groups[key] || (groups[key] = { label, job_id: r.job_id || null, customer_id: r.customer_id || null, count: 0, total: 0 });
+    if (r.job && r.event) label += " / " + r.event.event_number;
+    const g = groups[key] || (groups[key] = { label, job_id: r.job_id || null, customer_id: r.customer_id || null, count: 0, total: 0, rows: [] });
     g.count += 1;
     g.total += saaLineTotal(r) || 0;
+    g.rows.push(r);
   });
   return Object.values(groups).sort((a, b) => b.total - a.total);
 }
