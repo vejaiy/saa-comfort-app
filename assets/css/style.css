@@ -1444,3 +1444,47 @@ html.saa-embed .emp-fab { display: none !important; }
 /* Round 87b: fully static menu pictures -- no hover lift/zoom/tilt either. */
 .emp-app, .emp-app:hover, .emp-app:focus-visible, .emp-app:active { transform: none !important; transition: background .15s; }
 .emp-app-pic, .emp-app-pic svg, .emp-app-pic svg * { animation: none !important; transition: none !important; transform: none !important; }
+
+/* Round 89 (2026-10-03), per Vijayan: phone calendar -- swipe between days, week strip, floating Today.
+   All keyed on html.cal-mobile (upright phone; set by calendar.js using the top window, so the Dashboard's
+   embedded calendar agrees). */
+.cal-weekstrip, .cal-fab-today { display: none; }
+html.cal-mobile body { overflow-x: hidden; }
+html.cal-mobile #cal-swipe-area { touch-action: pan-y; will-change: transform; }
+html.cal-mobile .cal-page-head p, html.cal-mobile .cal-legend + p { display: none; }
+html.cal-mobile .cal-page-head h1 { font-size: 1.4rem; margin-bottom: 0 !important; }
+html.cal-mobile .cal-page-head { margin-bottom: 8px; }
+html.cal-mobile .cal-datebar { flex-wrap: wrap; gap: 6px; margin-bottom: 8px !important; }
+html.cal-mobile .cal-datebar #cal-today-btn { display: none; }
+html.cal-mobile .cal-datebar #cal-date-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+html.cal-mobile .cal-datebar #cal-prev-btn, html.cal-mobile .cal-datebar #cal-next-btn { padding: 4px 14px; }
+html.cal-mobile .cal-datebar .cal-date-label { flex: 1 1 0; min-width: 0; text-align: center; font-size: 1rem; cursor: pointer; }
+html.cal-mobile .cal-view-toggle { flex: 1 0 100%; margin-left: 0; }
+html.cal-mobile .cal-view-btn { flex: 1; padding: 8px 0; }
+html.cal-mobile .cal-summary-strip { flex-wrap: nowrap; overflow-x: auto; margin-bottom: 8px; gap: 6px; padding-bottom: 2px; scrollbar-width: none; }
+html.cal-mobile .cal-summary-strip::-webkit-scrollbar { display: none; }
+html.cal-mobile .cal-stat { flex: 0 0 auto; padding: 4px 10px; font-size: .78rem; }
+html.cal-mobile .cal-unscheduled { padding: 8px 10px; margin-bottom: 8px; }
+html.cal-mobile .cal-unscheduled h3 { font-size: .7rem; margin-bottom: 4px; }
+/* week strip: S M T W T F S with the dates, selected day in a navy pill, today's date in orange */
+html.cal-mobile .cal-weekstrip { display: flex; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 6px 4px; margin-bottom: 8px; touch-action: pan-y; }
+html.cal-mobile .cal-weekstrip[hidden] { display: none; }
+.cal-ws-day { flex: 1 1 0; min-width: 0; border: 0; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 2px 0; cursor: pointer; font-family: inherit; color: var(--navy); }
+.cal-ws-day .dow { font-size: .66rem; font-weight: 700; color: var(--muted); }
+.cal-ws-day .num { width: 34px; height: 34px; line-height: 34px; border-radius: 50%; font-size: 1.05rem; font-weight: 700; text-align: center; }
+.cal-ws-day.is-wkend .num { color: var(--muted); }
+.cal-ws-day.is-today .num { color: var(--orange); }
+.cal-ws-day.is-sel .num { background: var(--navy); color: #fff; }
+.cal-ws-day.is-sel.is-today .num { background: var(--orange); color: #fff; }
+/* technician columns share the screen width instead of scrolling sideways, so a swipe always means "change day" */
+html.cal-mobile .cal-vtech-col { flex: 1 1 0; min-width: 0; }
+html.cal-mobile .cal-vtech-col-head { padding: 4px 2px; font-size: .68rem; }
+html.cal-mobile .cal-vgrid-scroll { overflow-x: hidden; }
+/* floating Today button, bottom left (hidden in the Dashboard's embedded preview) */
+html.cal-mobile .cal-fab-today { display: inline-flex; align-items: center; position: fixed; left: 14px; bottom: 18px; z-index: 30; padding: 11px 20px; border: 0; border-radius: 999px; background: #fff; color: var(--navy); font-weight: 800; font-size: .95rem; font-family: inherit; box-shadow: 0 4px 16px rgba(15,36,57,.28), 0 0 0 1px rgba(15,36,57,.08); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+html.cal-mobile .cal-fab-today:active { background: #eef2f5; }
+html.saa-embed .cal-weekstrip, html.saa-embed .cal-fab-today { display: none !important; }
+@media print { .cal-fab-today, .cal-weekstrip { display: none !important; } }
+html.cal-mobile, html.cal-mobile body { overscroll-behavior-x: none; }
+html.cal-mobile .cal-vgrid-body { flex: 1 1 0; min-width: 0; }
+html.cal-mobile .cal-unscheduled.is-empty { display: none; }

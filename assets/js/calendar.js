@@ -246,6 +246,8 @@ async function saaCalInit() {
   row.innerHTML = SAA_CAL_FOLLOWUP_TYPES.map(([k, l], i) => `<label><input type="radio" name="fu-type" value="${k}" ${i === 0 ? "checked" : ""}> ${l}</label>`).join("");
 
   saaCalWireStaticHandlers();
+  saaCalWirePhoneHandlers();
+  saaCalRenderWeekStrip();
   await saaCalLoadAndRender();
 }
 
@@ -253,23 +255,23 @@ function saaCalSetDate(dateStr) {
   saaCalCurrentDate = dateStr;
   document.getElementById("cal-date-input").value = dateStr;
   saaCalUpdateDateLabel();
-  saaCalLoadAndRender();
+  return saaCalLoadAndRender();
 }
 function saaCalShiftDate(deltaDays) {
   const d = new Date(saaCalCurrentDate + "T12:00:00");
   d.setDate(d.getDate() + deltaDays);
-  saaCalSetDate(_saaCalDateObjToStr(d));
+  return saaCalSetDate(_saaCalDateObjToStr(d));
 }
 
 /** Prev/Next button behavior depends on which view is showing: a day at
  *  a time in Day view, a week at a time in Week view, a month at a time
  *  in Month view. dir is -1 (back) or 1 (forward). */
 function saaCalNavigate(dir) {
-  if (saaCalViewMode === "day") { saaCalShiftDate(dir); return; }
-  if (saaCalViewMode === "week") { saaCalShiftDate(dir * 7); return; }
+  if (saaCalViewMode === "day") return saaCalShiftDate(dir);
+  if (saaCalViewMode === "week") return saaCalShiftDate(dir * 7);
   const d = new Date(saaCalCurrentDate + "T12:00:00");
   d.setMonth(d.getMonth() + dir, 1); // land on the 1st first so e.g. Jan 31 -> Feb doesn't overflow into March
-  saaCalSetDate(_saaCalDateObjToStr(d));
+  return saaCalSetDate(_saaCalDateObjToStr(d));
 }
 
 function saaCalUpdateDateLabel() {
@@ -285,6 +287,7 @@ function saaCalUpdateDateLabel() {
     label.textContent = saaCalFormatDateLabel(saaCalCurrentDate);
   }
   saaCalUpdateTodayBtnLabel();
+  saaCalRenderWeekStrip();
 }
 
 /** The "Today" button jumps back to today's date regardless of view, but
@@ -297,6 +300,8 @@ function saaCalUpdateTodayBtnLabel() {
   const btn = document.getElementById("cal-today-btn");
   if (!btn) return;
   btn.textContent = saaCalViewMode === "week" ? "Current Week" : saaCalViewMode === "month" ? "Current Month" : "Today";
+  const fab = document.getElementById("cal-fab-today");
+  if (fab) fab.textContent = saaCalViewMode === "week" ? "This Week" : saaCalViewMode === "month" ? "This Month" : "Today";
 }
 
 /** Switches between Day / Week / Month. Day view alone has technician
@@ -471,6 +476,8 @@ function saaCalRenderSummaryStrip() {
 function saaCalRenderUnscheduledQueue() {
   document.getElementById("cal-unscheduled-count").textContent = saaCalUnscheduled.length;
   const wrap = document.getElementById("cal-unscheduled-row");
+  const box = wrap.closest(".cal-unscheduled");
+  if (box) box.classList.toggle("is-empty", !saaCalUnscheduled.length); // phone layout hides the box while nothing is waiting
   if (!saaCalUnscheduled.length) {
     wrap.innerHTML = '<div class="cal-unscheduled-empty">Nothing waiting — every job is on the board.</div>';
     return;
@@ -1351,9 +1358,141 @@ let _saaCalResizeTimer = null;
 window.addEventListener("resize", () => {
   clearTimeout(_saaCalResizeTimer);
   _saaCalResizeTimer = setTimeout(() => {
+    _saaCalApplyMobileClass();
+    saaCalRenderWeekStrip();
     if (saaCalViewMode === "day" && document.getElementById("cal-grid-body")) saaCalRenderDayGrid();
   }, 200);
 });
+
+/* ============================== PHONE: SWIPE, WEEK STRIP, FLOATING TODAY ============================== */
+
+/* Round 89 (2026-10-03), per Vijayan: "update phone calendar layout. should
+ * be able to swipe to go to days before or after." On an upright phone
+ * (the same test that picks the vertical Day grid) the whole calendar body
+ * follows the finger left/right and, past a threshold, moves to the next /
+ * previous day (Day view), week (Week view) or month (Month view). A Sun-Sat
+ * strip shows the current week's dates (tap to jump, swipe to change week),
+ * and a floating Today button sits at the bottom left, like the phone
+ * Calendar app. Everything here is inert unless html.cal-mobile is set. */
+function _saaCalApplyMobileClass() {
+  document.documentElement.classList.toggle("cal-mobile", _saaCalIsMobileDay());
+}
+
+function saaCalRenderWeekStrip() {
+  const el = document.getElementById("cal-weekstrip");
+  if (!el) return;
+  const show = saaCalViewMode === "day" && document.documentElement.classList.contains("cal-mobile");
+  el.hidden = !show;
+  if (!show) return;
+  const start = _saaCalWeekStart(saaCalCurrentDate);
+  const today = saaCalTodayStr();
+  const dows = ["S", "M", "T", "W", "T", "F", "S"];
+  let html = "";
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const ds = _saaCalDateObjToStr(d);
+    const cls = "cal-ws-day" + (ds === saaCalCurrentDate ? " is-sel" : "") + (ds === today ? " is-today" : "") + (i === 0 || i === 6 ? " is-wkend" : "");
+    html += `<button type="button" class="${cls}" data-date="${ds}" aria-label="${_saaCalEsc(saaCalFormatDateLabel(ds))}"><span class="dow">${dows[i]}</span><span class="num">${d.getDate()}</span></button>`;
+  }
+  el.innerHTML = html;
+}
+
+let _saaCalSwipeBusy = false;
+async function _saaCalSwipeNavigate(dir) {
+  const area = document.getElementById("cal-swipe-area");
+  if (_saaCalSwipeBusy) return;
+  _saaCalSwipeBusy = true;
+  try {
+    area.style.transition = "transform .13s ease-in, opacity .13s ease-in";
+    area.style.transform = `translateX(${-dir * 100}%)`;
+    area.style.opacity = "0";
+    await new Promise((r) => setTimeout(r, 130));
+    try { await saaCalNavigate(dir); } catch (e) { /* the grid keeps its previous contents */ }
+    area.style.transition = "none";
+    area.style.transform = `translateX(${dir * 45}%)`;
+    void area.offsetWidth;
+    area.style.transition = "transform .2s ease-out, opacity .2s ease-out";
+    area.style.transform = "";
+    area.style.opacity = "";
+    await new Promise((r) => setTimeout(r, 210));
+  } finally {
+    area.style.transition = ""; area.style.transform = ""; area.style.opacity = "";
+    _saaCalSwipeBusy = false;
+  }
+}
+
+/** Touch-swipe detector. onSwipe(dir): dir = +1 for a swipe toward the left
+ *  (next), -1 toward the right (previous). `follow` makes the element track
+ *  the finger. Vertical scrolling is untouched (decided by the first ~10px
+ *  of movement); a gesture that starts inside something that scrolls
+ *  sideways on its own is left alone. */
+function _saaCalAttachSwipe(el, onSwipe, follow) {
+  if (!el) return;
+  let sx = 0, sy = 0, st = 0, dx = 0, tracking = false, lock = null;
+  const sideScroller = (t) => {
+    for (let n = t; n && n !== el; n = n.parentElement) {
+      if (n.scrollWidth > n.clientWidth + 2 && /(auto|scroll)/.test(getComputedStyle(n).overflowX)) return true;
+    }
+    return false;
+  };
+  el.addEventListener("touchstart", (e) => {
+    tracking = false;
+    if (!document.documentElement.classList.contains("cal-mobile") || e.touches.length !== 1 || _saaCalSwipeBusy) return;
+    if (sideScroller(e.target)) return;
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now(); dx = 0; lock = null; tracking = true;
+  }, { passive: true });
+  el.addEventListener("touchmove", (e) => {
+    if (!tracking) return;
+    const t = e.touches[0];
+    const mx = t.clientX - sx, my = t.clientY - sy;
+    if (lock === null && (Math.abs(mx) > 10 || Math.abs(my) > 10)) lock = Math.abs(mx) > Math.abs(my) * 1.3 ? "h" : "v";
+    if (lock === "v") { tracking = false; return; }
+    if (lock === "h") {
+      dx = mx;
+      if (follow) {
+        el.style.transition = "none";
+        el.style.transform = `translateX(${dx * 0.5}px)`;
+        el.style.opacity = String(1 - Math.min(Math.abs(dx) / 600, 0.3));
+      }
+    }
+  }, { passive: true });
+  const end = () => {
+    if (!tracking || lock !== "h") { tracking = false; return; }
+    tracking = false;
+    const dt = Math.max(Date.now() - st, 1);
+    const commit = Math.abs(dx) > 70 || (Math.abs(dx) > 35 && Math.abs(dx) / dt > 0.5);
+    if (commit) { onSwipe(dx < 0 ? 1 : -1); return; }   // the commit animation carries on from where the finger left off
+    if (follow) { el.style.transition = "transform .15s ease-out, opacity .15s ease-out"; el.style.transform = ""; el.style.opacity = ""; }
+  };
+  el.addEventListener("touchend", end, { passive: true });
+  el.addEventListener("touchcancel", () => { if (follow) { el.style.transition = "transform .15s"; el.style.transform = ""; el.style.opacity = ""; } tracking = false; }, { passive: true });
+}
+
+function saaCalWirePhoneHandlers() {
+  _saaCalApplyMobileClass();
+  window.addEventListener("orientationchange", () => setTimeout(() => { _saaCalApplyMobileClass(); saaCalRenderWeekStrip(); if (saaCalViewMode === "day") saaCalRenderDayGrid(); }, 250));
+  const area = document.getElementById("cal-swipe-area");
+  if (area) {
+    _saaCalAttachSwipe(area, (dir) => _saaCalSwipeNavigate(dir), true);
+  }
+  const strip = document.getElementById("cal-weekstrip");
+  if (strip) {
+    strip.addEventListener("click", (e) => {
+      const b = e.target.closest(".cal-ws-day");
+      if (b) saaCalSetDate(b.dataset.date);
+    });
+    _saaCalAttachSwipe(strip, (dir) => saaCalShiftDate(dir * 7), false);
+  }
+  const fab = document.getElementById("cal-fab-today");
+  if (fab) fab.addEventListener("click", () => saaCalSetDate(saaCalTodayStr()));
+  const lbl = document.getElementById("cal-date-label");
+  const inp = document.getElementById("cal-date-input");
+  if (lbl && inp) lbl.addEventListener("click", () => {
+    if (!document.documentElement.classList.contains("cal-mobile")) return;
+    try { if (inp.showPicker) { inp.showPicker(); return; } } catch (e) { /* fall through */ }
+    inp.focus(); inp.click();
+  });
+}
 
 function saaCalWireStaticHandlers() {
   document.getElementById("cal-prev-btn").addEventListener("click", () => saaCalNavigate(-1));
