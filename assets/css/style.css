@@ -1462,8 +1462,10 @@ html.cal-mobile .cal-datebar #cal-today-btn { display: none; }
 html.cal-mobile .cal-datebar #cal-prev-btn, html.cal-mobile .cal-datebar #cal-next-btn { padding: 4px 14px; }
 html.cal-mobile .cal-datebar .cal-date-wrap { display: block; position: relative; flex: 1 1 0; min-width: 0; align-self: stretch; }
 html.cal-mobile .cal-datebar .cal-date-label { display: flex; align-items: center; justify-content: center; height: 100%; min-width: 0; text-align: center; font-size: 1rem; }
-/* the real date input sits invisibly over the date text: a tap lands on it, so the phone's own date picker opens */
-html.cal-mobile .cal-datebar #cal-date-input { position: absolute; inset: 0; width: 100% !important; height: 100%; opacity: 0; font-size: 16px; cursor: pointer; padding: 0; border: 0; }
+/* Round 92: the phone uses our own month calendar (see .cal-dp) instead of the native date input, which needs an extra tick/Done tap */
+html.cal-mobile .cal-datebar #cal-date-input { display: none; }
+html.cal-mobile .cal-datebar .cal-date-label { cursor: pointer; }
+html.cal-mobile .cal-datebar .cal-date-label::after { content: "\25BE"; margin-left: 6px; font-size: .8em; color: var(--muted); }
 html.cal-mobile #cal-new-service-btn { display: none; }
 html.cal-mobile .cal-add-btn-m { display: inline-flex; }
 html.cal-mobile .cal-view-toggle { flex: 1 0 100%; margin-left: 0; }
@@ -1505,5 +1507,33 @@ html.cal-mobile, html.cal-mobile body { overscroll-behavior-x: none; }
 html.cal-mobile .cal-vgrid-body { flex: 1 1 0; min-width: 0; }
 html.cal-mobile .cal-unscheduled.is-empty { display: none; }
 html.cal-mobile .cal-datebar .cal-date-label { white-space: nowrap; font-size: .95rem; }
-/* Round 91: in the full-screen overlay the Dashboard's round close (X) button floats at the top right -- start the calendar below it so the "+" never sits under the X */
-html.cal-mobile.saa-embed-full main.container { padding-top: 62px !important; }
+
+/* ---- Round 92: phone date picker (month grid; tap a day = go there) ---- */
+.cal-dp { position: fixed; inset: 0; z-index: 350; }
+.cal-dp-backdrop { position: absolute; inset: 0; background: rgba(15,36,57,.35); }
+.cal-dp-card { position: absolute; left: 50%; top: 96px; transform: translateX(-50%); width: min(340px, calc(100vw - 24px)); background: #fff; border-radius: 18px; box-shadow: 0 18px 50px rgba(15,36,57,.35); padding: 12px 12px 10px; }
+.cal-dp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.cal-dp-title { font-weight: 800; font-size: 1.02rem; color: var(--navy); }
+.cal-dp-nav { width: 44px; height: 40px; border: 0; border-radius: 12px; background: #f1f4f7; color: var(--navy); font-size: 1.6rem; line-height: 1; cursor: pointer; font-family: inherit; }
+.cal-dp-nav:active { background: #e2e8ee; }
+.cal-dp-dow, .cal-dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+.cal-dp-dow span { text-align: center; font-size: .7rem; font-weight: 700; color: var(--muted); padding: 4px 0; }
+.cal-dp-day { height: 42px; border: 0; background: transparent; border-radius: 50%; margin: 1px auto; width: 42px; font-size: 1rem; font-weight: 600; color: var(--navy); cursor: pointer; font-family: inherit; }
+.cal-dp-day.is-out { color: #aab6c2; font-weight: 500; }
+.cal-dp-day.is-today { color: var(--orange); font-weight: 800; }
+.cal-dp-day.is-sel { background: var(--navy); color: #fff; }
+.cal-dp-day.is-sel.is-today { background: var(--orange); color: #fff; }
+.cal-dp-day:active { background: #e2e8ee; }
+.cal-dp-foot { display: flex; justify-content: center; padding-top: 4px; }
+.cal-dp-today { border: 0; background: transparent; color: var(--navy); font-weight: 800; font-size: .95rem; padding: 8px 18px; cursor: pointer; font-family: inherit; }
+@media print { .cal-dp { display: none !important; } }
+
+/* ---- Round 92: full-screen calendar (phone) -- the close X shares the first row with the arrows / "+" / date ---- */
+html.cal-mobile.saa-embed-full main.container { padding-top: 10px !important; }
+html.cal-mobile.saa-embed-full .cal-datebar { padding-right: 52px; flex-wrap: wrap; }
+html.cal-mobile.saa-embed-full .cal-datebar #cal-new-service-btn-m { order: 1; width: 42px; height: 42px; font-size: 1.8rem; }
+html.cal-mobile.saa-embed-full .cal-datebar .cal-date-wrap { order: 2; }
+html.cal-mobile.saa-embed-full .cal-datebar .cal-view-toggle { order: 3; margin-right: -52px; }
+.cal-dp, .cal-dp * { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+html.cal-mobile.saa-embed-full .cal-datebar { gap: 10px; }
+html.cal-mobile .cal-datebar .cal-date-label, html.cal-mobile .cal-datebar .cal-date-wrap { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }

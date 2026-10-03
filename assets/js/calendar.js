@@ -1471,8 +1471,55 @@ function _saaCalAttachSwipe(el, onSwipe, follow) {
   el.addEventListener("touchcancel", () => { if (follow) { el.style.transition = "transform .15s"; el.style.transform = ""; el.style.opacity = ""; } tracking = false; }, { passive: true });
 }
 
+/* Round 92 (2026-10-03), per Vijayan: the phone's native date picker needs an extra tick/Done tap. On the phone, tapping the date now opens
+ * this small month calendar instead: tapping a day goes straight to that day and closes it. */
+function saaCalCloseDatePicker() {
+  const el = document.getElementById("cal-dp");
+  if (el) el.remove();
+}
+function saaCalOpenDatePicker() {
+  saaCalCloseDatePicker();
+  let shown = new Date(saaCalCurrentDate + "T12:00:00"); shown.setDate(1);
+  const root = document.createElement("div");
+  root.id = "cal-dp"; root.className = "cal-dp";
+  document.body.appendChild(root);
+  const draw = () => {
+    const today = saaCalTodayStr();
+    const first = new Date(shown); first.setDate(1 - first.getDay()); // back up to the Sunday on/before the 1st
+    let cells = "";
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(first); d.setDate(first.getDate() + i);
+      const ds = _saaCalDateObjToStr(d);
+      if (i >= 35 && d.getMonth() !== shown.getMonth()) break; // skip a 6th row that is entirely next month
+      const cls = "cal-dp-day" + (d.getMonth() !== shown.getMonth() ? " is-out" : "") + (ds === today ? " is-today" : "") + (ds === saaCalCurrentDate ? " is-sel" : "");
+      cells += `<button type="button" class="${cls}" data-date="${ds}">${d.getDate()}</button>`;
+    }
+    root.innerHTML = `<div class="cal-dp-backdrop" data-close="1"></div>
+      <div class="cal-dp-card" role="dialog" aria-label="Pick a date">
+        <div class="cal-dp-head">
+          <button type="button" class="cal-dp-nav" data-nav="-1" aria-label="Previous month">&lsaquo;</button>
+          <div class="cal-dp-title">${shown.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</div>
+          <button type="button" class="cal-dp-nav" data-nav="1" aria-label="Next month">&rsaquo;</button>
+        </div>
+        <div class="cal-dp-dow">${["S", "M", "T", "W", "T", "F", "S"].map((x) => `<span>${x}</span>`).join("")}</div>
+        <div class="cal-dp-grid">${cells}</div>
+        <div class="cal-dp-foot"><button type="button" class="cal-dp-today" data-date="${today}">Today</button></div>
+      </div>`;
+  };
+  root.addEventListener("click", (e) => {
+    if (e.target.closest("[data-close]")) { saaCalCloseDatePicker(); return; }
+    const nav = e.target.closest("[data-nav]");
+    if (nav) { shown.setMonth(shown.getMonth() + Number(nav.dataset.nav), 1); draw(); return; }
+    const day = e.target.closest("[data-date]");
+    if (day) { saaCalCloseDatePicker(); saaCalSetDate(day.dataset.date); }
+  });
+  draw();
+}
+
 function saaCalWirePhoneHandlers() {
   _saaCalApplyMobileClass();
+  const _lbl = document.getElementById("cal-date-label");
+  if (_lbl) _lbl.addEventListener("click", () => { if (document.documentElement.classList.contains("cal-mobile")) saaCalOpenDatePicker(); });
   window.addEventListener("orientationchange", () => setTimeout(() => { _saaCalApplyMobileClass(); saaCalRenderWeekStrip(); if (saaCalViewMode === "day") saaCalRenderDayGrid(); }, 250));
   const area = document.getElementById("cal-swipe-area");
   if (area) {
