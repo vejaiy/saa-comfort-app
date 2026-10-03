@@ -5,18 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20261010a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261010b">
 <script>
 if (new URLSearchParams(location.search).get('embed') === '1') {
   document.documentElement.classList.add('saa-embed');
+  if (new URLSearchParams(location.search).get('full') === '1') document.documentElement.classList.add('saa-embed-full');
 }
 </script>
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20261010a"></script>
-<script src="../assets/js/supabase-config.js?v=20261010a"></script>
-<script src="../assets/js/auth.js?v=20261010a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261010b"></script>
+<script src="../assets/js/supabase-config.js?v=20261010b"></script>
+<script src="../assets/js/auth.js?v=20261010b"></script>
 <script>saaRequireAuth();</script>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="ic-dashboard" viewBox="0 0 80 60"><g fill="none" stroke="#27425f" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><ellipse cx="40" cy="56" rx="26" ry="2.6" fill="#27425f" opacity=".08" stroke="none"/>
 <rect x="52" y="12" width="6" height="12" fill="#c0634a"/>
@@ -246,8 +247,10 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
   <button type="button" class="btn btn-ghost btn-sm" id="cal-prev-btn">&larr;</button>
   <button type="button" class="btn btn-ghost btn-sm" id="cal-today-btn">Today</button>
   <button type="button" class="btn btn-ghost btn-sm" id="cal-next-btn">&rarr;</button>
-  <span class="cal-date-label" id="cal-date-label"></span>
-  <input type="date" id="cal-date-input" style="width:auto">
+  <!-- Round 90: on the phone the (invisible) date input is laid over the date text, so tapping the date opens the native date picker (display:contents keeps the desktop layout as it was) -->
+  <span class="cal-date-wrap"><span class="cal-date-label" id="cal-date-label"></span>
+  <input type="date" id="cal-date-input" style="width:auto" aria-label="Pick a date"></span>
+  <button type="button" class="cal-add-btn-m" id="cal-new-service-btn-m" aria-label="Schedule a service" title="Schedule">+</button>
   <div class="cal-view-toggle" id="cal-view-toggle">
     <button type="button" class="cal-view-btn active" data-view="day">Day</button>
     <button type="button" class="cal-view-btn" data-view="week">Week</button>
@@ -1197,22 +1200,22 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20261010a"></script>
-<script src="../assets/js/worksheet.js?v=20261010a"></script>
-<script src="../assets/js/xlsx-export.js?v=20261010a"></script>
-<script src="../assets/js/systems-db.js?v=20261010a"></script>
-<script src="../assets/js/events-db.js?v=20261010a"></script>
-<script src="../assets/js/calendar-db.js?v=20261010a"></script>
-<script src="../assets/js/jobs-db.js?v=20261010a"></script>
-<script src="../assets/js/job-photos-db.js?v=20261010a"></script>
-<script src="../assets/js/warranty-files-db.js?v=20261010a"></script>
-<script src="../assets/js/camera-capture.js?v=20261010a"></script>
-<script src="../assets/js/print-invoice.js?v=20261010a"></script>
-<script src="../assets/js/maps-config.js?v=20261010a"></script>
-<script src="../assets/js/mileage-db.js?v=20261010a"></script>
-<script src="../assets/js/jobs.js?v=20261010a"></script>
-<script src="../assets/js/print-service-checklist.js?v=20261010a"></script>
-<script src="../assets/js/service-checklist.js?v=20261010a"></script>
-<script src="../assets/js/calendar.js?v=20261010a"></script>
+<script src="../assets/js/pricing-data.js?v=20261010b"></script>
+<script src="../assets/js/worksheet.js?v=20261010b"></script>
+<script src="../assets/js/xlsx-export.js?v=20261010b"></script>
+<script src="../assets/js/systems-db.js?v=20261010b"></script>
+<script src="../assets/js/events-db.js?v=20261010b"></script>
+<script src="../assets/js/calendar-db.js?v=20261010b"></script>
+<script src="../assets/js/jobs-db.js?v=20261010b"></script>
+<script src="../assets/js/job-photos-db.js?v=20261010b"></script>
+<script src="../assets/js/warranty-files-db.js?v=20261010b"></script>
+<script src="../assets/js/camera-capture.js?v=20261010b"></script>
+<script src="../assets/js/print-invoice.js?v=20261010b"></script>
+<script src="../assets/js/maps-config.js?v=20261010b"></script>
+<script src="../assets/js/mileage-db.js?v=20261010b"></script>
+<script src="../assets/js/jobs.js?v=20261010b"></script>
+<script src="../assets/js/print-service-checklist.js?v=20261010b"></script>
+<script src="../assets/js/service-checklist.js?v=20261010b"></script>
+<script src="../assets/js/calendar.js?v=20261010b"></script>
 </body>
 </html>

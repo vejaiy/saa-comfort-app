@@ -231,6 +231,7 @@ function saaCalCustName(customer) {
 /* ============================== INIT ============================== */
 
 async function saaCalInit() {
+  _saaCalApplyMobileClass();
   saaCalCurrentDate = saaCalTodayStr();
   document.getElementById("cal-date-input").value = saaCalCurrentDate;
   saaCalUpdateDateLabel();
@@ -284,7 +285,9 @@ function saaCalUpdateDateLabel() {
     const d = new Date(saaCalCurrentDate + "T12:00:00");
     label.textContent = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   } else {
-    label.textContent = saaCalFormatDateLabel(saaCalCurrentDate);
+    label.textContent = document.documentElement.classList.contains("cal-mobile")
+      ? new Date(saaCalCurrentDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })  // "Sat, Oct 3, 2026" fits on one line on a phone
+      : saaCalFormatDateLabel(saaCalCurrentDate);
   }
   saaCalUpdateTodayBtnLabel();
   saaCalRenderWeekStrip();
@@ -1359,7 +1362,7 @@ window.addEventListener("resize", () => {
   clearTimeout(_saaCalResizeTimer);
   _saaCalResizeTimer = setTimeout(() => {
     _saaCalApplyMobileClass();
-    saaCalRenderWeekStrip();
+    saaCalUpdateDateLabel();
     if (saaCalViewMode === "day" && document.getElementById("cal-grid-body")) saaCalRenderDayGrid();
   }, 200);
 });
@@ -1485,13 +1488,6 @@ function saaCalWirePhoneHandlers() {
   }
   const fab = document.getElementById("cal-fab-today");
   if (fab) fab.addEventListener("click", () => saaCalSetDate(saaCalTodayStr()));
-  const lbl = document.getElementById("cal-date-label");
-  const inp = document.getElementById("cal-date-input");
-  if (lbl && inp) lbl.addEventListener("click", () => {
-    if (!document.documentElement.classList.contains("cal-mobile")) return;
-    try { if (inp.showPicker) { inp.showPicker(); return; } } catch (e) { /* fall through */ }
-    inp.focus(); inp.click();
-  });
 }
 
 function saaCalWireStaticHandlers() {
@@ -1500,6 +1496,7 @@ function saaCalWireStaticHandlers() {
   document.getElementById("cal-today-btn").addEventListener("click", () => saaCalSetDate(saaCalTodayStr()));
   document.getElementById("cal-date-input").addEventListener("change", (e) => saaCalSetDate(e.target.value));
   document.getElementById("cal-new-service-btn").addEventListener("click", () => saaCalOpenNewServicePopup({}));
+  document.getElementById("cal-new-service-btn-m").addEventListener("click", () => saaCalOpenNewServicePopup({}));
   document.querySelectorAll(".cal-view-btn[data-view]").forEach((btn) => {
     btn.addEventListener("click", () => saaCalSetView(btn.dataset.view));
   });

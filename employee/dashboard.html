@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dashboard | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20261010a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261010b">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20261010a"></script>
-<script src="../assets/js/supabase-config.js?v=20261010a"></script>
-<script src="../assets/js/auth.js?v=20261010a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261010b"></script>
+<script src="../assets/js/supabase-config.js?v=20261010b"></script>
+<script src="../assets/js/auth.js?v=20261010b"></script>
 <script>saaRequireAuth();</script>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="ic-dashboard" viewBox="0 0 80 60"><g fill="none" stroke="#27425f" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><ellipse cx="40" cy="56" rx="26" ry="2.6" fill="#27425f" opacity=".08" stroke="none"/>
 <rect x="52" y="12" width="6" height="12" fill="#c0634a"/>
@@ -247,6 +247,8 @@
   </div>
 </div>
 
+<button type="button" class="dash-fab-today" id="dash-fab-today" aria-label="Jump to today">Today</button>
+
 <!-- Round 26 (2026-09-14): Open Full Calendar is a full-viewport overlay in
      this same tab (no second login), closed with the X. -->
 <div class="dash-cal-fullscreen" id="dash-cal-fullscreen" hidden>
@@ -255,15 +257,15 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20261010a"></script>
-<script src="../assets/js/worksheet.js?v=20261010a"></script>
-<script src="../assets/js/xlsx-export.js?v=20261010a"></script>
+<script src="../assets/js/pricing-data.js?v=20261010b"></script>
+<script src="../assets/js/worksheet.js?v=20261010b"></script>
+<script src="../assets/js/xlsx-export.js?v=20261010b"></script>
 <script>
 (function () {
   var overlay = document.getElementById('dash-cal-fullscreen');
   var frame = document.getElementById('dash-cal-fullscreen-iframe');
   function openCalFullscreen() {
-    frame.src = 'calendar.html?embed=1';
+    frame.src = 'calendar.html?embed=1&full=1';
     overlay.hidden = false;
     document.body.style.overflow = 'hidden';
   }
@@ -273,6 +275,11 @@
     document.body.style.overflow = '';
   }
   document.getElementById('dash-cal-fullscreen-btn').addEventListener('click', openCalFullscreen);
+  // Round 90: floating Today (phone) drives the calendar preview's date
+  document.getElementById('dash-fab-today').addEventListener('click', function () {
+    var f = document.querySelector('.dash-calendar-embed iframe');
+    try { f.contentWindow.saaCalSetDate(f.contentWindow.saaCalTodayStr()); } catch (e) { /* preview not loaded yet */ }
+  });
   document.getElementById('dash-cal-fullscreen-close').addEventListener('click', closeCalFullscreen);
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && !overlay.hidden) closeCalFullscreen();
