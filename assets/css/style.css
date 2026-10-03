@@ -1505,3 +1505,5 @@ html.cal-mobile, html.cal-mobile body { overscroll-behavior-x: none; }
 html.cal-mobile .cal-vgrid-body { flex: 1 1 0; min-width: 0; }
 html.cal-mobile .cal-unscheduled.is-empty { display: none; }
 html.cal-mobile .cal-datebar .cal-date-label { white-space: nowrap; font-size: .95rem; }
+/* Round 91: in the full-screen overlay the Dashboard's round close (X) button floats at the top right -- start the calendar below it so the "+" never sits under the X */
+html.cal-mobile.saa-embed-full main.container { padding-top: 62px !important; }
