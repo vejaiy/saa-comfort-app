@@ -1537,3 +1537,9 @@ html.cal-mobile.saa-embed-full .cal-datebar .cal-view-toggle { order: 3; margin-
 .cal-dp, .cal-dp * { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 html.cal-mobile.saa-embed-full .cal-datebar { gap: 10px; }
 html.cal-mobile .cal-datebar .cal-date-label, html.cal-mobile .cal-datebar .cal-date-wrap { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+
+/* Round 93 (2026-10-03): Condenser page -> Price List tab (70 rows) kept compact. */
+#cp-table td { padding: 5px 12px; }
+#cp-table th.num, #cp-table td.num { text-align: right; }
+#cp-table .cp-price { padding: 5px 8px; }
+#cp-table tr.row-off td { color: var(--muted); }

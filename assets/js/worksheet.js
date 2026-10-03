@@ -81,8 +81,25 @@ function renderLineItemTable(mountEl, rows, opts) {
   }
   const activeConfig = configOptions ? (configOptions.find(c => c.key === opts.configSelected) || configOptions[0]) : null;
 
+  // Round 93 (2026-10-03), per Vijayan: the Condenser worksheet's "System
+  // tonnage" + "Configuration" pickers became Brand / Tonnage / Stage
+  // dropdowns whose options and price come from the Condenser Price List
+  // (opts.linkedKind === "condenser", opts.linkedOptions = the live
+  // CONDENSER_PRICES array -- see condenser-db.js). The tonnage select keeps
+  // the id `${mountId}-linked` so everything that already reads it (coil
+  // sync, BOM description, saved quotes) keeps working; Brand and Stage are
+  // `${mountId}-brand` / `${mountId}-stage`. Stage also drives which rows
+  // are Included (opts.stageConfig maps stage -> configOptions key).
+  const isCondenser = opts.linkedKind === "condenser";
   let linkedPicker = "";
-  if (linkedIdx > -1 && opts.linkedOptions) {
+  if (isCondenser && linkedIdx > -1) {
+    linkedPicker = `<div class="cond-picker" style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+      <div class="field" style="min-width:150px;flex:1;max-width:240px"><label>Brand</label><select id="${mountEl.id}-brand"></select></div>
+      <div class="field" style="min-width:130px;flex:1;max-width:200px"><label>Tonnage</label><select id="${mountEl.id}-linked"></select></div>
+      <div class="field" style="min-width:150px;flex:1;max-width:240px"><label>Stage</label><select id="${mountEl.id}-stage"></select></div>
+    </div>
+    <div class="muted" id="${mountEl.id}-condnote" style="font-size:.84rem;margin:-4px 0 12px"></div>`;
+  } else if (linkedIdx > -1 && opts.linkedOptions) {
     const optHtml = opts.linkedOptions.map((o, i) => {
       const val = opts.linkedKind === "tier" ? o.id : o.tonnage;
       const label = opts.linkedKind === "tier" ? o.label : `${o.tonnage} ton — ${o.desc} ($${o.price})`;
@@ -94,7 +111,7 @@ function renderLineItemTable(mountEl, rows, opts) {
   }
 
   let configPicker = "";
-  if (configOptions && configOptions.length) {
+  if (configOptions && configOptions.length && !(isCondenser && opts.stageConfig)) {
     const optHtml = configOptions.map((c) =>
       `<option value="${c.key}"${c.key === opts.configSelected ? " selected" : ""}>${c.label}</option>`
     ).join("");
@@ -243,7 +260,7 @@ function renderLineItemTable(mountEl, rows, opts) {
   mountEl.addEventListener("change", recalc);
 
   const linkedSelect = mountEl.querySelector(`#${mountEl.id}-linked`);
-  if (linkedSelect && linkedIdx > -1) {
+  if (linkedSelect && linkedIdx > -1 && !isCondenser) {
     linkedSelect.addEventListener("change", () => {
       const val = linkedSelect.value;
       const opt = opts.linkedOptions.find(o => String(opts.linkedKind === "tier" ? o.id : o.tonnage) === val);
@@ -263,25 +280,94 @@ function renderLineItemTable(mountEl, rows, opts) {
   // edits the tech has already made on screen survive a configuration
   // switch. This mirrors how the tonnage/tier picker above only ever
   // touches the one linked row's price, never the rest of the table.
+  function applyConfig(key) {
+    opts.configSelected = key;
+    const cfg = configOptions && configOptions.find(c => c.key === key);
+    if (!cfg) return;
+    mountEl.querySelectorAll("tbody tr[data-row]").forEach((tr) => {
+      const idx = parseInt(tr.dataset.idx, 10);
+      const row = rows[idx];
+      if (!row || row[cfg.field] === undefined) return;
+      const toggle = tr.querySelector(".row-toggle");
+      const want = row[cfg.field] !== false;
+      if (toggle.checked !== want) {
+        toggle.checked = want;
+        toggle.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+    recalc();
+  }
   const configSelect = mountEl.querySelector(`#${mountEl.id}-config`);
   if (configSelect && configOptions) {
-    configSelect.addEventListener("change", () => {
-      opts.configSelected = configSelect.value;
-      const cfg = configOptions.find(c => c.key === configSelect.value);
-      if (!cfg) return;
-      mountEl.querySelectorAll("tbody tr[data-row]").forEach((tr) => {
-        const idx = parseInt(tr.dataset.idx, 10);
-        const row = rows[idx];
-        if (!row || row[cfg.field] === undefined) return;
-        const toggle = tr.querySelector(".row-toggle");
-        const want = row[cfg.field] !== false;
-        if (toggle.checked !== want) {
-          toggle.checked = want;
-          toggle.dispatchEvent(new Event("change", { bubbles: true }));
-        }
-      });
-      recalc();
+    configSelect.addEventListener("change", () => applyConfig(configSelect.value));
+  }
+
+  // ---- Round 93: Brand / Tonnage / Stage -> price (condenser kind) ----
+  const brandSel = isCondenser ? mountEl.querySelector(`#${mountEl.id}-brand`) : null;
+  const stageSel = isCondenser ? mountEl.querySelector(`#${mountEl.id}-stage`) : null;
+  let lastCondPrice = null; // the price we last auto-filled (so a refresh never clobbers a hand-edited price)
+  const condAvail = () => (opts.linkedOptions || []).filter((o) => o.price !== null && o.price !== undefined && Number(o.price) > 0);
+  const condUniq = (arr) => arr.filter((v, i) => arr.indexOf(v) === i);
+  function condFill(sel, values, labelFn, preferred) {
+    const keep = sel.value;
+    sel.innerHTML = values.map((v) => `<option value="${v}">${labelFn(v)}</option>`).join("");
+    const want = values.map(String).includes(String(keep)) ? keep
+      : (preferred !== undefined && values.map(String).includes(String(preferred)) ? preferred : (values.length ? values[0] : ""));
+    sel.value = String(want);
+  }
+  function condFillBrands() { condFill(brandSel, condUniq(condAvail().map((o) => o.brand)), (v) => v); }
+  function condFillTonnage() {
+    const tons = condUniq(condAvail().filter((o) => o.brand === brandSel.value).map((o) => Number(o.tonnage))).sort((a, b) => a - b);
+    condFill(linkedSelect, tons, (v) => `${v} ton`, 3);
+  }
+  function condFillStages() {
+    const stages = condUniq(condAvail().filter((o) => o.brand === brandSel.value && String(o.tonnage) === String(linkedSelect.value)).map((o) => o.stage));
+    condFill(stageSel, stages, (v) => v);
+  }
+  function condSyncConfigFromStage() {
+    if (!opts.stageConfig || !stageSel.value) return;
+    const key = opts.stageConfig[stageSel.value];
+    if (key && key !== opts.configSelected) applyConfig(key);
+  }
+  function condApplyPrice(force) {
+    const tr = mountEl.querySelector("tr[data-linked-row]");
+    const note = mountEl.querySelector(`#${mountEl.id}-condnote`);
+    const priceInput = tr && tr.querySelector(".price");
+    const hit = condAvail().find((o) => o.brand === brandSel.value && String(o.tonnage) === String(linkedSelect.value) && o.stage === stageSel.value);
+    if (!hit || !priceInput) {
+      if (note) note.textContent = "No price on the Condenser Price List for this combination — type the unit cost in manually.";
+      return;
+    }
+    const cur = parseFloat(priceInput.value);
+    // force: the picker was just changed by a person. Otherwise (a price-list
+    // refresh) only overwrite when the row still holds the last auto-fill.
+    if (force || lastCondPrice === null || cur === lastCondPrice || !isFinite(cur)) {
+      priceInput.value = hit.price;
+    }
+    lastCondPrice = Number(hit.price);
+    if (note) note.textContent = `${brandSel.value} ${linkedSelect.value} ton ${stageSel.value}: ${fmtMoney(hit.price)} from the Condenser Price List — you can still adjust the Unit $ below for this quote.`;
+    recalc();
+  }
+  if (isCondenser && linkedSelect && brandSel && stageSel) {
+    condFillBrands();
+    condFillTonnage();
+    condFillStages();
+    brandSel.addEventListener("change", () => {
+      condFillTonnage();
+      linkedSelect.dispatchEvent(new Event("change", { bubbles: true }));
     });
+    linkedSelect.addEventListener("change", () => {
+      condFillStages();
+      condSyncConfigFromStage();
+      condApplyPrice(true);
+    });
+    stageSel.addEventListener("change", () => {
+      condSyncConfigFromStage();
+      condApplyPrice(true);
+    });
+    // Initial price from the default selection (no row-edit to protect yet).
+    condSyncConfigFromStage();
+    condApplyPrice(true);
   }
 
   recalc();
@@ -294,7 +380,24 @@ function renderLineItemTable(mountEl, rows, opts) {
       linkedSelect.value = String(val);
       linkedSelect.dispatchEvent(new Event("change", { bubbles: true }));
     },
-    getConfigValue: () => (configSelect ? configSelect.value : null),
+    getConfigValue: () => (configSelect ? configSelect.value : (opts.configSelected || null)),
+    // Round 93: condenser Brand / Tonnage / Stage helpers.
+    getCondenserSelection: () => (isCondenser && brandSel ? { brand: brandSel.value, tonnage: linkedSelect.value, stage: stageSel.value } : null),
+    setCondenserSelection: (sel) => {
+      if (!isCondenser || !brandSel) return;
+      if (sel.brand !== undefined) { brandSel.value = String(sel.brand); brandSel.dispatchEvent(new Event("change", { bubbles: true })); }
+      if (sel.tonnage !== undefined) { linkedSelect.value = String(sel.tonnage); linkedSelect.dispatchEvent(new Event("change", { bubbles: true })); }
+      if (sel.stage !== undefined) { stageSel.value = String(sel.stage); stageSel.dispatchEvent(new Event("change", { bubbles: true })); }
+    },
+    /** Re-reads the (live) price list: rebuilds the three dropdowns keeping
+     *  the current choice where it still exists, and re-fills Unit $ unless
+     *  the row was hand-edited for this quote. */
+    refreshCondenserPrices: () => {
+      if (!isCondenser || !brandSel) return;
+      condFillBrands(); condFillTonnage(); condFillStages();
+      condSyncConfigFromStage();
+      condApplyPrice(false);
+    },
     setConfigValue: (val) => {
       if (!configSelect) return;
       configSelect.value = String(val);
@@ -385,7 +488,12 @@ function _saaBomLinkedDescription(mountId, formState, src) {
   const linked = formState[`${mountId}-linked`];
   const val = linked && linked.v;
   if (!val) return src.item;
-  if (src.tonnageLinked) return `${val} ton ${base}`;
+  if (src.tonnageLinked) {
+    // Round 93: the Condenser also carries Brand + Stage pickers.
+    const brand = (formState[`${mountId}-brand`] || {}).v;
+    const stage = (formState[`${mountId}-stage`] || {}).v;
+    return `${brand ? brand + " " : ""}${val} ton ${stage ? stage + " " : ""}${base}`;
+  }
   const tiers = typeof FURNACE_TIERS !== "undefined" ? FURNACE_TIERS : [];
   const tier = tiers.find((t) => String(t.id) === String(val));
   return tier ? `${base} — ${tier.label}` : src.item;

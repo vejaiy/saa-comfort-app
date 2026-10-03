@@ -24,6 +24,92 @@ const CONDENSER_TONNAGE = [
   { tonnage: 6,   desc: "Single speed condenser", price: 5000 },
 ];
 
+/* ---- Condenser price list (Round 93, 2026-10-03) ----
+   Source: Condenser_Cost.xlsx (Goodman base price, other brands = Goodman
+   x (1 + brand/stage markup)). This array is only the FACTORY DEFAULT /
+   offline fallback: the live, editable price list lives in the Supabase
+   table condenser_prices (see condenser-db.js, edited on the Condenser
+   page's "Price List" tab) and is loaded into CONDENSER_PRICES at page
+   load. price: null = "N/A" (that brand doesn't offer that stage -- e.g.
+   Lennox Variable Speed); N/A combinations never appear in the worksheet
+   dropdowns. Every Condenser worksheet (Condenser page + the Create Quote
+   page's Condenser section) picks Brand / Tonnage / Stage from this list
+   and fills the "Condenser unit" Unit $ with the matching price, so the
+   Quote uses whatever prices are on the Price List. */
+const CONDENSER_PRICES_DEFAULT = [
+  { brand: "Goodman", tonnage: 1.5, stage: "Single stage", price: 1430.4 },
+  { brand: "Goodman", tonnage: 2, stage: "Single stage", price: 1547.2 },
+  { brand: "Goodman", tonnage: 2.5, stage: "Single stage", price: 1613.6 },
+  { brand: "Goodman", tonnage: 3, stage: "Single stage", price: 1812.8 },
+  { brand: "Goodman", tonnage: 3.5, stage: "Single stage", price: 2051.2 },
+  { brand: "Goodman", tonnage: 4, stage: "Single stage", price: 2217.6 },
+  { brand: "Goodman", tonnage: 5, stage: "Single stage", price: 2532.0 },
+  { brand: "Goodman", tonnage: 1.5, stage: "Variable Speed", price: 1770.4 },
+  { brand: "Goodman", tonnage: 2, stage: "Variable Speed", price: 1853.6 },
+  { brand: "Goodman", tonnage: 2.5, stage: "Variable Speed", price: 1956.8 },
+  { brand: "Goodman", tonnage: 3, stage: "Variable Speed", price: 2060.0 },
+  { brand: "Goodman", tonnage: 3.5, stage: "Variable Speed", price: 2225.6 },
+  { brand: "Goodman", tonnage: 4, stage: "Variable Speed", price: 2392.0 },
+  { brand: "Goodman", tonnage: 5, stage: "Variable Speed", price: 2776.0 },
+  { brand: "Carrier", tonnage: 1.5, stage: "Single stage", price: 1644.96 },
+  { brand: "Carrier", tonnage: 2, stage: "Single stage", price: 1779.28 },
+  { brand: "Carrier", tonnage: 2.5, stage: "Single stage", price: 1855.64 },
+  { brand: "Carrier", tonnage: 3, stage: "Single stage", price: 2084.72 },
+  { brand: "Carrier", tonnage: 3.5, stage: "Single stage", price: 2358.88 },
+  { brand: "Carrier", tonnage: 4, stage: "Single stage", price: 2550.24 },
+  { brand: "Carrier", tonnage: 5, stage: "Single stage", price: 2911.8 },
+  { brand: "Carrier", tonnage: 1.5, stage: "Variable Speed", price: 2124.48 },
+  { brand: "Carrier", tonnage: 2, stage: "Variable Speed", price: 2224.32 },
+  { brand: "Carrier", tonnage: 2.5, stage: "Variable Speed", price: 2348.16 },
+  { brand: "Carrier", tonnage: 3, stage: "Variable Speed", price: 2472.0 },
+  { brand: "Carrier", tonnage: 3.5, stage: "Variable Speed", price: 2670.72 },
+  { brand: "Carrier", tonnage: 4, stage: "Variable Speed", price: 2870.4 },
+  { brand: "Carrier", tonnage: 5, stage: "Variable Speed", price: 3331.2 },
+  { brand: "Daikin", tonnage: 1.5, stage: "Single stage", price: 1644.96 },
+  { brand: "Daikin", tonnage: 2, stage: "Single stage", price: 1779.28 },
+  { brand: "Daikin", tonnage: 2.5, stage: "Single stage", price: 1855.64 },
+  { brand: "Daikin", tonnage: 3, stage: "Single stage", price: 2084.72 },
+  { brand: "Daikin", tonnage: 3.5, stage: "Single stage", price: 2358.88 },
+  { brand: "Daikin", tonnage: 4, stage: "Single stage", price: 2550.24 },
+  { brand: "Daikin", tonnage: 5, stage: "Single stage", price: 2911.8 },
+  { brand: "Daikin", tonnage: 1.5, stage: "Variable Speed", price: 2124.48 },
+  { brand: "Daikin", tonnage: 2, stage: "Variable Speed", price: 2224.32 },
+  { brand: "Daikin", tonnage: 2.5, stage: "Variable Speed", price: 2348.16 },
+  { brand: "Daikin", tonnage: 3, stage: "Variable Speed", price: 2472.0 },
+  { brand: "Daikin", tonnage: 3.5, stage: "Variable Speed", price: 2670.72 },
+  { brand: "Daikin", tonnage: 4, stage: "Variable Speed", price: 2870.4 },
+  { brand: "Daikin", tonnage: 5, stage: "Variable Speed", price: 3331.2 },
+  { brand: "Lennox", tonnage: 1.5, stage: "Single stage", price: 1530.53 },
+  { brand: "Lennox", tonnage: 2, stage: "Single stage", price: 1655.5 },
+  { brand: "Lennox", tonnage: 2.5, stage: "Single stage", price: 1726.55 },
+  { brand: "Lennox", tonnage: 3, stage: "Single stage", price: 1939.7 },
+  { brand: "Lennox", tonnage: 3.5, stage: "Single stage", price: 2194.78 },
+  { brand: "Lennox", tonnage: 4, stage: "Single stage", price: 2372.83 },
+  { brand: "Lennox", tonnage: 5, stage: "Single stage", price: 2709.24 },
+  { brand: "Lennox", tonnage: 1.5, stage: "Variable Speed", price: null },
+  { brand: "Lennox", tonnage: 2, stage: "Variable Speed", price: null },
+  { brand: "Lennox", tonnage: 2.5, stage: "Variable Speed", price: null },
+  { brand: "Lennox", tonnage: 3, stage: "Variable Speed", price: null },
+  { brand: "Lennox", tonnage: 3.5, stage: "Variable Speed", price: null },
+  { brand: "Lennox", tonnage: 4, stage: "Variable Speed", price: null },
+  { brand: "Lennox", tonnage: 5, stage: "Variable Speed", price: null },
+  { brand: "Trane", tonnage: 1.5, stage: "Single stage", price: 1716.48 },
+  { brand: "Trane", tonnage: 2, stage: "Single stage", price: 1856.64 },
+  { brand: "Trane", tonnage: 2.5, stage: "Single stage", price: 1936.32 },
+  { brand: "Trane", tonnage: 3, stage: "Single stage", price: 2175.36 },
+  { brand: "Trane", tonnage: 3.5, stage: "Single stage", price: 2461.44 },
+  { brand: "Trane", tonnage: 4, stage: "Single stage", price: 2661.12 },
+  { brand: "Trane", tonnage: 5, stage: "Single stage", price: 3038.4 },
+  { brand: "Trane", tonnage: 1.5, stage: "Variable Speed", price: 2301.52 },
+  { brand: "Trane", tonnage: 2, stage: "Variable Speed", price: 2409.68 },
+  { brand: "Trane", tonnage: 2.5, stage: "Variable Speed", price: 2543.84 },
+  { brand: "Trane", tonnage: 3, stage: "Variable Speed", price: 2678.0 },
+  { brand: "Trane", tonnage: 3.5, stage: "Variable Speed", price: 2893.28 },
+  { brand: "Trane", tonnage: 4, stage: "Variable Speed", price: 3109.6 },
+  { brand: "Trane", tonnage: 5, stage: "Variable Speed", price: 3608.8 },
+];
+const CONDENSER_PRICES = CONDENSER_PRICES_DEFAULT.map((r) => Object.assign({}, r));
+
 const COIL_TONNAGE = [
   { tonnage: 1.5, desc: "Cased Coil", price: 750 },
   { tonnage: 2,   desc: "Cased Coil", price: 850 },
@@ -63,7 +149,7 @@ const ZONES = [
    row's Included checkbox to the matching flag; the technician can still
    toggle any individual row afterward. */
 const CONDENSER_MATERIALS = [
-  { group: "MATERIALS",   category: "Equipment",    item: "Condenser unit (per System tonnage above)", unit: "EA", qty: 1, price: 2500, spec: "AHRI-matched, 208/230V-1ph — confirm refrigerant type (R-410A vs A2L R-454B)", notes: "New outdoor condensing unit sized to match the existing coil/furnace.", includedSingleStage: true, includedVariableSpeed: true, tonnageLinked: true },
+  { group: "MATERIALS",   category: "Equipment",    item: "Condenser unit (per Brand / Tonnage / Stage above)", unit: "EA", qty: 1, price: 1812.8, spec: "AHRI-matched, 208/230V-1ph — confirm refrigerant type (R-410A vs A2L R-454B)", notes: "New outdoor condensing unit sized to match the existing coil/furnace.", includedSingleStage: true, includedVariableSpeed: true, tonnageLinked: true },
   { group: "MATERIALS",   category: "Refrigeration", item: "Refrigerant charge", unit: "OZ", qty: 0.08, price: 200, spec: "R-410A or A2L per system, ~8-10 lb typical for 3-ton", notes: "Refrigerant weighed to nameplate spec, adjusted for line length.", includedSingleStage: true, includedVariableSpeed: true },
   { group: "MATERIALS",   category: "Refrigeration", item: "POE refrigerant oil", unit: "OZ", qty: 1, price: 20, spec: "POE, viscosity per condenser OEM spec", notes: "Compatible lubricant added per manufacturer spec.", includedSingleStage: true, includedVariableSpeed: true },
   { group: "MATERIALS",   category: "Refrigeration", item: "Line-set flare nuts / couplings", unit: "EA", qty: 0, price: 15, spec: "Match existing line-set OD (3/8\" & 3/4\" typical 3-ton)", notes: "Reconnects line set to new condenser fittings.", includedSingleStage: false, includedVariableSpeed: false },
