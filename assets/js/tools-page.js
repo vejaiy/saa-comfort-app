@@ -1,5 +1,5 @@
 /* ============================================================
-   SAA Comfort Air LLC — Tool List page logic (employee/tool-list.html)
+   SAA Comfort Air LLC — Tools + Supplies page logic (employee/tool-list.html and employee/supplies.html)
    Renders the Stock Counts and Purchase Ledger tables from tools-db.js,
    wires up the shared type/search filter, inline stock-qty editing,
    and the two "Add" forms. Round 35 (2026-09-16).
@@ -18,9 +18,18 @@ function _tlTypeLabel(t) {
   return t === "tools" ? "Tools" : t === "supplies" ? "Supplies" : (t || "");
 }
 
+// Round 84 (2026-10-03), per Vijayan ("make tools and supplies as separate
+// page"): this one script drives both employee/tool-list.html (Tools) and
+// employee/supplies.html (Supplies). gen_tools.py sets window.TL_KIND
+// ("tools" | "supplies"), TL_LABEL and TL_LIST before loading it; every
+// query and every "Add" form is pinned to that type.
+const TL_KIND = window.TL_KIND || "tools";
+const TL_LABEL = window.TL_LABEL || "Tools";
+const TL_LIST = window.TL_LIST || "Tool List";
+
 function _tlFilters() {
   return {
-    type: document.getElementById("tl-type-filter").value || undefined,
+    type: TL_KIND,
     search: document.getElementById("tl-search").value || undefined,
   };
 }
@@ -63,7 +72,6 @@ async function renderInventory() {
     <tr data-id="${r.id}">
       <td>${_tlEsc(r.item_name)}</td>
       <td>${_tlEsc(r.category)}</td>
-      <td>${_tlTypeLabel(r.type)}</td>
       <td><input type="number" step="any" class="tl-qty-input" data-id="${r.id}" value="${r.quantity_on_hand}" style="width:80px"></td>
       <td>${_tlEsc(r.last_purchase_date)}</td>
       <td class="muted" style="font-size:.82rem">${_tlEsc(r.notes)}</td>
@@ -104,7 +112,7 @@ document.getElementById("tl-inv-add-btn").addEventListener("click", async () => 
   const res = await saaToolInventoryAdd({
     item_name: itemName,
     category: document.getElementById("tl-inv-add-category").value.trim(),
-    type: document.getElementById("tl-inv-add-type").value,
+    type: TL_KIND,
     quantity_on_hand: document.getElementById("tl-inv-add-qty").value,
     unit_of_measure: document.getElementById("tl-inv-add-unit").value.trim(),
     notes: document.getElementById("tl-inv-add-notes").value.trim(),
@@ -121,9 +129,7 @@ document.getElementById("tl-inv-add-btn").addEventListener("click", async () => 
 
 function _tlFilterNote() {
   const parts = [];
-  const type = document.getElementById("tl-type-filter").value;
   const search = document.getElementById("tl-search").value.trim();
-  if (type) parts.push(_tlTypeLabel(type));
   if (search) parts.push(`matching "${search}"`);
   return parts.length ? "filtered: " + parts.join(", ") : "";
 }
@@ -132,6 +138,7 @@ function _tlPrintList() {
   printToolList({
     generatedOn: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
     filterNote: _tlFilterNote(),
+    title: TL_LIST,
     rows: _tlLastInventoryRows,
   });
 }
@@ -139,15 +146,15 @@ function _tlPrintList() {
 // Round 77: real formatted .xlsx (see xlsx-export.js), same rows as on screen.
 function _tlDownloadCsv() {
   const rows = _tlLastInventoryRows.map((r) => [
-    r.item_name, r.category, _tlTypeLabel(r.type), r.quantity_on_hand, r.unit_of_measure, r.last_purchase_date, r.notes,
+    r.item_name, r.category, r.quantity_on_hand, r.unit_of_measure, r.last_purchase_date, r.notes,
   ]);
-  saaXlsxDownload("SAA-tool-list-" + saaXlsxStamp(), [{
-    name: "Tool List", tabColor: "C55A11",
-    title: "SAA Comfort Air LLC \u2014 Tool List",
+  saaXlsxDownload("SAA-" + TL_LIST.toLowerCase().replace(/ /g, "-") + "-" + saaXlsxStamp(), [{
+    name: TL_LIST, tabColor: TL_KIND === "tools" ? "C55A11" : "2E7D5B",
+    title: "SAA Comfort Air LLC \u2014 " + TL_LIST,
     subtitle: "Generated " + saaXlsxTodayLabel() + "   |   " + rows.length + " item" + (rows.length === 1 ? "" : "s") + " (as filtered on screen)",
-    freezeCols: 1, emptyText: "No tools match the current filters.",
+    freezeCols: 1, emptyText: "No " + TL_LABEL.toLowerCase() + " match the current filters.",
     columns: [
-      { header: "Item", width: 38, type: "wrap" }, { header: "Category", width: 22 }, { header: "Type", width: 14, type: "center" },
+      { header: "Item", width: 38, type: "wrap" }, { header: "Category", width: 22 },
       { header: "Qty on Hand", width: 12, type: "int" }, { header: "Unit", width: 10, type: "center" },
       { header: "Last Purchased", width: 15, type: "date" }, { header: "Notes", width: 44, type: "wrap" },
     ],
@@ -179,7 +186,6 @@ async function renderPurchases() {
       <td>${_tlEsc(r.vendor)}</td>
       <td>${_tlEsc(r.item_name)}</td>
       <td>${_tlEsc(r.category)}</td>
-      <td>${_tlTypeLabel(r.type)}</td>
       <td>${r.qty}</td>
       <td>${_tlMoney(r.unit_price)}</td>
       <td>${_tlMoney(r.item_total)}</td>
@@ -210,7 +216,7 @@ document.getElementById("tl-purch-add-btn").addEventListener("click", async () =
     vendor: document.getElementById("tl-purch-add-vendor").value.trim(),
     item_name: itemName,
     category: document.getElementById("tl-purch-add-category").value.trim(),
-    type: document.getElementById("tl-purch-add-type").value,
+    type: TL_KIND,
     qty: document.getElementById("tl-purch-add-qty").value,
     unit_price: document.getElementById("tl-purch-add-price").value,
     sales_tax: document.getElementById("tl-purch-add-tax").value,
@@ -244,7 +250,7 @@ function _tlShopBoughtChoice(itemName) {
     overlay.innerHTML = `
       <div class="modal-card" style="max-width:420px">
         <h3>Bought: ${_tlEsc(itemName)}</h3>
-        <p class="muted" style="margin-bottom:16px">Remove it from the Tools to Buy list, or keep it here marked as purchased (hidden unless "Show purchased" is ticked)?</p>
+        <p class="muted" style="margin-bottom:16px">Remove it from the ${TL_LABEL} to Buy list, or keep it here marked as purchased (hidden unless "Show purchased" is ticked)?</p>
         <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
           <button type="button" class="btn btn-ghost btn-sm" data-act="cancel">Cancel</button>
           <button type="button" class="btn btn-ghost btn-sm" data-act="keep">Keep as purchased</button>
@@ -284,7 +290,6 @@ async function renderShoppingList() {
       <td>${_tlEsc(r.brand)}</td>
       <td>${r.qty == null ? "" : r.qty}</td>
       <td>${_tlEsc(r.category)}</td>
-      <td>${_tlTypeLabel(r.type)}</td>
       <td>${_tlMoney(r.estimated_price)}</td>
       <td>${_tlEsc(_tlPriorityLabel(r.priority))}</td>
       <td class="muted" style="font-size:.82rem">${_tlEsc(r.notes)}</td>
@@ -319,7 +324,7 @@ async function renderShoppingList() {
   tbody.querySelectorAll(".tl-shop-del").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const row = _tlShopRows.find((r) => r.id === btn.dataset.id) || {};
-      const ok = await saaConfirm(`Delete "${_tlEsc(row.item_name || "this item")}" from the Tools to Buy list? This can't be undone.`,
+      const ok = await saaConfirm(`Delete "${_tlEsc(row.item_name || "this item")}" from the ${TL_LABEL} to Buy list? This can't be undone.`,
         { title: "Delete item", okLabel: "Delete", cancelLabel: "Cancel" });
       if (!ok) return;
       const res = await saaToolShoppingListDelete(btn.dataset.id);
@@ -330,7 +335,7 @@ async function renderShoppingList() {
   });
 }
 
-const _TL_SHOP_FIELDS = { name: "item_name", spec: "specification", brand: "brand", qty: "qty", category: "category", type: "type", price: "estimated_price", priority: "priority", notes: "notes" };
+const _TL_SHOP_FIELDS = { name: "item_name", spec: "specification", brand: "brand", qty: "qty", category: "category", price: "estimated_price", priority: "priority", notes: "notes" };
 
 function _tlShopFormValues() {
   return {
@@ -339,7 +344,7 @@ function _tlShopFormValues() {
     brand: document.getElementById("tl-shop-add-brand").value.trim(),
     qty: document.getElementById("tl-shop-add-qty").value,
     category: document.getElementById("tl-shop-add-category").value.trim(),
-    type: document.getElementById("tl-shop-add-type").value,
+    type: TL_KIND,
     estimated_price: document.getElementById("tl-shop-add-price").value,
     priority: document.getElementById("tl-shop-add-priority").value,
     notes: document.getElementById("tl-shop-add-notes").value.trim(),
@@ -353,7 +358,6 @@ function _tlShopResetForm() {
     const el = document.getElementById(`tl-shop-add-${f}`);
     if (el) el.value = f === "qty" ? "1" : "";
   });
-  document.getElementById("tl-shop-add-type").value = "tools";
   document.getElementById("tl-shop-add-priority").value = "";
   document.getElementById("tl-shop-form-title").textContent = "Add to Shopping List";
   document.getElementById("tl-shop-add-btn").textContent = "Add to List";
@@ -370,7 +374,6 @@ function _tlShopStartEdit(id) {
     const el = document.getElementById(`tl-shop-add-${f}`);
     if (!el) return;
     let v = row[col];
-    if (f === "type") v = v || "tools";
     el.value = v == null ? "" : v;
   });
   document.getElementById("tl-shop-form-title").textContent = `Edit: ${row.item_name || "item"}`;
@@ -415,7 +418,6 @@ function renderAll() {
 }
 
 let _tlSearchTimer = null;
-document.getElementById("tl-type-filter").addEventListener("change", renderAll);
 document.getElementById("tl-search").addEventListener("input", () => {
   clearTimeout(_tlSearchTimer);
   _tlSearchTimer = setTimeout(renderAll, 200);
@@ -423,7 +425,6 @@ document.getElementById("tl-search").addEventListener("input", () => {
 document.getElementById("tl-date-from").addEventListener("change", renderPurchases);
 document.getElementById("tl-date-to").addEventListener("change", renderPurchases);
 document.getElementById("tl-clear-btn").addEventListener("click", () => {
-  document.getElementById("tl-type-filter").value = "";
   document.getElementById("tl-search").value = "";
   document.getElementById("tl-date-from").value = "";
   document.getElementById("tl-date-to").value = "";

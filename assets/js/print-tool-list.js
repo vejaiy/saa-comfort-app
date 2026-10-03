@@ -32,18 +32,17 @@ function printToolList(opts) {
         <tr>
           <td>${_saaToolListEsc(r.item_name)}</td>
           <td>${_saaToolListEsc(r.category)}</td>
-          <td>${_saaToolListEsc(r.type === "tools" ? "Tools" : r.type === "supplies" ? "Supplies" : r.type)}</td>
           <td class="num">${_saaToolListEsc(r.quantity_on_hand)}${r.unit_of_measure ? " " + _saaToolListEsc(r.unit_of_measure) : ""}</td>
           <td>${_saaToolListEsc(r.last_purchase_date)}</td>
           <td>${_saaToolListEsc(r.notes)}</td>
         </tr>`).join("")
-    : `<tr><td colspan="6" class="muted">No items on the stock list.</td></tr>`;
+    : `<tr><td colspan="5" class="muted">No items on the stock list.</td></tr>`;
 
   const html = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Tool List — ${info.name}</title>
+<title>${_saaToolListEsc(opts.title || "Tool List")} — ${info.name}</title>
 <style>
   @page { size: letter; margin: 0.55in 0.6in; }
   * { box-sizing: border-box; }
@@ -82,17 +81,17 @@ function printToolList(opts) {
   <div class="rule"></div>
 
   <div class="title-row">
-    <h2>Tool List — Stock Counts</h2>
+    <h2>${_saaToolListEsc(opts.title || "Tool List")} — Stock Counts</h2>
     <div class="sub">Generated ${_saaToolListEsc(opts.generatedOn)}${opts.filterNote ? " &mdash; " + _saaToolListEsc(opts.filterNote) : ""}</div>
   </div>
 
   <table class="items">
-    <thead><tr><th>Item</th><th>Category</th><th>Type</th><th class="num">Qty on Hand</th><th>Last Purchased</th><th>Notes</th></tr></thead>
+    <thead><tr><th>Item</th><th>Category</th><th class="num">Qty on Hand</th><th>Last Purchased</th><th>Notes</th></tr></thead>
     <tbody>${rowsHtml}</tbody>
   </table>
 
   <div class="footer">
-    <div>${info.name} &mdash; Tool List</div>
+    <div>${info.name} &mdash; ${_saaToolListEsc(opts.title || "Tool List")}</div>
     <div>${info.address}</div>
   </div>
 
@@ -103,7 +102,7 @@ function printToolList(opts) {
 </html>`;
 
   const win = window.open("", "_blank");
-  if (!win) { alert("Please allow pop-ups to print the Tool List."); return; }
+  if (!win) { alert("Please allow pop-ups to print this list."); return; }
   win.document.open();
   win.document.write(html);
   win.document.close();
