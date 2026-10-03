@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Customers | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20261005a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261006a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20261005a"></script>
-<script src="../assets/js/supabase-config.js?v=20261005a"></script>
-<script src="../assets/js/auth.js?v=20261005a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261006a"></script>
+<script src="../assets/js/supabase-config.js?v=20261006a"></script>
+<script src="../assets/js/auth.js?v=20261006a"></script>
 <script>saaRequireAuth();</script>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="ic-dashboard" viewBox="0 0 80 60"><g fill="none" stroke="#27425f" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><ellipse cx="40" cy="56" rx="26" ry="2.6" fill="#27425f" opacity=".08" stroke="none"/>
 <rect x="52" y="12" width="6" height="12" fill="#c0634a"/>
@@ -189,6 +189,12 @@
     <div class="emp-apps-foot"><a class="emp-app-link" href="dashboard.html">Dashboard</a><a class="emp-app-link" href="../index.html">Public Site</a></div>
   </div>
 </header>
+<!-- Round 85 (2026-10-03), per Vijayan: on the phone, floating Home + Menu buttons
+     stay at the middle right of every employee page, in addition to the header ones. -->
+<nav class="emp-fab" aria-label="Quick navigation">
+  <a class="emp-fab-btn" href="dashboard.html" title="Dashboard" aria-label="Dashboard"><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg></a>
+  <button type="button" class="emp-fab-btn" id="emp-fab-menu" title="All pages" aria-label="All pages menu"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="currentColor"><circle cx="5" cy="5" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="19" r="2"/></svg></button>
+</nav>
 <script>
 (function(){
   var btn=document.getElementById('emp-apps-btn'), panel=document.getElementById('emp-apps');
@@ -207,6 +213,8 @@
   btn.addEventListener('click',function(e){ e.stopPropagation(); panel.hidden||!panel.classList.contains('is-open') ? open() : close(); });
   document.addEventListener('click',function(e){ if(!panel.hidden && !panel.contains(e.target) && !btn.contains(e.target)) close(); });
   document.addEventListener('keydown',function(e){ if(e.key==='Escape' && !panel.hidden) { close(); btn.focus(); } });
+  var fab=document.getElementById('emp-fab-menu');
+  if(fab) fab.addEventListener('click',function(e){ e.stopPropagation(); btn.click(); });
   q.addEventListener('input',function(){
     var v=q.value.trim().toLowerCase(), any=false;
     panel.querySelectorAll('.emp-app').forEach(function(a){ var m=!v||a.dataset.q.indexOf(v)>=0; a.hidden=!m; if(m) any=true; });
@@ -309,11 +317,11 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20261005a"></script>
-<script src="../assets/js/worksheet.js?v=20261005a"></script>
-<script src="../assets/js/xlsx-export.js?v=20261005a"></script>
-<script src="../assets/js/jobs-db.js?v=20261005a"></script>
-<script src="../assets/js/customers-db.js?v=20261005a"></script>
+<script src="../assets/js/pricing-data.js?v=20261006a"></script>
+<script src="../assets/js/worksheet.js?v=20261006a"></script>
+<script src="../assets/js/xlsx-export.js?v=20261006a"></script>
+<script src="../assets/js/jobs-db.js?v=20261006a"></script>
+<script src="../assets/js/customers-db.js?v=20261006a"></script>
 <script>
   function _custEsc(s) {
     return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

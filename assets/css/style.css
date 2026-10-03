@@ -1418,3 +1418,14 @@ tr.tl-shop-purchased td:not(.tl-shop-actions) { opacity: .6; }
 .dash-menu-btn svg { color: #3f78b5; }
 @media (max-width: 520px) { .dash-banner { padding: 10px 12px; gap: 10px; } .dash-banner-pic { display: none; } .dash-banner-text h1 { font-size: 1.2rem; } .dash-menu-btn span { display: none; } .dash-menu-btn { padding: 10px; } }
 .dash-calendar-embed iframe { height: calc(100vh - 230px); min-height: 520px; max-height: 900px; }
+
+/* Round 85: phone-only floating Home + Menu buttons, fixed at the middle right of every employee page. */
+.emp-fab { display: none; }
+@media (max-width: 700px) {
+  .emp-fab { display: flex; flex-direction: column; gap: 8px; position: fixed; right: 0; top: 50%; transform: translateY(-50%); z-index: 34; }
+  .emp-fab-btn { width: 42px; height: 42px; border: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: rgba(15,36,57,.93); color: #fff; border-radius: 12px 0 0 12px; box-shadow: -2px 3px 12px rgba(15,36,57,.35); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .emp-fab-btn:active { background: var(--orange); }
+  .emp-fab-btn:hover { text-decoration: none; }
+}
+html.saa-embed .emp-fab { display: none !important; }
+@media print { .emp-fab { display: none !important; } }
