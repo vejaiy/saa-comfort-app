@@ -1,5 +1,5 @@
 /* ============================================================
-   SAA Comfort Air LLC — Tools + Supplies page logic (employee/tool-list.html and employee/supplies.html)
+   SAA Comfort Air LLC — Tools & Supplies page logic (employee/tool-list.html)
    Renders the Stock Counts and Purchase Ledger tables from tools-db.js,
    wires up the shared type/search filter, inline stock-qty editing,
    and the two "Add" forms. Round 35 (2026-09-16).
@@ -18,20 +18,27 @@ function _tlTypeLabel(t) {
   return t === "tools" ? "Tools" : t === "supplies" ? "Supplies" : (t || "");
 }
 
-// Round 84 (2026-10-03), per Vijayan ("make tools and supplies as separate
-// page"): this one script drives both employee/tool-list.html (Tools) and
-// employee/supplies.html (Supplies). gen_tools.py sets window.TL_KIND
-// ("tools" | "supplies"), TL_LABEL and TL_LIST before loading it; every
-// query and every "Add" form is pinned to that type.
-const TL_KIND = window.TL_KIND || "tools";
-const TL_LABEL = window.TL_LABEL || "Tools";
-const TL_LIST = window.TL_LIST || "Tool List";
+// Round 86 (2026-10-03), per Vijayan's marked-up screenshot: ONE page again,
+// with top tabs  Tools | Supplies | Purchase Ledger | To Buy.  The Tools and
+// Supplies tabs are the stock counts for each type (each pinned to its own
+// type, with its own Add form / Print / Excel); Purchase Ledger and To Buy
+// cover both types and use the Type filter in the toolbar (shown on those two
+// tabs only). Open straight to a tab with tool-list.html?tab=supplies.
+const TL_KINDS = {
+  tools:    { label: "Tools",    list: "Tool List",     tab: "C55A11" },
+  supplies: { label: "Supplies", list: "Supplies List", tab: "2E7D5B" },
+};
 
+// filters for the Purchase Ledger / To Buy tabs (both types, optional Type filter)
 function _tlFilters() {
   return {
-    type: TL_KIND,
+    type: document.getElementById("tl-type-filter").value || undefined,
     search: document.getElementById("tl-search").value || undefined,
   };
+}
+// filters for a stock tab (pinned to its own type)
+function _tlStockFilters(kind) {
+  return { type: kind, search: document.getElementById("tl-search").value || undefined };
 }
 
 function _tlPriorityLabel(p) {
@@ -40,10 +47,13 @@ function _tlPriorityLabel(p) {
 
 /* ---- Tabs (Stock Counts / Purchase Ledger / Tools to Buy) ---- */
 
-let _tlActiveTab = "stock";
+let _tlActiveTab = "tools";
 
 function _tlSwitchTab(tab) {
+  if (!document.getElementById(`tl-panel-${tab}`)) tab = "tools";
   _tlActiveTab = tab;
+  // The Type filter only means something on the ledger and the to-buy list.
+  document.getElementById("tl-type-filter").hidden = !(tab === "purchases" || tab === "shopping");
   document.querySelectorAll("#tl-tabs .cal-view-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   document.querySelectorAll(".rc-tab-panel").forEach((p) => { p.hidden = true; });
   const panel = document.getElementById(`tl-panel-${tab}`);
@@ -57,14 +67,14 @@ function _tlSwitchTab(tab) {
 // download in excel format"): both buttons act on whatever's currently
 // on screen, so this is refreshed at the end of every renderInventory()
 // (i.e. it already reflects the Type/search filters above the table).
-let _tlLastInventoryRows = [];
+const _tlLastInventoryRows = { tools: [], supplies: [] };
 
-async function renderInventory() {
-  const rows = await saaToolInventoryFetchAll(_tlFilters());
-  _tlLastInventoryRows = rows;
-  const tbody = document.getElementById("tl-inv-tbody");
-  document.getElementById("tl-inv-empty").hidden = rows.length > 0;
-  document.getElementById("tl-inv-count").textContent = rows.length
+async function renderInventory(kind) {
+  const rows = await saaToolInventoryFetchAll(_tlStockFilters(kind));
+  _tlLastInventoryRows[kind] = rows;
+  const tbody = document.getElementById(`tl-inv-tbody-${kind}`);
+  document.getElementById(`tl-inv-empty-${kind}`).hidden = rows.length > 0;
+  document.getElementById(`tl-inv-count-${kind}`).textContent = rows.length
     ? `${rows.length} item${rows.length === 1 ? "" : "s"}`
     : "";
 
@@ -100,70 +110,66 @@ async function renderInventory() {
       if (!confirm("Remove this item from the stock list? This does not touch the purchase ledger.")) return;
       const res = await saaToolInventoryDelete(btn.dataset.id);
       if (!res.ok) { alert("Couldn't delete: " + res.error); return; }
-      renderInventory();
+      renderInventory(kind);
     });
   });
 }
 
-document.getElementById("tl-inv-add-btn").addEventListener("click", async () => {
-  const status = document.getElementById("tl-inv-add-status");
-  const itemName = document.getElementById("tl-inv-add-name").value.trim();
-  if (!itemName) { status.textContent = "Item name is required."; return; }
-  const res = await saaToolInventoryAdd({
-    item_name: itemName,
-    category: document.getElementById("tl-inv-add-category").value.trim(),
-    type: TL_KIND,
-    quantity_on_hand: document.getElementById("tl-inv-add-qty").value,
-    unit_of_measure: document.getElementById("tl-inv-add-unit").value.trim(),
-    notes: document.getElementById("tl-inv-add-notes").value.trim(),
-  });
-  if (!res.ok) { status.textContent = "Error: " + res.error; return; }
-  document.getElementById("tl-inv-add-name").value = "";
-  document.getElementById("tl-inv-add-category").value = "";
-  document.getElementById("tl-inv-add-qty").value = "";
-  document.getElementById("tl-inv-add-unit").value = "";
-  document.getElementById("tl-inv-add-notes").value = "";
-  status.textContent = "Added.";
-  renderInventory();
-});
-
 function _tlFilterNote() {
-  const parts = [];
   const search = document.getElementById("tl-search").value.trim();
-  if (search) parts.push(`matching "${search}"`);
-  return parts.length ? "filtered: " + parts.join(", ") : "";
+  return search ? `filtered: matching "${search}"` : "";
 }
 
-function _tlPrintList() {
-  printToolList({
-    generatedOn: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-    filterNote: _tlFilterNote(),
-    title: TL_LIST,
-    rows: _tlLastInventoryRows,
+Object.keys(TL_KINDS).forEach((kind) => {
+  const K = TL_KINDS[kind];
+  const el = (id) => document.getElementById(`${id}-${kind}`);
+
+  el("tl-inv-add-btn").addEventListener("click", async () => {
+    const status = el("tl-inv-add-status");
+    const itemName = el("tl-inv-add-name").value.trim();
+    if (!itemName) { status.textContent = "Item name is required."; return; }
+    const res = await saaToolInventoryAdd({
+      item_name: itemName,
+      category: el("tl-inv-add-category").value.trim(),
+      type: kind,
+      quantity_on_hand: el("tl-inv-add-qty").value,
+      unit_of_measure: el("tl-inv-add-unit").value.trim(),
+      notes: el("tl-inv-add-notes").value.trim(),
+    });
+    if (!res.ok) { status.textContent = "Error: " + res.error; return; }
+    ["name", "category", "qty", "unit", "notes"].forEach((f) => { el(`tl-inv-add-${f}`).value = ""; });
+    status.textContent = "Added.";
+    renderInventory(kind);
   });
-}
 
-// Round 77: real formatted .xlsx (see xlsx-export.js), same rows as on screen.
-function _tlDownloadCsv() {
-  const rows = _tlLastInventoryRows.map((r) => [
-    r.item_name, r.category, r.quantity_on_hand, r.unit_of_measure, r.last_purchase_date, r.notes,
-  ]);
-  saaXlsxDownload("SAA-" + TL_LIST.toLowerCase().replace(/ /g, "-") + "-" + saaXlsxStamp(), [{
-    name: TL_LIST, tabColor: TL_KIND === "tools" ? "C55A11" : "2E7D5B",
-    title: "SAA Comfort Air LLC \u2014 " + TL_LIST,
-    subtitle: "Generated " + saaXlsxTodayLabel() + "   |   " + rows.length + " item" + (rows.length === 1 ? "" : "s") + " (as filtered on screen)",
-    freezeCols: 1, emptyText: "No " + TL_LABEL.toLowerCase() + " match the current filters.",
-    columns: [
-      { header: "Item", width: 38, type: "wrap" }, { header: "Category", width: 22 },
-      { header: "Qty on Hand", width: 12, type: "int" }, { header: "Unit", width: 10, type: "center" },
-      { header: "Last Purchased", width: 15, type: "date" }, { header: "Notes", width: 44, type: "wrap" },
-    ],
-    rows,
-  }]);
-}
+  el("tl-print-btn").addEventListener("click", () => {
+    printToolList({
+      generatedOn: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      filterNote: _tlFilterNote(),
+      title: K.list,
+      rows: _tlLastInventoryRows[kind],
+    });
+  });
 
-document.getElementById("tl-print-btn").addEventListener("click", _tlPrintList);
-document.getElementById("tl-download-btn").addEventListener("click", _tlDownloadCsv);
+  // Real formatted .xlsx (see xlsx-export.js), same rows as on screen.
+  el("tl-download-btn").addEventListener("click", () => {
+    const rows = _tlLastInventoryRows[kind].map((r) => [
+      r.item_name, r.category, r.quantity_on_hand, r.unit_of_measure, r.last_purchase_date, r.notes,
+    ]);
+    saaXlsxDownload("SAA-" + K.list.toLowerCase().replace(/ /g, "-") + "-" + saaXlsxStamp(), [{
+      name: K.list, tabColor: K.tab,
+      title: "SAA Comfort Air LLC \u2014 " + K.list,
+      subtitle: "Generated " + saaXlsxTodayLabel() + "   |   " + rows.length + " item" + (rows.length === 1 ? "" : "s") + " (as filtered on screen)",
+      freezeCols: 1, emptyText: "No " + K.label.toLowerCase() + " match the current search.",
+      columns: [
+        { header: "Item", width: 38, type: "wrap" }, { header: "Category", width: 22 },
+        { header: "Qty on Hand", width: 12, type: "int" }, { header: "Unit", width: 10, type: "center" },
+        { header: "Last Purchased", width: 15, type: "date" }, { header: "Notes", width: 44, type: "wrap" },
+      ],
+      rows,
+    }]);
+  });
+});
 
 /* ---- Purchase Ledger ---- */
 
@@ -186,6 +192,7 @@ async function renderPurchases() {
       <td>${_tlEsc(r.vendor)}</td>
       <td>${_tlEsc(r.item_name)}</td>
       <td>${_tlEsc(r.category)}</td>
+      <td>${_tlTypeLabel(r.type)}</td>
       <td>${r.qty}</td>
       <td>${_tlMoney(r.unit_price)}</td>
       <td>${_tlMoney(r.item_total)}</td>
@@ -216,7 +223,7 @@ document.getElementById("tl-purch-add-btn").addEventListener("click", async () =
     vendor: document.getElementById("tl-purch-add-vendor").value.trim(),
     item_name: itemName,
     category: document.getElementById("tl-purch-add-category").value.trim(),
-    type: TL_KIND,
+    type: document.getElementById("tl-purch-add-type").value,
     qty: document.getElementById("tl-purch-add-qty").value,
     unit_price: document.getElementById("tl-purch-add-price").value,
     sales_tax: document.getElementById("tl-purch-add-tax").value,
@@ -250,7 +257,7 @@ function _tlShopBoughtChoice(itemName) {
     overlay.innerHTML = `
       <div class="modal-card" style="max-width:420px">
         <h3>Bought: ${_tlEsc(itemName)}</h3>
-        <p class="muted" style="margin-bottom:16px">Remove it from the ${TL_LABEL} to Buy list, or keep it here marked as purchased (hidden unless "Show purchased" is ticked)?</p>
+        <p class="muted" style="margin-bottom:16px">Remove it from the To Buy list, or keep it here marked as purchased (hidden unless "Show purchased" is ticked)?</p>
         <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
           <button type="button" class="btn btn-ghost btn-sm" data-act="cancel">Cancel</button>
           <button type="button" class="btn btn-ghost btn-sm" data-act="keep">Keep as purchased</button>
@@ -290,6 +297,7 @@ async function renderShoppingList() {
       <td>${_tlEsc(r.brand)}</td>
       <td>${r.qty == null ? "" : r.qty}</td>
       <td>${_tlEsc(r.category)}</td>
+      <td>${_tlTypeLabel(r.type)}</td>
       <td>${_tlMoney(r.estimated_price)}</td>
       <td>${_tlEsc(_tlPriorityLabel(r.priority))}</td>
       <td class="muted" style="font-size:.82rem">${_tlEsc(r.notes)}</td>
@@ -324,7 +332,7 @@ async function renderShoppingList() {
   tbody.querySelectorAll(".tl-shop-del").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const row = _tlShopRows.find((r) => r.id === btn.dataset.id) || {};
-      const ok = await saaConfirm(`Delete "${_tlEsc(row.item_name || "this item")}" from the ${TL_LABEL} to Buy list? This can't be undone.`,
+      const ok = await saaConfirm(`Delete "${_tlEsc(row.item_name || "this item")}" from the To Buy list? This can't be undone.`,
         { title: "Delete item", okLabel: "Delete", cancelLabel: "Cancel" });
       if (!ok) return;
       const res = await saaToolShoppingListDelete(btn.dataset.id);
@@ -335,7 +343,7 @@ async function renderShoppingList() {
   });
 }
 
-const _TL_SHOP_FIELDS = { name: "item_name", spec: "specification", brand: "brand", qty: "qty", category: "category", price: "estimated_price", priority: "priority", notes: "notes" };
+const _TL_SHOP_FIELDS = { name: "item_name", spec: "specification", brand: "brand", qty: "qty", category: "category", type: "type", price: "estimated_price", priority: "priority", notes: "notes" };
 
 function _tlShopFormValues() {
   return {
@@ -344,7 +352,7 @@ function _tlShopFormValues() {
     brand: document.getElementById("tl-shop-add-brand").value.trim(),
     qty: document.getElementById("tl-shop-add-qty").value,
     category: document.getElementById("tl-shop-add-category").value.trim(),
-    type: TL_KIND,
+    type: document.getElementById("tl-shop-add-type").value,
     estimated_price: document.getElementById("tl-shop-add-price").value,
     priority: document.getElementById("tl-shop-add-priority").value,
     notes: document.getElementById("tl-shop-add-notes").value.trim(),
@@ -358,6 +366,7 @@ function _tlShopResetForm() {
     const el = document.getElementById(`tl-shop-add-${f}`);
     if (el) el.value = f === "qty" ? "1" : "";
   });
+  document.getElementById("tl-shop-add-type").value = "tools";
   document.getElementById("tl-shop-add-priority").value = "";
   document.getElementById("tl-shop-form-title").textContent = "Add to Shopping List";
   document.getElementById("tl-shop-add-btn").textContent = "Add to List";
@@ -374,6 +383,7 @@ function _tlShopStartEdit(id) {
     const el = document.getElementById(`tl-shop-add-${f}`);
     if (!el) return;
     let v = row[col];
+    if (f === "type") v = v || "tools";
     el.value = v == null ? "" : v;
   });
   document.getElementById("tl-shop-form-title").textContent = `Edit: ${row.item_name || "item"}`;
@@ -412,12 +422,14 @@ document.querySelectorAll("#tl-tabs .cal-view-btn").forEach((b) => {
 /* ---- Shared filter bar ---- */
 
 function renderAll() {
-  renderInventory();
+  renderInventory("tools");
+  renderInventory("supplies");
   renderPurchases();
   renderShoppingList();
 }
 
 let _tlSearchTimer = null;
+document.getElementById("tl-type-filter").addEventListener("change", () => { renderPurchases(); renderShoppingList(); });
 document.getElementById("tl-search").addEventListener("input", () => {
   clearTimeout(_tlSearchTimer);
   _tlSearchTimer = setTimeout(renderAll, 200);
@@ -425,15 +437,19 @@ document.getElementById("tl-search").addEventListener("input", () => {
 document.getElementById("tl-date-from").addEventListener("change", renderPurchases);
 document.getElementById("tl-date-to").addEventListener("change", renderPurchases);
 document.getElementById("tl-clear-btn").addEventListener("click", () => {
+  document.getElementById("tl-type-filter").value = "";
   document.getElementById("tl-search").value = "";
   document.getElementById("tl-date-from").value = "";
   document.getElementById("tl-date-to").value = "";
   renderAll();
 });
 
-// The Stock Counts tab starts marked "active" in the generated markup, but
-// every tab panel starts hidden except it (see gen_tools.py) -- _tlSwitchTab
-// keeps the button/panel state in sync going forward, so run it once up
-// front to match the default markup rather than assuming they never drift.
-_tlSwitchTab("stock");
+// Start on the Tools tab, or the one named in the address (?tab=supplies,
+// also #supplies) -- e.g. the old supplies.html address redirects here.
+let _tlStartTab = "tools";
+try {
+  const q = new URLSearchParams(location.search).get("tab") || location.hash.replace("#", "");
+  if (q === "supplies" || q === "purchases" || q === "shopping" || q === "tools") _tlStartTab = q;
+} catch (e) { /* default tab */ }
+_tlSwitchTab(_tlStartTab);
 renderAll();
