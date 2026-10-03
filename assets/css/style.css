@@ -1398,3 +1398,23 @@ tr.tl-shop-purchased td:not(.tl-shop-actions) { opacity: .6; }
 .emp-apps-search input:focus, .dash-search input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(63,120,181,.2); }
 @media (max-width: 520px) { #dash-groups { grid-template-columns: 1fr; } .dash-tiles { grid-template-columns: repeat(3, 1fr); gap: 8px; } .dash-name { font-size: .76rem; } }
 @media (min-width: 521px) { .dash-tiles { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 9px; } .dash-pic svg { max-width: 74px; } .dash-name { font-size: .79rem; padding: 6px 4px 10px; } }
+
+/* Round 83: the apps panel is now THE navigation (dashboard tiles moved into it): wider, 4-up, with live counts. */
+.emp-apps { width: 468px; }
+.emp-apps-grid { grid-template-columns: repeat(4, 1fr); }
+.emp-app-pic { position: relative; width: 66px; height: 49px; }
+.emp-app-badge { position: absolute; top: -3px; right: -6px; min-width: 20px; padding: 0 6px; border-radius: 999px; background: #fff; color: var(--ac); font-size: .66rem; font-weight: 800; line-height: 18px; text-align: center; box-shadow: 0 1px 4px rgba(15,36,57,.25); }
+.emp-app-badge[hidden] { display: none; }
+@media (max-width: 520px) { .emp-apps-grid { grid-template-columns: repeat(3, 1fr); } }
+/* Dashboard: calendar is the front page; a Google-style Menu button opens the apps panel. */
+.dash-banner { display: flex; align-items: center; gap: 16px; padding: 12px 18px; margin-bottom: 14px; border-radius: 20px; background: linear-gradient(120deg, #e8f1fb 0%, #e3f4f1 55%, #fdf0e2 100%); border: 1px solid rgba(15,36,57,.06); }
+.dash-banner-pic { flex: 0 0 auto; width: 84px; height: 63px; }
+.dash-banner-pic svg { width: 100%; height: 100%; }
+.dash-banner-text { flex: 1 1 auto; min-width: 0; }
+.dash-banner-text h1 { margin: 0 0 2px; font-size: 1.5rem; }
+.dash-menu-btn { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 10px; border: 1px solid rgba(15,36,57,.12); background: #fff; color: var(--navy); border-radius: 16px; padding: 10px 16px 10px 12px; font-size: .95rem; font-weight: 800; cursor: pointer; box-shadow: var(--shadow); transition: transform .15s, box-shadow .15s; }
+.dash-menu-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(15,36,57,.16); }
+.dash-menu-btn:active { transform: scale(.96); }
+.dash-menu-btn svg { color: #3f78b5; }
+@media (max-width: 520px) { .dash-banner { padding: 10px 12px; gap: 10px; } .dash-banner-pic { display: none; } .dash-banner-text h1 { font-size: 1.2rem; } .dash-menu-btn span { display: none; } .dash-menu-btn { padding: 10px; } }
+.dash-calendar-embed iframe { height: calc(100vh - 230px); min-height: 520px; max-height: 900px; }
