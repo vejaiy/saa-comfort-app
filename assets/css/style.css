@@ -1429,3 +1429,18 @@ tr.tl-shop-purchased td:not(.tl-shop-actions) { opacity: .6; }
 }
 html.saa-embed .emp-fab { display: none !important; }
 @media print { .emp-fab { display: none !important; } }
+
+/* Round 87 (2026-10-03), per Vijayan: bigger Home + Menu (9-dot) buttons in the header on desktop and tablet
+   (phone size unchanged); menu icons no longer animate. */
+@media (min-width: 701px) {
+  .emp-header { padding: 10px 0; }
+  .emp-header .emp-actions { gap: 10px; }
+  .emp-header .emp-ic-btn { width: 54px; height: 54px; }
+  .emp-header .emp-ic-btn svg { width: 31px; height: 31px; }
+  .emp-header .brand .mark { width: 38px; height: 38px; font-size: .7rem; }
+  .emp-apps { top: 78px; max-height: calc(100vh - 90px); }
+}
+.emp-apps svg *, .dash-banner svg *, .dash-pic svg * { animation: none !important; }
+/* Round 87b: fully static menu pictures -- no hover lift/zoom/tilt either. */
+.emp-app, .emp-app:hover, .emp-app:focus-visible, .emp-app:active { transform: none !important; transition: background .15s; }
+.emp-app-pic, .emp-app-pic svg, .emp-app-pic svg * { animation: none !important; transition: none !important; transform: none !important; }
