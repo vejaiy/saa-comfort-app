@@ -3619,6 +3619,9 @@ async function jbOpenDetail(jobId) {
   // (now disabled, auto-derived) field -- edit it from the current Event's
   // own modal instead, same as Status just above.
   document.getElementById("jbd-completed-time-note").textContent = _jbCompletedTime.isEstimate ? "Estimated" : "";
+  // Round 96: Scheduled/Completion are editable (write-through to the current
+  // Event) except on a historical Job, which is read-only.
+  ["jbd-scheduled", "jbd-time", "jbd-completed", "jbd-completed-time"].forEach((id) => { document.getElementById(id).disabled = job.is_current === false; });
   document.getElementById("jbd-address").value = job.job_address || "";
   document.getElementById("jbd-city").value = job.job_city || "";
   document.getElementById("jbd-state").value = job.job_state || "TX";
@@ -3860,6 +3863,59 @@ async function jbSaveDetail(opts) {
   statusMsg.textContent = "Saved.";
   await jbLoadAll();
   if (!opts.silent) _jbToast("Job Card saved.");
+}
+
+/** Round 96 (2026-10-04), per Vijayan ("allow to update scheduled time and
+ *  completion time"): the Job Card's Scheduled Date/Time and Completion
+ *  Date/Completed Time are editable again. They are deliberately NOT part of
+ *  jbSaveDetail's autosave patch (Round 55: a stale DOM value there used to
+ *  overwrite what an Event edit had just synced into the Job). Instead each
+ *  pair is an explicit write-through the moment BOTH its date and time are
+ *  filled in: schedule -> the Job's current Event (saaEventsSetScheduleForJob,
+ *  then the Job re-syncs from it); completion -> the Event's completed_at
+ *  plus the Job's completed stamp (saaEventsSetCompletionForJob). Afterwards
+ *  the card, Event History, Jobs list and Calendar are refreshed. */
+async function jbApplyScheduleEdit(kind) {
+  const job = _jbCurrentJob;
+  if (!job || !job.id) return;
+  const statusMsg = document.getElementById("jbd-status-msg");
+  if (job.is_current === false) return;
+  const ids = kind === "completion" ? ["jbd-completed", "jbd-completed-time"] : ["jbd-scheduled", "jbd-time"];
+  const dateVal = document.getElementById(ids[0]).value;
+  const timeVal = document.getElementById(ids[1]).value;
+  const label = kind === "completion" ? "completion" : "scheduled";
+  if (!dateVal || !timeVal) {
+    if (statusMsg) statusMsg.textContent = `Enter both a ${label} date and time to save the change.`;
+    return;
+  }
+  if (statusMsg) statusMsg.textContent = "Saving…";
+  const res = kind === "completion"
+    ? await saaEventsSetCompletionForJob(job.id, dateVal, timeVal)
+    : await saaEventsSetScheduleForJob(job.id, dateVal, timeVal);
+  if (!res.ok) {
+    if (statusMsg) statusMsg.textContent = res.error;
+    _jbToast(res.error, true);
+    return;
+  }
+  if (statusMsg) statusMsg.textContent = kind === "completion" ? "Completion time saved" : "Schedule saved";
+  const jobId = job.id;
+  await jbLoadAll();
+  const fresh = _jbAllJobs.find((j) => j.id === jobId);
+  if (fresh && _jbCurrentJob && _jbCurrentJob.id === jobId) _jbCurrentJob = fresh;
+  if (_jbCurrentJob) {
+    await jbRenderEventTimeline(_jbCurrentJob);
+    await _jbRefreshJobDerivedFields();
+    if (typeof _jbUpdateMileageContext === "function") _jbUpdateMileageContext();
+  }
+  if (typeof saaCalLoadAndRender === "function") { try { await saaCalLoadAndRender(); } catch (e) { /* calendar not on this page */ } }
+}
+
+function jbWireScheduleEdits() {
+  [["jbd-scheduled", "schedule"], ["jbd-time", "schedule"], ["jbd-completed", "completion"], ["jbd-completed-time", "completion"]].forEach(([id, kind]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("change", () => { _jbSaveChain = _jbSaveChain.then(() => jbApplyScheduleEdit(kind)).catch(() => {}); });
+  });
 }
 
 /** Debounces a background jbSaveDetail() call so editing any tracked field
@@ -4201,6 +4257,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (_jbCurrentJob) _jbUpdateMileageContext();
     });
   });
+  jbWireScheduleEdits(); // Round 96
   // Job Card quick-access row (Round 6 item 4) — same three actions as the
   // buttons already inside the card, just reachable without scrolling.
   document.getElementById("jbd-quick-checklist-btn").addEventListener("click", jbOpenInspectionModal);

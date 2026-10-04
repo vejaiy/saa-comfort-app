@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jobs | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20261013a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261014a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20261013a"></script>
-<script src="../assets/js/supabase-config.js?v=20261013a"></script>
-<script src="../assets/js/auth.js?v=20261013a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261014a"></script>
+<script src="../assets/js/supabase-config.js?v=20261014a"></script>
+<script src="../assets/js/auth.js?v=20261014a"></script>
 <script>saaRequireAuth();</script>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="ic-dashboard" viewBox="0 0 80 60"><g fill="none" stroke="#27425f" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><ellipse cx="40" cy="56" rx="26" ry="2.6" fill="#27425f" opacity=".08" stroke="none"/>
 <rect x="52" y="12" width="6" height="12" fill="#c0634a"/>
@@ -613,25 +613,21 @@
             <div class="field"><label>Technician 2 <span class="muted field-opt" style="font-weight:400">(optional)</span></label><select id="jbd-tech2"></select></div>
             <div class="field"><label>Technician 3 <span class="muted field-opt" style="font-weight:400">(optional)</span></label><select id="jbd-tech3"></select></div>
           </div>
-          <!-- Round 55 follow-up, per Vijayan ("schedule time and completion
-               time is update it is not updating in Jobs and Events"):
-               these four used to be plain editable fields that wrote
-               straight to the Job row via jbSaveDetail -- an ordinary Job
-               Card save (even one just touching Notes) would silently
-               overwrite whatever _saaEventsSyncJobFromCurrentEvent had
-               just synced in from the current Event with whatever stale
-               value happened to still be sitting in these DOM fields from
-               when the card was opened. Same disabled/auto-derived
-               treatment Round 54 already gave jbd-status -- change the
-               schedule or completion time from the Event (Job Card's
-               event modal or the Calendar drawer) instead. -->
+          <!-- Round 55 follow-up made these four read-only (a stale DOM value
+               was overwriting what an Event edit had just synced in).
+               Round 96 (2026-10-04), per Vijayan ("allow to update scheduled
+               time and completion time"): editable again, but safely -- they
+               are NOT part of the autosave/jbSaveDetail patch. Instead each
+               pair writes straight through to this Job's current Event (and
+               the Job's own completed stamp) the moment both a date and a
+               time are entered; see jbWireScheduleEdits in jobs.js. -->
           <div class="field-row">
-            <div class="field"><label>Scheduled Date</label><input type="date" id="jbd-scheduled" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"></div>
-            <div class="field"><label>Scheduled Time</label><input type="time" id="jbd-time" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"></div>
+            <div class="field"><label>Scheduled Date</label><input type="date" id="jbd-scheduled" title="Change the scheduled date (updates this Job's current Event)"></div>
+            <div class="field"><label>Scheduled Time</label><input type="time" id="jbd-time" title="Change the scheduled time (updates this Job's current Event)"></div>
           </div>
           <div class="field-row">
-            <div class="field"><label>Completion Date</label><input type="date" id="jbd-completed" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"></div>
-            <div class="field"><label>Completed Time <span class="jbe-est-pill" id="jbd-completed-time-note"></span></label><input type="time" id="jbd-completed-time" disabled title="Auto-derived from this Job's current Event -- change it from the Event instead"></div>
+            <div class="field"><label>Completion Date</label><input type="date" id="jbd-completed" title="Change the completion date (updates this Job's current Event)"></div>
+            <div class="field"><label>Completed Time <span class="jbe-est-pill" id="jbd-completed-time-note"></span></label><input type="time" id="jbd-completed-time" title="Change the completed time (updates this Job's current Event)"></div>
           </div>
           <div class="field"><label>Service Address</label><input type="text" id="jbd-address"></div>
           <div class="field-row field-row-3 jb-addr-row">
@@ -1103,20 +1099,20 @@
 <div id="jb-toast" class="cal-toast" hidden></div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20261013a"></script>
-<script src="../assets/js/worksheet.js?v=20261013a"></script>
-<script src="../assets/js/xlsx-export.js?v=20261013a"></script>
-<script src="../assets/js/systems-db.js?v=20261013a"></script>
-<script src="../assets/js/events-db.js?v=20261013a"></script>
-<script src="../assets/js/jobs-db.js?v=20261013a"></script>
-<script src="../assets/js/job-photos-db.js?v=20261013a"></script>
-<script src="../assets/js/warranty-files-db.js?v=20261013a"></script>
-<script src="../assets/js/camera-capture.js?v=20261013a"></script>
-<script src="../assets/js/print-invoice.js?v=20261013a"></script>
-<script src="../assets/js/maps-config.js?v=20261013a"></script>
-<script src="../assets/js/mileage-db.js?v=20261013a"></script>
-<script src="../assets/js/jobs.js?v=20261013a"></script>
-<script src="../assets/js/print-service-checklist.js?v=20261013a"></script>
-<script src="../assets/js/service-checklist.js?v=20261013a"></script>
+<script src="../assets/js/pricing-data.js?v=20261014a"></script>
+<script src="../assets/js/worksheet.js?v=20261014a"></script>
+<script src="../assets/js/xlsx-export.js?v=20261014a"></script>
+<script src="../assets/js/systems-db.js?v=20261014a"></script>
+<script src="../assets/js/events-db.js?v=20261014a"></script>
+<script src="../assets/js/jobs-db.js?v=20261014a"></script>
+<script src="../assets/js/job-photos-db.js?v=20261014a"></script>
+<script src="../assets/js/warranty-files-db.js?v=20261014a"></script>
+<script src="../assets/js/camera-capture.js?v=20261014a"></script>
+<script src="../assets/js/print-invoice.js?v=20261014a"></script>
+<script src="../assets/js/maps-config.js?v=20261014a"></script>
+<script src="../assets/js/mileage-db.js?v=20261014a"></script>
+<script src="../assets/js/jobs.js?v=20261014a"></script>
+<script src="../assets/js/print-service-checklist.js?v=20261014a"></script>
+<script src="../assets/js/service-checklist.js?v=20261014a"></script>
 </body>
 </html>

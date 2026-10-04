@@ -491,6 +491,66 @@ async function saaEventsSetCompletedTime(eventId, dateStr, hhmm) {
   }
 }
 
+/** Round 96 (2026-10-04), per Vijayan ("allow to update scheduled time and
+ *  completion time" on the Job Card): the Job Card's Scheduled Date/Time
+ *  fields write through to the Job's CURRENT Event (the Event stays the
+ *  source of truth; the Job's own columns are then re-synced from it by
+ *  _saaEventsSyncJobFromCurrentEvent, same as a Calendar drag). Unlike
+ *  saaEventsReschedule this does NOT flip the Event's status to
+ *  "rescheduled" -- correcting the time of a Completed visit must leave it
+ *  Completed. An existing scheduled_end is shifted by the same amount so
+ *  the visit keeps its length. Returns { ok:true } | { ok:false, error }. */
+async function saaEventsSetScheduleForJob(jobId, dateStr, hhmm) {
+  try {
+    if (!dateStr || !hhmm) return { ok: false, error: "Both a scheduled date and time are required." };
+    const current = await saaEventsFetchCurrentForJob(jobId);
+    if (!current) return { ok: false, error: "This Job has no Event to update." };
+    const pad = (n) => String(n).padStart(2, "0");
+    const wall = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+    const patch = { scheduled_start: `${dateStr}T${hhmm}:00`, updated_at: new Date().toISOString() };
+    const oldStart = saaEventsWallClock(current.scheduled_start);
+    const oldEnd = saaEventsWallClock(current.scheduled_end);
+    if (oldStart && oldEnd) {
+      const newStart = new Date(`${dateStr}T${hhmm}:00`);
+      const delta = newStart.getTime() - oldStart.local.getTime();
+      patch.scheduled_end = wall(new Date(oldEnd.local.getTime() + delta));
+    }
+    const { error } = await _saaClient.from("events").update(patch).eq("id", current.id);
+    if (error) throw error;
+    await _saaEventsSyncJobFromCurrentEvent(jobId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: _saaEventsFriendlyDbError(e) };
+  }
+}
+
+/** Round 96: the Job Card's Completion Date / Completed Time. Writes the
+ *  Job's current Event's completed_at (saaEventsSetCompletedTime, which also
+ *  keeps the Calendar card's end in step) AND the Job's own completed_date +
+ *  status_history.completed -- the Job Card reads its completion date/time
+ *  from the Job row, the Calendar and Event card from the Event, so both
+ *  must carry the edit or they would disagree. */
+async function saaEventsSetCompletionForJob(jobId, dateStr, hhmm) {
+  try {
+    if (!dateStr || !hhmm) return { ok: false, error: "Both a completion date and time are required." };
+    const iso = new Date(`${dateStr}T${hhmm}:00`).toISOString();
+    const { data: job, error: jobErr } = await _saaClient.from("jobs").select("status_history").eq("id", jobId).single();
+    if (jobErr) throw jobErr;
+    const status_history = Object.assign({}, job.status_history || {}, { completed: iso });
+    const { error } = await _saaClient.from("jobs")
+      .update({ completed_date: dateStr, status_history, updated_at: new Date().toISOString() }).eq("id", jobId);
+    if (error) throw error;
+    const current = await saaEventsFetchCurrentForJob(jobId);
+    if (current) {
+      const r = await saaEventsSetCompletedTime(current.id, dateStr, hhmm);
+      if (!r.ok) return r;
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: _saaEventsFriendlyDbError(e) };
+  }
+}
+
 /** Generic partial update, used by the Event detail view for everything
  *  from a status change to filling in technician/customer notes, work
  *  performed, parts used, or a customer signature. Auto-stamps
