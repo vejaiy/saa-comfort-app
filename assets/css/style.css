@@ -1581,3 +1581,17 @@ html:not(.saa-embed) .cal-hero .cal-summary-strip { margin-bottom: 0; }
 html:not(.saa-embed) .cal-hero .cal-datebar { margin-bottom: 14px !important; }
 html:not(.saa-embed) .cal-hero .cal-page-head p.muted { color: #2b3a49; }
 @media (max-width: 640px) { html:not(.saa-embed) .cal-hero { padding: 12px 12px 10px; border-radius: 14px; margin-bottom: 10px; } }
+
+/* ---- Round 100: photo backgrounds for the Operations and Quote Worksheets menu sections ----
+   A white wash keeps the labels and the picture tiles legible over the photo. */
+.emp-apps-group.c-blue {
+  background: linear-gradient(rgba(255,255,255,.70), rgba(255,255,255,.60)), url("../img/menu-operations-bg.jpg") center 30% / cover no-repeat, var(--g1);
+}
+.emp-apps-group.c-teal {
+  background: linear-gradient(rgba(255,255,255,.72), rgba(255,255,255,.62)), url("../img/menu-worksheets-bg.jpg") center 40% / cover no-repeat, var(--g1);
+}
+.emp-apps-group.c-blue h4, .emp-apps-group.c-teal h4 { text-shadow: 0 0 6px #fff, 0 0 3px #fff; font-weight: 800; }
+.emp-apps-group.c-blue .emp-app-name, .emp-apps-group.c-teal .emp-app-name { text-shadow: 0 0 5px #fff, 0 0 3px #fff, 0 0 2px #fff; font-weight: 700; }
+.emp-apps-group.c-blue .emp-app:hover, .emp-apps-group.c-teal .emp-app:hover,
+.emp-apps-group.c-blue .emp-app:focus-visible, .emp-apps-group.c-teal .emp-app:focus-visible { background: rgba(255,255,255,.88); }
+.emp-apps-group.c-blue .emp-app.is-current, .emp-apps-group.c-teal .emp-app.is-current { background: #fff; }
