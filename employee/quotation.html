@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Create Quote | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20261012a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261012b">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20261012a"></script>
-<script src="../assets/js/supabase-config.js?v=20261012a"></script>
-<script src="../assets/js/auth.js?v=20261012a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261012b"></script>
+<script src="../assets/js/supabase-config.js?v=20261012b"></script>
+<script src="../assets/js/auth.js?v=20261012b"></script>
 <script>saaRequireAuth();</script>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="ic-dashboard" viewBox="0 0 80 60"><g fill="none" stroke="#27425f" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><ellipse cx="40" cy="56" rx="26" ry="2.6" fill="#27425f" opacity=".08" stroke="none"/>
 <rect x="52" y="12" width="6" height="12" fill="#c0634a"/>
@@ -300,6 +300,15 @@
   <div class="price" id="price-condenser">$0.00</div>
   <label class="switch"><input type="checkbox" id="tgl-condenser" checked><span class="slider"></span></label>
 </div>
+<div class="margin-row" id="margin-row-condenser">
+  <div class="meta"><div class="name">Condenser margin</div><div class="desc">Added on top of the condenser material cost &mdash; counted in the quote total.</div></div>
+  <select id="margin-condenser-mode" aria-label="Condenser margin type">
+    <option value="pct" selected>% of material cost</option>
+    <option value="usd">$ flat amount</option>
+  </select>
+  <input type="number" id="margin-condenser-val" value="0" step="any" min="0" aria-label="Condenser margin" style="width:90px">
+  <div class="price" id="margin-condenser-amt">$0.00</div>
+</div>
 <details class="detail-panel" id="panel-condenser">
   <summary>Condenser worksheet <span class="hint">click to open the worksheet</span></summary>
   <div class="detail-body"><div id="detail-condenser"></div></div>
@@ -309,6 +318,15 @@
   <div class="meta"><div class="name">Coil Material</div><div class="desc">Remove and dispose of the existing coil; install a new matched coil. Price scales with the access/complexity zone below.</div></div>
   <div class="price" id="price-coil">$0.00</div>
   <label class="switch"><input type="checkbox" id="tgl-coil" checked><span class="slider"></span></label>
+</div>
+<div class="margin-row" id="margin-row-coil">
+  <div class="meta"><div class="name">Coil margin</div><div class="desc">Added on top of the coil material cost &mdash; counted in the quote total.</div></div>
+  <select id="margin-coil-mode" aria-label="Coil margin type">
+    <option value="pct" selected>% of material cost</option>
+    <option value="usd">$ flat amount</option>
+  </select>
+  <input type="number" id="margin-coil-val" value="0" step="any" min="0" aria-label="Coil margin" style="width:90px">
+  <div class="price" id="margin-coil-amt">$0.00</div>
 </div>
 <details class="detail-panel" id="panel-coil">
   <summary>Coil Change worksheet <span class="hint">click to open the worksheet</span></summary>
@@ -324,6 +342,15 @@
   <div class="price" id="price-furnace">$0.00</div>
   <label class="switch"><input type="checkbox" id="tgl-furnace" checked><span class="slider"></span></label>
 </div>
+<div class="margin-row" id="margin-row-furnace">
+  <div class="meta"><div class="name">Furnace margin</div><div class="desc">Added on top of the furnace material cost &mdash; counted in the quote total.</div></div>
+  <select id="margin-furnace-mode" aria-label="Furnace margin type">
+    <option value="pct" selected>% of material cost</option>
+    <option value="usd">$ flat amount</option>
+  </select>
+  <input type="number" id="margin-furnace-val" value="0" step="any" min="0" aria-label="Furnace margin" style="width:90px">
+  <div class="price" id="margin-furnace-amt">$0.00</div>
+</div>
 <details class="detail-panel" id="panel-furnace">
   <summary>Furnace Change worksheet <span class="hint">click to open the worksheet</span></summary>
   <div class="detail-body"><div id="detail-furnace"></div></div>
@@ -335,7 +362,8 @@
 <div class="field" style="max-width:220px"><label>Overhead %</label><input type="number" id="overhead-pct" value="0" step="any"></div>
 
 <div class="totals-strip">
-  <div class="total-box"><div class="label">Equipment + Labor + Overhead</div><div class="value" id="subtotal-box" style="font-size:1.3rem">$0.00</div></div>
+  <div class="total-box"><div class="label">Equipment + Margin + Labor + Overhead</div><div class="value" id="subtotal-box" style="font-size:1.3rem">$0.00</div></div>
+  <div class="total-box"><div class="label">of which Margins (Condenser + Coil + Furnace)</div><div class="value" id="margin-total-box" style="font-size:1.3rem">$0.00</div></div>
 </div>
 
 <h2 style="font-size:1.05rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:28px">Additional Changes</h2>
@@ -445,14 +473,14 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20261012a"></script>
-<script src="../assets/js/worksheet.js?v=20261012a"></script>
-<script src="../assets/js/xlsx-export.js?v=20261012a"></script>
-<script src="../assets/js/condenser-db.js?v=20261012a"></script>
-<script src="../assets/js/labor-widget.js?v=20261012a"></script>
-<script src="../assets/js/plenum-widget.js?v=20261012a"></script>
-<script src="../assets/js/print-quote.js?v=20261012a"></script>
-<script src="../assets/js/quotes-db.js?v=20261012a"></script>
+<script src="../assets/js/pricing-data.js?v=20261012b"></script>
+<script src="../assets/js/worksheet.js?v=20261012b"></script>
+<script src="../assets/js/xlsx-export.js?v=20261012b"></script>
+<script src="../assets/js/condenser-db.js?v=20261012b"></script>
+<script src="../assets/js/labor-widget.js?v=20261012b"></script>
+<script src="../assets/js/plenum-widget.js?v=20261012b"></script>
+<script src="../assets/js/print-quote.js?v=20261012b"></script>
+<script src="../assets/js/quotes-db.js?v=20261012b"></script>
 <script>
   document.getElementById('q-date').value = new Date().toLocaleDateString('en-US');
   saaAttachPhoneMask(document.getElementById('q-phone'));
@@ -576,7 +604,24 @@
     const overheadPct = (parseFloat(document.getElementById('overhead-pct').value) || 0) / 100;
     const overhead = laborTotal * overheadPct;
 
-    const equipTotal = saaRoundMoney((condenserOn ? condTotal : 0) + (coilOn ? coilTotal : 0) + (furnaceOn ? furnaceTotal : 0) + laborTotal + overhead);
+    // Round 94: separate Condenser / Coil / Furnace margin items (% of that
+    // equipment's material cost, or a flat $), added to the quote.
+    function marginFor(id, base, on) {
+      const row = document.getElementById('margin-row-' + id);
+      if (row) row.style.display = on ? '' : 'none';
+      const mode = document.getElementById('margin-' + id + '-mode').value;
+      const v = parseFloat(document.getElementById('margin-' + id + '-val').value) || 0;
+      const amt = on ? saaRoundMoney(mode === 'pct' ? base * v / 100 : v) : 0;
+      document.getElementById('margin-' + id + '-amt').textContent = fmtMoney(amt);
+      return amt;
+    }
+    const condMargin = marginFor('condenser', condTotal, condenserOn);
+    const coilMargin = marginFor('coil', coilTotal, coilOn);
+    const furnaceMargin = marginFor('furnace', furnaceTotal, furnaceOn);
+    const marginTotal = saaRoundMoney(condMargin + coilMargin + furnaceMargin);
+    document.getElementById('margin-total-box').textContent = fmtMoney(marginTotal);
+
+    const equipTotal = saaRoundMoney((condenserOn ? condTotal : 0) + (coilOn ? coilTotal : 0) + (furnaceOn ? furnaceTotal : 0) + marginTotal + laborTotal + overhead);
     document.getElementById('subtotal-box').textContent = fmtMoney(equipTotal);
 
     const plenumTotal = plenumWidget.getTotal();
@@ -638,7 +683,9 @@
       }
 
       const lineItems = [];
-      const equipOnlyTotal = saaRoundMoney((condenserOn ? condTotal : 0) + (coilOn ? coilTotal : 0) + (furnaceOn ? furnaceTotal : 0));
+      // Margins are folded into the one customer-facing system line (the
+      // customer sees a price, not our margin).
+      const equipOnlyTotal = saaRoundMoney((condenserOn ? condTotal : 0) + (coilOn ? coilTotal : 0) + (furnaceOn ? furnaceTotal : 0) + marginTotal);
       const laborLineTotal = saaRoundMoney(laborTotal + overhead);
       // Equipment + Labor print as ONE combined line item on the formal
       // quote (2026-09-13 follow-up: Vijayan wants a single "system,
@@ -669,7 +716,8 @@
       // add-ons); otherCost is unused here (nothing in this worksheet
       // doesn't fall under one of those two).
       const laborCost = laborLineTotal;
-      const materialCost = saaRoundMoney(grandTotal - laborLineTotal);
+      // Round 94: margin is profit, not cost -- left out of the material cost.
+      const materialCost = saaRoundMoney(grandTotal - laborLineTotal - marginTotal);
       return {
         jobTitle: quoteTypeLabel(),
         quoteType: quoteTypeSelect.value,

@@ -1543,3 +1543,12 @@ html.cal-mobile .cal-datebar .cal-date-label, html.cal-mobile .cal-datebar .cal-
 #cp-table th.num, #cp-table td.num { text-align: right; }
 #cp-table .cp-price { padding: 5px 8px; }
 #cp-table tr.row-off td { color: var(--muted); }
+
+/* Round 94 (2026-10-03): Condenser / Coil / Furnace margin rows on Create Quote. */
+.margin-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; margin: -4px 0 10px 16px; border: 1px dashed var(--orange-2, #e8731a); border-radius: var(--radius); background: #fffaf5; flex-wrap: wrap; }
+.margin-row .meta { flex: 1; min-width: 200px; }
+.margin-row .meta .name { font-weight: 700; color: var(--navy); }
+.margin-row .meta .desc { font-size: .82rem; color: var(--muted); }
+.margin-row select { max-width: 190px; }
+.margin-row .price { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 110px; text-align: right; }
+.margin-row .price { margin-left: auto; }
