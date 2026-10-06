@@ -1633,3 +1633,7 @@ html:not(.saa-embed) .cal-hero .cal-page-head p.muted { color: #2b3a49; }
    behind the panel's edge as dark slivers -- tuck them away until the menu closes. ---- */
 .emp-fab { transition: opacity .12s ease, visibility 0s linear 0s; }
 html.emp-menu-open .emp-fab { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .12s ease, visibility 0s linear .12s; }
+
+/* Round 105 (2026-10-07): Receipts "By Project" tab */
+#pc-tbody td.num, #pc-tfoot td.num, #rc-panel-projects th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pc-kind { font-size: .75rem; font-style: italic; }

@@ -140,3 +140,77 @@ function printReceipts(opts) {
   win.document.write(html);
   win.document.close();
 }
+
+/**
+ * Round 105 (2026-10-07): generic multi-section print (Overview and By Project downloads).
+ * opts: { title (HTML-safe), periodLabel, generatedOn,
+ *         sections: [{ heading, columns:[{h, num}], rows:[[cell,...]], total:[cell,...], pageBreak }] }
+ * Cells are plain text (escaped here). Same letterhead as printReceipts.
+ */
+function printReceiptSections(opts) {
+  const info = SAA_RECEIPTS_PRINT_INFO;
+  const esc = _saaReceiptsPrintEsc;
+  const sectionHtml = (sec) => {
+    const cols = sec.columns || [];
+    const cell = (v, i, tag) => `<${tag}${cols[i] && cols[i].num ? ' class="num"' : ""}>${esc(v)}</${tag}>`;
+    const rows = (sec.rows || []).length
+      ? sec.rows.map((r) => `<tr>${r.map((v, i) => cell(v, i, "td")).join("")}</tr>`).join("")
+      : `<tr><td colspan="${cols.length}" class="muted">Nothing in this period.</td></tr>`;
+    const tot = sec.total && (sec.rows || []).length ? `<tr class="total-row">${sec.total.map((v, i) => `<td${cols[i] && cols[i].num ? ' class="num"' : ""}><strong>${esc(v)}</strong></td>`).join("")}</tr>` : "";
+    return `<div class="sec${sec.pageBreak ? " pb" : ""}"><h3>${esc(sec.heading)}</h3>
+  <table class="items"><thead><tr>${cols.map((c, i) => cell(c.h, i, "th")).join("")}</tr></thead><tbody>${rows}${tot}</tbody></table></div>`;
+  };
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${String(opts.title).replace(/&amp;/g, "&")} — ${info.name}</title>
+<style>
+  @page { size: letter landscape; margin: 0.55in 0.6in; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #1a2733; font-size: 12px; line-height: 1.4; margin: 0; }
+  h1, h2, h3 { margin: 0; }
+  .rule { border-top: 2px solid #1a6b5a; margin: 6px 0 12px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+  .header h1 { font-size: 1.2rem; color: #0f2439; }
+  .header .sub { color: #55636e; font-size: .8rem; }
+  .header .contact { text-align: right; font-size: .8rem; color: #55636e; }
+  .title-row { margin: 6px 0 12px; }
+  .title-row h2 { font-size: 1.4rem; color: #1a6b5a; text-transform: uppercase; letter-spacing: .5px; }
+  .title-row .sub { color: #55636e; font-size: .84rem; margin-top: 2px; }
+  .sec { margin-bottom: 18px; } .sec.pb { page-break-before: always; }
+  .sec h3 { font-size: 1rem; color: #0f2439; margin-bottom: 4px; }
+  table.items { width: 100%; border-collapse: collapse; }
+  table.items th { text-align: left; font-size: .66rem; text-transform: uppercase; letter-spacing: .3px; color: #55636e; border-bottom: 1px solid #cfd8de; padding: 5px 4px; }
+  table.items td { padding: 6px 4px; border-bottom: 1px solid #e7ecef; vertical-align: top; }
+  table.items td.num, table.items th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  table.items tr { page-break-inside: avoid; }
+  table.items tr.total-row td { border-top: 2px solid #1a6b5a; border-bottom: none; padding-top: 8px; }
+  .muted { color: #55636e; }
+  .footer { display: flex; justify-content: space-between; color: #55636e; font-size: .74rem; border-top: 1px solid #cfd8de; padding-top: 6px; margin-top: 24px; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div><h1>${info.name}</h1><div class="sub">${info.license}</div></div>
+    <div class="contact">${info.phone}<br>${info.email}<br>${info.address}</div>
+  </div>
+  <div class="rule"></div>
+  <div class="title-row">
+    <h2>${opts.title}</h2>
+    <div class="sub">Generated ${esc(opts.generatedOn)} &mdash; ${esc(opts.periodLabel)}</div>
+  </div>
+  ${(opts.sections || []).map(sectionHtml).join("\n")}
+  <div class="footer"><div>${info.name} &mdash; ${String(opts.title)}</div><div>${info.address}</div></div>
+<script>
+  window.onload = function () { setTimeout(function () { window.print(); }, 150); };
+</script>
+</body>
+</html>`;
+  const win = window.open("", "_blank");
+  if (!win) { alert("Please allow pop-ups to print."); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}

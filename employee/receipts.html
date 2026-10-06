@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Receipts | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20261016b">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261017a">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20261016b"></script>
-<script src="../assets/js/supabase-config.js?v=20261016b"></script>
-<script src="../assets/js/auth.js?v=20261016b"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261017a"></script>
+<script src="../assets/js/supabase-config.js?v=20261017a"></script>
+<script src="../assets/js/auth.js?v=20261017a"></script>
 <script>saaRequireAuth();</script>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="ic-dashboard" viewBox="0 0 80 60"><g fill="none" stroke="#27425f" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><ellipse cx="40" cy="56" rx="26" ry="2.6" fill="#27425f" opacity=".08" stroke="none"/>
 <rect x="52" y="12" width="6" height="12" fill="#c0634a"/>
@@ -279,9 +279,24 @@
   <button type="button" class="cal-view-btn" data-tab="tools">Tools</button>
   <button type="button" class="cal-view-btn" data-tab="supplies">Supplies</button>
   <button type="button" class="cal-view-btn" data-tab="expenses">Expenses</button>
+  <button type="button" class="cal-view-btn" data-tab="projects">By Project</button>
 </div>
 
 <div class="rc-tab-panel" id="rc-panel-overview" hidden>
+  <div class="jobs-toolbar" style="margin-bottom:14px">
+    <label class="muted" style="font-size:.85rem;display:flex;align-items:center;gap:6px">
+      Download
+      <select id="rc-dl-period-type-overview">
+        <option value="all">All time</option>
+        <option value="month">By month</option>
+        <option value="year">By year</option>
+      </select>
+    </label>
+    <select id="rc-dl-period-value-overview" style="display:none"></select>
+    <button type="button" class="btn btn-ghost btn-sm" id="rc-dl-xlsx-overview" title="Excel workbook for the chosen period: Overview, By Project, Receipts, Tools, Supplies and Expenses tabs">Download Excel</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="rc-dl-pdf-overview">Download PDF</button>
+  </div>
+  <!-- Round 105 -->
   <div class="rc-summary-cards" id="rc-summary-cards" style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:22px"></div>
 
   <h3 style="margin-bottom:8px">By Category</h3>
@@ -352,6 +367,32 @@
   </div>
   <div id="rc-months-supplies"></div>
   <p class="muted rc-empty" id="rc-empty-supplies" style="text-align:center;padding:30px" hidden>No supplies line items match your filters.</p>
+</div>
+
+<!-- Round 105 (2026-10-07): By Project tab -- every receipt line + expense added up per job -->
+<div class="rc-tab-panel" id="rc-panel-projects" hidden>
+  <div class="jobs-toolbar" style="margin-bottom:14px">
+    <label class="muted" style="font-size:.85rem;display:flex;align-items:center;gap:6px">
+      Download
+      <select id="rc-dl-period-type-projects">
+        <option value="all">All time</option>
+        <option value="month">By month</option>
+        <option value="year">By year</option>
+      </select>
+    </label>
+    <select id="rc-dl-period-value-projects" style="display:none"></select>
+    <button type="button" class="btn btn-ghost btn-sm" id="rc-dl-xlsx-projects" title="Excel workbook with By Project and Project Detail tabs for the chosen period">Download Excel</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="rc-dl-pdf-projects">Download PDF</button>
+  </div>
+  <p class="muted" style="margin:-4px 0 12px;font-size:.85rem">Receipts, tools, supplies and expenses added up per job (sales tax included). Click a project to see every line behind it.</p>
+  <div class="rc-summary-cards" id="pc-summary" style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px"></div>
+  <div class="jobs-table-wrap">
+    <table class="jobs-table">
+      <thead><tr><th>Project</th><th class="num">Lines</th><th class="num">Receipts</th><th class="num">Tools</th><th class="num">Supplies</th><th class="num">Expenses</th><th class="num">Total</th><th></th></tr></thead>
+      <tbody id="pc-tbody"></tbody>
+      <tfoot id="pc-tfoot"></tfoot>
+    </table>
+  </div>
 </div>
 
 <!-- Round 76 (2026-09-30): Expenses tab -- SAA / job-project / tools expenses (food, travel, subcontract, advisory, ...) -->
@@ -474,13 +515,14 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20261016b"></script>
-<script src="../assets/js/worksheet.js?v=20261016b"></script>
-<script src="../assets/js/xlsx-export.js?v=20261016b"></script>
-<script src="../assets/js/receipts-db.js?v=20261016b"></script>
-<script src="../assets/js/print-receipts.js?v=20261016b"></script>
-<script src="../assets/js/receipts-page.js?v=20261016b"></script>
-<script src="../assets/js/expenses-db.js?v=20261016b"></script>
-<script src="../assets/js/expenses-page.js?v=20261016b"></script>
+<script src="../assets/js/pricing-data.js?v=20261017a"></script>
+<script src="../assets/js/worksheet.js?v=20261017a"></script>
+<script src="../assets/js/xlsx-export.js?v=20261017a"></script>
+<script src="../assets/js/receipts-db.js?v=20261017a"></script>
+<script src="../assets/js/print-receipts.js?v=20261017a"></script>
+<script src="../assets/js/receipts-page.js?v=20261017a"></script>
+<script src="../assets/js/expenses-db.js?v=20261017a"></script>
+<script src="../assets/js/expenses-page.js?v=20261017a"></script>
+<script src="../assets/js/project-costs.js?v=20261017a"></script>
 </body>
 </html>

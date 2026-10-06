@@ -345,8 +345,9 @@ function _rcDownloadXlsx(spec, opts) {
     sheets.expenses = saaExpensesBuildSheet(spec, opts.expenseRows);
   }
   const order = opts.first === "expenses" ? ["expenses", "receipts", "tools", "supplies"] : ["receipts", "tools", "supplies", "expenses"];
-  saaXlsxDownload(`SAA-purchases-and-expenses-${spec.label.replace(/\s+/g, "-").toLowerCase()}-${saaXlsxStamp()}.xlsx`,
-    order.map((k) => sheets[k]).filter(Boolean));
+  // Round 105: opts.pre = extra sheets placed ahead of the standard four (Overview download), opts.file = custom file name.
+  saaXlsxDownload(opts.file || `SAA-purchases-and-expenses-${spec.label.replace(/\s+/g, "-").toLowerCase()}-${saaXlsxStamp()}.xlsx`,
+    (opts.pre || []).concat(order.map((k) => sheets[k]).filter(Boolean)));
 }
 
 function _rcDownloadExcel(bucket) { _rcDownloadXlsx(_rcPeriodSpec(bucket)); }
@@ -493,6 +494,7 @@ function _rcToggleDrill(tr) {
 
 function _rcRenderActiveTab() {
   if (_rcActiveTab === "overview") _rcRenderOverview();
+  else if (_rcActiveTab === "projects") { if (typeof saaProjectsRender === "function") saaProjectsRender(); } // Round 105
   else if (_rcActiveTab === "expenses") { if (typeof saaExpensesRender === "function") saaExpensesRender(); } // Round 76
   else _rcRenderBucketTab(_rcActiveTab);
 }
