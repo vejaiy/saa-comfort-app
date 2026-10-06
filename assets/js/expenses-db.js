@@ -24,9 +24,13 @@ const SAA_EXPENSE_SCOPES = [
 const SAA_EXPENSE_PAYMENT_METHODS = ["Credit card", "Debit card", "Cash", "Check", "Bank transfer / Zelle", "Other"];
 const SAA_EXPENSE_COMPANY_PAYER = "SAA (company card / account)";
 const SAA_EXPENSE_OWNER_PAYER = "Vijayan (personal)";
+// Round 101: added the Form 1065 line items the Accounts page rolls up
+// (wages, rent, insurance, ...), appended so existing choices keep their place.
 const SAA_EXPENSE_TAX_CATEGORIES = [
   "Meals (50% deductible)", "Travel", "Contract labor", "Professional fees", "Tools & equipment",
   "Supplies", "Vehicle & fuel", "Advertising", "Other",
+  "Wages & payroll", "Guaranteed payments to partners", "Rent", "Insurance", "Licenses, permits & taxes",
+  "Interest", "Bank & card fees", "Repairs & maintenance", "Utilities & phone", "Software & subscriptions", "Depreciation",
 ];
 // Suggested tax category when a category is picked and none is chosen yet.
 const SAA_EXPENSE_TAX_DEFAULTS = {

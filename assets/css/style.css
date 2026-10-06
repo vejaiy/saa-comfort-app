@@ -1595,3 +1595,41 @@ html:not(.saa-embed) .cal-hero .cal-page-head p.muted { color: #2b3a49; }
 .emp-apps-group.c-blue .emp-app:hover, .emp-apps-group.c-teal .emp-app:hover,
 .emp-apps-group.c-blue .emp-app:focus-visible, .emp-apps-group.c-teal .emp-app:focus-visible { background: rgba(255,255,255,.88); }
 .emp-apps-group.c-blue .emp-app.is-current, .emp-apps-group.c-teal .emp-app.is-current { background: #fff; }
+
+/* ---- Round 101: Accounts page (employee/accounts.html) + gold menu group ---- */
+.c-gold { --g1: #fbf3da; --g2: #f4e4b0; --ac: #a97c0f; }
+.acct-controls { align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.acct-ctl { display: flex; flex-direction: column; gap: 3px; font-size: .74rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+.acct-ctl select, .acct-ctl input { font-size: .92rem; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--ink); }
+.acct-card { padding: 14px 16px; }
+.acct-table td.num, .acct-table th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.acct-table .acct-head td { background: #eef3f6; font-weight: 800; text-transform: uppercase; font-size: .72rem; letter-spacing: .5px; color: var(--navy); }
+.acct-table .acct-sub td { font-weight: 700; background: #f7f9fa; border-top: 1px solid #b9c6d0; }
+.acct-table .acct-net td { font-weight: 800; background: #e3f4f1; border-top: 2px solid #2f8f84; font-size: 1.05em; }
+.acct-table .acct-margin td { color: var(--muted); font-size: .85rem; }
+.acct-table .acct-ind { padding-left: 16px; }
+.acct-table .acct-n { font-size: .78rem; }
+.acct-table .acct-line { font-weight: 700; color: #2f8f84; width: 56px; }
+.acct-neg { color: #b3261e !important; }
+.acct-pos { color: #1f7a4d; }
+.acct-attn ul { margin: 0; padding-left: 20px; } .acct-attn li { margin-bottom: 5px; font-size: .9rem; }
+.acct-recon { margin: 10px 2px 0; font-size: .86rem; }
+.acct-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start; }
+.acct-docs { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px; }
+.acct-doc { padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.acct-doc h3 { margin: 0; font-size: 1.02rem; } .acct-doc p { margin: 0; flex: 1; font-size: .88rem; }
+.acct-doc-all { background: #f3f8fc; border-color: #b9d3ea; }
+#acct-ledger-toggle .cal-view-btn.active { background: var(--navy); color: #fff; }
+@media (max-width: 640px) { .acct-controls { gap: 8px; } .acct-ctl { flex: 1 1 44%; } .acct-ctl select, .acct-ctl input { width: 100% !important; } .acct-card { padding: 10px 8px; } }
+@media (max-width: 640px) {
+  .acct-table { min-width: 0 !important; width: 100%; }
+  .acct-table th, .acct-table td { white-space: normal; padding: 8px 5px; font-size: .8rem; }
+  .acct-table td.num, .acct-table th.num { white-space: nowrap; }
+  .acct-table .acct-ind { padding-left: 8px; }
+  #acct-ledger-body td, #acct-ledger-head th { white-space: nowrap; }
+}
+
+/* ---- Round 102: while the Apps menu is open the floating Home / Employee / Menu buttons (phone) would peek out from
+   behind the panel's edge as dark slivers -- tuck them away until the menu closes. ---- */
+.emp-fab { transition: opacity .12s ease, visibility 0s linear 0s; }
+html.emp-menu-open .emp-fab { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .12s ease, visibility 0s linear .12s; }
