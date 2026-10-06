@@ -70,6 +70,31 @@ function _jbToast(msg, isError) {
   el._t = setTimeout(() => { el.hidden = true; }, 3200);
 }
 
+/* Round 103 (2026-10-06), per Vijayan: "why date received all showing Oct06. fix it."
+ * Cause: a Job's created_at is the moment that Job RECORD was created. When a
+ * repeat visit creates a new Job (saa_create_job_with_conversion), the earlier
+ * jobs are folded into it as Events, so the surviving Job's created_at became
+ * "today" while its Events kept the real dates. The Events keep the original
+ * job's created_at as their own created_at, so:
+ *   Event "Date Received" = the Event's own created_at (never later than its first scheduled visit)
+ *   Job   "Date Received" = the earliest of its own created_at / scheduled date and all its Events' dates */
+function _jbEarliestIso(list) {
+  let best = null, bestT = Infinity;
+  list.forEach((v) => {
+    if (!v) return;
+    const t = new Date(String(v).length <= 10 ? `${v}T00:00:00` : v).getTime();
+    if (!isNaN(t) && t < bestT) { bestT = t; best = v; }
+  });
+  return best;
+}
+function _jbEventReceivedAt(e, job) {
+  return _jbEarliestIso([e && e.created_at, e && e.scheduled_start]) || (job && job.created_at) || null;
+}
+function _jbJobReceivedAt(job) {
+  const evs = (job && job.events) || [];
+  return _jbEarliestIso([job && job.created_at, job && job.scheduled_date].concat(evs.map((e) => e.created_at), evs.map((e) => e.scheduled_start))) || (job && job.created_at) || null;
+}
+
 function _jbFormatDate(dateStr) {
   if (!dateStr) return "—";
   const d = new Date(dateStr.length <= 10 ? `${dateStr}T00:00:00` : dateStr);
@@ -206,7 +231,7 @@ const _JB_COLUMNS = [
   { key: "jobnum", filterId: "jb-filter-jobnum", kind: "text",
     matchText: (j) => _jbJobNum(j), sortVal: (j) => _jbJobNum(j).toLowerCase() },
   { key: "received", filterId: "jb-filter-received", kind: "text",
-    matchText: (j) => _jbFormatDate(j.created_at), sortVal: (j) => j.created_at || "" },
+    matchText: (j) => _jbFormatDate(_jbJobReceivedAt(j)), sortVal: (j) => { const t = new Date(_jbJobReceivedAt(j) || 0).getTime(); return isNaN(t) ? 0 : t; } },
   { key: "scheduled", filterId: "jb-filter-scheduled", kind: "text",
     matchText: (j) => _jbFormatDate(j.scheduled_date), sortVal: (j) => j.scheduled_date || null },
   { key: "customer", filterId: "jb-filter-customer", kind: "text",
@@ -473,7 +498,7 @@ function _jbEventRowHtml(job, e) {
     <tr class="jb-event-subrow" data-job-id="${job.id}" data-event-id="${e.id}">
       <td class="jb-expand-cell"></td>
       <td class="jb-event-subrow-num">${_jbEsc(e.event_number || "—")}</td>
-      <td>${_jbFormatDate(job.created_at)}</td>
+      <td>${_jbFormatDate(_jbEventReceivedAt(e, job))}</td>
       <td>${_jbEventTimeLabel(e.scheduled_start)}</td>
       <td>${_jbCustName(job.customer)}</td>
       <td>${job.customer && job.customer.phone ? saaFormatPhone(job.customer.phone) : "—"}</td>
@@ -511,7 +536,7 @@ function jbRenderTable() {
     <tr class="jb-row" data-id="${j.id}">
       <td class="jb-expand-cell">${expandCell}</td>
       <td>${_jbJobNum(j)}</td>
-      <td>${_jbFormatDate(j.created_at)}</td>
+      <td>${_jbFormatDate(_jbJobReceivedAt(j))}</td>
       <td>${_jbFormatDate(j.scheduled_date)}</td>
       <td>${_jbCustName(j.customer)}</td>
       <td>${j.customer && j.customer.phone ? saaFormatPhone(j.customer.phone) : "—"}</td>
@@ -607,7 +632,7 @@ function _jbJobSheet(rows) {
   const data = rows.map((j) => {
     const amt = _jbQuoteAmount(j);
     return [
-      _jbJobNum(j), j.created_at, j.scheduled_date, _jbCustName(j.customer),
+      _jbJobNum(j), _jbJobReceivedAt(j), j.scheduled_date, _jbCustName(j.customer),
       j.customer && j.customer.phone ? saaFormatPhone(j.customer.phone) : "",
       [j.job_address, j.job_city].filter(Boolean).join(", "),
       saaJobTypeLabel(j.job_type), _jbPriorityLabel[j.priority] || j.priority || "",
@@ -647,7 +672,7 @@ function _jbEventSheet(rows) {
   rows.forEach((job) => (job.events || []).forEach((e) => flat.push({ job, e })));
   flat.sort((x, y) => String(y.e.scheduled_start || "").localeCompare(String(x.e.scheduled_start || "")));
   const data = flat.map(({ job, e }) => [
-    e.event_number || "", _jbJobNum(job), job.created_at, e.scheduled_start, _jbCustName(job.customer),
+    e.event_number || "", _jbJobNum(job), _jbEventReceivedAt(e, job), e.scheduled_start, _jbCustName(job.customer),
     job.customer && job.customer.phone ? saaFormatPhone(job.customer.phone) : "",
     [e.service_address, e.service_city].filter(Boolean).join(", ") || [job.job_address, job.job_city].filter(Boolean).join(", "),
     saaEventTypeLabel(e.event_type), _jbPriorityLabel[job.priority] || job.priority || "",
@@ -3567,7 +3592,7 @@ async function jbOpenDetail(jobId) {
   _jbCurrentJob = job;
 
   document.getElementById("jbd-title").textContent = job.title || saaJobTypeLabel(job.job_type);
-  document.getElementById("jbd-jobnum").textContent = `${_jbJobNum(job)} · Received ${_jbFormatDate(job.created_at)}`;
+  document.getElementById("jbd-jobnum").textContent = `${_jbJobNum(job)} · Received ${_jbFormatDate(_jbJobReceivedAt(job))}`;
   _jbdRenderHeadSummary(job); // Round 64
 
   // Round 43 (2026-09-22): historical-Job banner. A converted Job's own
