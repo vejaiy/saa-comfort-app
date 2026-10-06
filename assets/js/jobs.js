@@ -507,7 +507,7 @@ function _jbEventRowHtml(job, e) {
       <td><span class="jb-badge jb-pri-${job.priority}">${_jbPriorityLabel[job.priority] || job.priority}</span></td>
       <td>${_jbEsc(_jbEventTechNames(e))}</td>
       <td><span class="jb-event-badge evt-${e.event_status}">${_jbEsc(saaEventStatusLabel(e.event_status))}</span></td>
-      <td><span class="jb-badge jb-pay-${job.paymentStatus}">${_jbPaymentLabel[job.paymentStatus]}</span></td>
+      <td>${e.paymentStatus ? `<span class="jb-badge jb-pay-${e.paymentStatus}">${_jbPaymentLabel[e.paymentStatus]}</span>` : '<span class="muted" title="No invoice for this visit yet">—</span>'}</td>
       <td>${_jbEventQuoteCellHtml(e)}</td>
     </tr>`;
 }
@@ -676,7 +676,7 @@ function _jbEventSheet(rows) {
     job.customer && job.customer.phone ? saaFormatPhone(job.customer.phone) : "",
     [e.service_address, e.service_city].filter(Boolean).join(", ") || [job.job_address, job.job_city].filter(Boolean).join(", "),
     saaEventTypeLabel(e.event_type), _jbPriorityLabel[job.priority] || job.priority || "",
-    _jbEventTechNames(e), saaEventStatusLabel(e.event_status), _jbPaymentLabel[job.paymentStatus] || "",
+    _jbEventTechNames(e), saaEventStatusLabel(e.event_status), e.paymentStatus ? (_jbPaymentLabel[e.paymentStatus] || "") : "No invoice",
     _jbQuoteNum(_jbEventQuoteAmount(e)),
   ]);
   return {

@@ -338,6 +338,14 @@ async function saaJobsFetchAll() {
         technician2: e.assigned_technician_id_2 ? techById[e.assigned_technician_id_2] || null : null,
         technician3: e.assigned_technician_id_3 ? techById[e.assigned_technician_id_3] || null : null,
         invoice: invoiceByEvent[e.id] || null,
+        // Round 104: each Event's OWN payment status, from its own invoice and
+        // the payments recorded against that invoice (null = no invoice yet).
+        // The Jobs List used to repeat the parent Job's status on every Event
+        // row, so a free $0 follow-up made an unpaid $9,098.50 install look Paid.
+        amountPaid: invoiceByEvent[e.id] ? paidByInvoice[invoiceByEvent[e.id].id] || 0 : 0,
+        paymentStatus: invoiceByEvent[e.id]
+          ? saaJobsPaymentStatus(invoiceByEvent[e.id], paidByInvoice[invoiceByEvent[e.id].id] || 0, !!hasPaymentByInvoice[invoiceByEvent[e.id].id])
+          : null,
       })),
     });
   });
