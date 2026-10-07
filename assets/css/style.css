@@ -1666,3 +1666,22 @@ a.rc-summary-btn:focus-visible { outline: 3px solid #1a6b5a; outline-offset: 2px
 .emp-apps-group.c-green .emp-app:hover, .emp-apps-group.c-gold .emp-app:hover,
 .emp-apps-group.c-green .emp-app:focus-visible, .emp-apps-group.c-gold .emp-app:focus-visible { background: rgba(255,255,255,.88); }
 .emp-apps-group.c-green .emp-app.is-current, .emp-apps-group.c-gold .emp-app.is-current { background: #fff; }
+
+/* ---- Round 112: brighter menu photos (lighter white wash, stronger label glow) ---- */
+.emp-apps-group.c-blue   { background: linear-gradient(rgba(255,255,255,.22), rgba(255,255,255,.12)), url("../img/menu-operations-bg.jpg") center 30% / cover no-repeat, var(--g1); }
+.emp-apps-group.c-teal   { background: linear-gradient(rgba(255,255,255,.24), rgba(255,255,255,.14)), url("../img/menu-worksheets-bg.jpg") center 40% / cover no-repeat, var(--g1); }
+.emp-apps-group.c-green  { background: linear-gradient(rgba(255,255,255,.18), rgba(255,255,255,.08)), url("../img/menu-money-bg.jpg") center 45% / cover no-repeat, var(--g1); }
+.emp-apps-group.c-gold   { background: linear-gradient(rgba(255,255,255,.14), rgba(255,255,255,.04)), url("../img/menu-accounts-bg.jpg") center 50% / cover no-repeat, var(--g1); }
+.emp-apps-group.c-blue h4, .emp-apps-group.c-teal h4, .emp-apps-group.c-green h4, .emp-apps-group.c-gold h4 {
+  text-shadow: 0 0 3px #fff, 0 0 6px #fff, 0 0 10px #fff, 0 0 14px #fff; }
+.emp-apps-group.c-blue .emp-app-name, .emp-apps-group.c-teal .emp-app-name, .emp-apps-group.c-green .emp-app-name, .emp-apps-group.c-gold .emp-app-name {
+  text-shadow: 0 0 2px #fff, 0 0 4px #fff, 0 0 7px #fff, 0 0 10px #fff, 0 0 14px #fff; }
+/* Round 112b: small translucent label chips keep text readable on the brighter photos */
+.emp-apps-group.c-blue .emp-app-name, .emp-apps-group.c-teal .emp-app-name, .emp-apps-group.c-green .emp-app-name, .emp-apps-group.c-gold .emp-app-name {
+  background: rgba(255,255,255,.62); border-radius: 6px; padding: 1px 5px; text-shadow: 0 0 3px rgba(255,255,255,.9); }
+.emp-apps-group.c-blue h4, .emp-apps-group.c-teal h4, .emp-apps-group.c-green h4, .emp-apps-group.c-gold h4 {
+  display: inline-block; background: rgba(255,255,255,.7); border-radius: 6px; padding: 1px 7px; text-shadow: none; }
+.emp-apps-group.c-blue { background: linear-gradient(rgba(255,255,255,.14), rgba(255,255,255,.06)), url("../img/menu-operations-bg.jpg") center 30% / cover no-repeat, var(--g1); }
+.emp-apps-group.c-teal { background: linear-gradient(rgba(255,255,255,.16), rgba(255,255,255,.08)), url("../img/menu-worksheets-bg.jpg") center 40% / cover no-repeat, var(--g1); }
+.emp-apps-group.c-green { background: linear-gradient(rgba(255,255,255,.10), rgba(255,255,255,.02)), url("../img/menu-money-bg.jpg") center 45% / cover no-repeat, var(--g1); }
+.emp-apps-group.c-gold { background: linear-gradient(rgba(255,255,255,.06), rgba(255,255,255,0)), url("../img/menu-accounts-bg.jpg") center 50% / cover no-repeat, var(--g1); }
