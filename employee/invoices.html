@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Invoices | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20261017c">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261017e">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20261017c"></script>
-<script src="../assets/js/supabase-config.js?v=20261017c"></script>
-<script src="../assets/js/auth.js?v=20261017c"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261017e"></script>
+<script src="../assets/js/supabase-config.js?v=20261017e"></script>
+<script src="../assets/js/auth.js?v=20261017e"></script>
 <script>saaRequireAuth();</script>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="ic-dashboard" viewBox="0 0 80 60"><g fill="none" stroke="#27425f" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><ellipse cx="40" cy="56" rx="26" ry="2.6" fill="#27425f" opacity=".08" stroke="none"/>
 <rect x="52" y="12" width="6" height="12" fill="#c0634a"/>
@@ -288,12 +288,12 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20261017c"></script>
-<script src="../assets/js/worksheet.js?v=20261017c"></script>
-<script src="../assets/js/xlsx-export.js?v=20261017c"></script>
-<script src="../assets/js/jobs-db.js?v=20261017c"></script>
-<script src="../assets/js/events-db.js?v=20261017c"></script>
-<script src="../assets/js/invoices-db.js?v=20261017c"></script>
+<script src="../assets/js/pricing-data.js?v=20261017e"></script>
+<script src="../assets/js/worksheet.js?v=20261017e"></script>
+<script src="../assets/js/xlsx-export.js?v=20261017e"></script>
+<script src="../assets/js/jobs-db.js?v=20261017e"></script>
+<script src="../assets/js/events-db.js?v=20261017e"></script>
+<script src="../assets/js/invoices-db.js?v=20261017e"></script>
 <script>
   // Same document-status labels the Job Card's own Invoice Status select
   // uses (_jbInvoiceLabel in jobs.js) -- kept as a local copy here rather
@@ -442,6 +442,8 @@
         r.customer ? [r.customer.first_name, r.customer.last_name].filter(Boolean).join(" ") : "",
         r.event ? (r.event.event_number || saaEventTypeLabel(r.event.event_type)) : (r.job ? (r.job.job_number || saaJobTypeLabel(r.job.job_type)) : ""),
         Number(r.amount_total) || 0,
+        Number(r.discount) || 0,
+        Number(r.additional_charges) || 0,
         Number(r.totalDue) || 0,
         Number(r.amountPaid) || 0,
         balance,
@@ -452,11 +454,12 @@
     saaXlsxDownload("SAA-invoices-" + saaXlsxStamp(), [{
       name: "Invoices", tabColor: "2F5496",
       title: "SAA Comfort Air LLC — Invoices",
-      subtitle: "Generated " + saaXlsxTodayLabel() + "   |   " + rows.length + " invoice" + (rows.length === 1 ? "" : "s") + " (as filtered on screen)   |   Yellow = balance still due",
+      subtitle: "Generated " + saaXlsxTodayLabel() + "   |   " + rows.length + " invoice" + (rows.length === 1 ? "" : "s") + " (as filtered on screen)   |   Amount - Discount + Added Charges = Total Due (= invoiced revenue on the Accounts page)   |   Paid = payments received   |   Yellow = balance still due",
       freezeCols: 1, totals: true, emptyText: "No invoices match the current filters.",
       columns: [
         { header: "Invoice #", width: 16 }, { header: "Date", width: 13, type: "date" }, { header: "Customer", width: 26 },
         { header: "Job / Event", width: 20 }, { header: "Amount", width: 13, type: "money", total: true },
+        { header: "Discount", width: 12, type: "money", total: true }, { header: "Added Charges", width: 14, type: "money", total: true },
         { header: "Total Due", width: 13, type: "money", total: true }, { header: "Paid", width: 13, type: "money", total: true },
         { header: "Balance", width: 13, type: "money", total: true }, { header: "Status", width: 14, type: "center" },
         { header: "Payment", width: 14, type: "center" },

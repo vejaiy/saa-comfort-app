@@ -39,6 +39,8 @@ function saaAcctMileageRate(year) {
 const SAA_ACCT_CATEGORIES = {
   materials:  { section: "cogs", line: "2",   label: "Job materials & parts (purchases)" },
   subs:       { section: "cogs", line: "2",   label: "Subcontract / contract labor (jobs)" },
+  joblabor:   { section: "cogs", line: "2",   label: "Job labor (technician cost, from Event financials)" },
+  jobother:   { section: "cogs", line: "2",   label: "Other job costs (from Event financials)" },
   wages:      { section: "opex", line: "9",   label: "Salaries & wages (non-partners)" },
   guaranteed: { section: "opex", line: "10",  label: "Guaranteed payments to partners" },
   repairs:    { section: "opex", line: "11",  label: "Repairs & maintenance" },
@@ -109,7 +111,7 @@ async function saaAcctLoadAll() {
     saaExpensesFetchAll().catch((e) => { console.error(e); return []; }),
     saaMileageFetchAll().catch((e) => { console.error(e); return []; }),
     // Round 106 (project P&L): event -> its CURRENT job, and every job's number + customer name
-    (async () => { const r = await _saaClient.from("events").select("id,job_id"); return r.data || []; })().catch((e) => { console.error(e); return []; }),
+    (async () => { const r = await _saaClient.from("events").select("id,job_id,event_number,event_status,customer_id,actual_labor_cost,other_cost,completed_at,scheduled_start,created_at"); return r.data || []; })().catch((e) => { console.error(e); return []; }),
     (typeof saaReceiptsFetchJobPickerOptions === "function" ? saaReceiptsFetchJobPickerOptions() : Promise.resolve([])).catch((e) => { console.error(e); return []; }),
   ]);
   return { invoices, payments, receiptLines, expenses, mileage, events, jobOptions };
@@ -171,6 +173,10 @@ function saaAcctBuild(data, period, opts) {
   const accrualRevenue = _acctRound(invoices.reduce((s, i) => s + invTotal(i), 0));
   const arOutstanding = _acctRound(liveInvoices.reduce((s, i) => s + Math.max(0, invTotal(i) - _acctNum(i.amountPaid)), 0));
   const draftInvoices = invoices.filter((i) => i.status === "draft");
+  // Round 108: invoices whose recorded payments exceed what the invoice says is due (all non-void invoices, as of today).
+  // Typical cause: payments logged against a $0 follow-up-visit invoice while the charge sits on another record.
+  const overpaid = liveInvoices.map((i) => ({ invoice: i.invoice_number || "", customer: _acctCust(i.customer), due: _acctRound(invTotal(i)), paid: _acctRound(_acctNum(i.amountPaid)) }))
+    .map((o) => Object.assign(o, { excess: _acctRound(o.paid - o.due) })).filter((o) => o.excess > 0.005).sort((a, b) => b.excess - a.excess);
 
   /* ---- costs: unify receipt lines + expenses into one list ---- */
   const costs = [];
@@ -210,6 +216,25 @@ function saaAcctBuild(data, period, opts) {
       subtotal: amt, salesTax: 0, amount: _acctRound(amt),
       flag: cls.note || (e.reimbursable && !e.reimbursed ? "Owed back to payer" : ""),
     });
+  });
+
+  /* ---- job labor + other job costs (Round 109) ----
+     Each Event's Financials carry "Actual labor cost" and "Other cost" (the job's own costs that are not
+     receipts). They belong to the job the Event currently lives on and are booked on the visit's date
+     (completed, else scheduled, else created). Material cost is NOT added here: it is auto-calculated
+     from linked receipts, which are already counted above. Invoice discounts / added charges are already
+     inside invoiced revenue (Total Due = amount - discount + added charges). */
+  let jobCostEvents = 0;
+  (data.events || []).forEach((ev) => {
+    const lab = _acctNum(ev.actual_labor_cost), oth = _acctNum(ev.other_cost);
+    if (!(lab > 0 || oth > 0)) return;
+    const date = _acctDay(ev.completed_at || ev.scheduled_start || ev.created_at);
+    if (!_acctIn(period, date)) return;
+    jobCostEvents++;
+    const base = { date, source: "Job cost", vendor: "Technician / job cost", bucket: "", ref: ev.event_number || "", payment: "", salesTax: 0, flag: "",
+      project: "", jobId: ev.job_id || null, customerId: ev.customer_id || null, customerName: "", projectLabel: "" };
+    if (lab > 0) costs.push(Object.assign({}, base, { description: `${ev.event_number || "Event"} \u2014 actual labor cost`, category: "Job labor", key: "joblabor", subtotal: lab, amount: _acctRound(lab) }));
+    if (oth > 0) costs.push(Object.assign({}, base, { description: `${ev.event_number || "Event"} \u2014 other cost`, category: "Other job cost", key: "jobother", subtotal: oth, amount: _acctRound(oth) }));
   });
 
   /* ---- mileage -> standard-mileage deduction ---- */
@@ -355,6 +380,7 @@ function saaAcctBuild(data, period, opts) {
      overhead so the project rows always add up to the P&L above. */
   const optByJob = {}; (data.jobOptions || []).forEach((o) => { optByJob[o.job_id] = o; });
   const eventJob = {}; (data.events || []).forEach((ev) => { eventJob[ev.id] = ev.job_id; });
+  costs.forEach((c) => { if (!c.project && c.jobId && optByJob[c.jobId]) c.project = String(optByJob[c.jobId].label).split(" — ")[0]; });
   const invById = {}; (data.invoices || []).forEach((i) => { invById[i.id] = i; });
   const pGroups = {};
   const pgroup = (key, kind, label, customer, jobId) => pGroups[key] || (pGroups[key] = { key, kind, label, customer: customer || "", job_id: jobId || null, revCash: 0, revAccrual: 0, cogs: 0, opex: 0, count: 0 });
@@ -413,12 +439,14 @@ function saaAcctBuild(data, period, opts) {
     revenue: { cash: cashRevenue, accrual: accrualRevenue, arOutstanding, paymentCount: payments.length, invoiceCount: invoices.length },
     cogs, opex, cogsTotal, opexTotal, gross, net, salesTaxPaid,
     // Round 107: where the total cost comes from, so the card ties to the Receipts page tiles
-    costBySource: (() => { const o = { receipts: 0, expenses: 0, mileage: 0 }; costs.forEach((c) => { o[c.source === "Receipt" ? "receipts" : c.source === "Expense" ? "expenses" : "mileage"] += c.amount; }); Object.keys(o).forEach((k) => { o[k] = _acctRound(o[k]); }); return o; })(),
+    costBySource: (() => { const o = { receipts: 0, expenses: 0, jobCosts: 0, mileage: 0 }; costs.forEach((c) => { o[c.source === "Receipt" ? "receipts" : c.source === "Expense" ? "expenses" : c.source === "Job cost" ? "jobCosts" : "mileage"] += c.amount; }); Object.keys(o).forEach((k) => { o[k] = _acctRound(o[k]); }); return o; })(),
     tax: { form1065, otherDeductions, mealsFull, mealsNonDeductible, totalDeductions: totalDeductionsTax, taxable },
     mileage: { miles, amount: mileageAmount, rate, trips: logs.length, byTech: mileageByTech },
     months, costs, incomeLedger, invoiceLedger, nec, salesTaxSummary, projects, projectTotals,
     attention: {
       noAmount, needsReview, excluded, noTaxCat, noTaxCatAmount: _acctRound(noTaxCatAmount),
+      jobCosts: { count: jobCostEvents, amount: _acctRound(costs.filter((c) => c.source === "Job cost").reduce((x, c) => x + c.amount, 0)) },
+      overpaid: { count: overpaid.length, amount: _acctRound(overpaid.reduce((x, o) => x + o.excess, 0)), list: overpaid },
       draftInvoices: { count: draftInvoices.length, amount: _acctRound(draftInvoices.reduce((s, i) => s + invTotal(i), 0)) },
     },
   };

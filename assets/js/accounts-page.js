@@ -57,9 +57,9 @@
     const card = (label, value, sub, cls, href, go) =>
       `<a class="rc-summary-card rc-summary-btn" href="${href}" data-go="${esc(go)}"><div class="rc-sc-label">${label}</div><div class="rc-sc-value ${cls || ""}">${value}</div><div class="rc-sc-sub">${sub || ""}</div><div class="rc-sc-go">${esc(go)} &rarr;</div></a>`;
     $("acct-cards").innerHTML =
-      card("Revenue", money(rev), `${b === "accrual" ? m.revenue.invoiceCount + " invoices" : m.revenue.paymentCount + " payments"} ${lab}` + (b === "both" ? ` &middot; accrual ${money(m.revenue.accrual)}` : ""), "",
+      card("Revenue", money(rev), b === "both" ? `received (${m.revenue.paymentCount} payments) &middot; invoiced ${money(m.revenue.accrual)} (${m.revenue.invoiceCount} invoices)` : `${b === "accrual" ? m.revenue.invoiceCount + " invoices" : m.revenue.paymentCount + " payments"} ${lab}`, "",
         `invoices.html?from=${per.from}&to=${per.to}`, "Open invoices") +
-      card("Costs & expenses", money(m.cogsTotal + m.opexTotal), `Receipts ${money(m.costBySource.receipts)} &middot; expenses ${money(m.costBySource.expenses)} &middot; mileage ${money(m.costBySource.mileage)}`, "", "receipts.html", "Open receipts") +
+      card("Costs & expenses", money(m.cogsTotal + m.opexTotal), `Receipts ${money(m.costBySource.receipts)} &middot; expenses ${money(m.costBySource.expenses)} &middot; job labor &amp; other ${money(m.costBySource.jobCosts)} &middot; mileage ${money(m.costBySource.mileage)}`, "", "receipts.html", "Open receipts") +
       card("Net profit", money(net), `${margin(net, rev)} margin` + (b === "both" ? ` &middot; accrual ${money(m.net.accrual)}` : ""), net < 0 ? "acct-neg" : "acct-pos", "#pl", "See Profit & Loss") +
       card("Unpaid invoices (A/R)", money(m.revenue.arOutstanding), "all invoices, as of today", "", "invoices.html?pay=due", "Show unpaid invoices");
     $("acct-cards").querySelectorAll("a[href='#pl']").forEach((a) => a.addEventListener("click", (ev) => {
@@ -117,6 +117,11 @@
     if (at.noTaxCat) items.push(`<b>${at.noTaxCat}</b> deductible expense${at.noTaxCat === 1 ? " has" : "s have"} no tax category (${money(at.noTaxCatAmount)}) &mdash; placed under &ldquo;Other expenses&rdquo;. Set a tax category on the Expenses tab.`);
     if (at.excluded.count) items.push(`<b>${at.excluded.count}</b> expense${at.excluded.count === 1 ? " is" : "s are"} marked <em>not tax deductible</em> (${money(at.excluded.amount)}) &mdash; left out of the P&amp;L.`);
     if (at.draftInvoices.count) items.push(`<b>${at.draftInvoices.count}</b> invoice${at.draftInvoices.count === 1 ? " is" : "s are"} still in Draft (${money(at.draftInvoices.amount)}) &mdash; included in accrual revenue. Mark an invoice Void to exclude it.`);
+    if (at.jobCosts && at.jobCosts.count) items.push(`<b>${money(at.jobCosts.amount)}</b> of job labor and other job costs from <b>${at.jobCosts.count}</b> visit${at.jobCosts.count === 1 ? "" : "s"} (each Event's Financials) are counted as cost of goods sold. If a labor payment is also entered as an Expense, remove one of them so it isn't counted twice.`);
+    if (at.overpaid && at.overpaid.count) {
+      const top = at.overpaid.list.slice(0, 4).map((o) => `${esc(o.invoice)} (${money(o.paid)} paid vs ${money(o.due)} due)`).join("; ");
+      items.push(`<b>${at.overpaid.count}</b> invoice${at.overpaid.count === 1 ? " has" : "s have"} more payments recorded than the invoice total &mdash; ${money(at.overpaid.amount)} in all, which is why cash revenue is higher than invoiced revenue. Check that the full charge is on the invoice: ${top}${at.overpaid.count > 4 ? "&hellip;" : ""}.`);
+    }
     if (MODEL.revenue.cash > 0 && MODEL.revenue.cash > MODEL.revenue.accrual + 0.005)
       items.push(`Cash revenue is higher than accrual revenue for this period: some payments were received for invoices issued in an earlier period.`);
     $("acct-attention").innerHTML = items.length
