@@ -1437,7 +1437,23 @@ async function saaJobsUpdateInvoice(invoiceId, fields) {
       .update(Object.assign({}, fields, { updated_at: new Date().toISOString() }))
       .eq("id", invoiceId);
     if (error) throw error;
-    return { ok: true };
+    // Round 110: a Draft / Sent invoice whose payments already cover its (possibly just-edited) total is Paid --
+    // the same rule saaJobsRecordPayment applies when a payment is entered. Without this, adding a discount
+    // AFTER the money came in left the invoice stuck on Draft even though nothing was owed.
+    let status = fields.status;
+    if (status && status !== "void" && status !== "paid") {
+      const { data: invoice } = await _saaClient.from("invoices").select("*").eq("id", invoiceId).maybeSingle();
+      if (invoice) {
+        const payments = await saaJobsFetchPayments(invoiceId);
+        const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        const totalDue = saaJobsInvoiceTotalDue(invoice);
+        if (totalDue > 0 && totalPaid >= totalDue) {
+          await _saaClient.from("invoices").update({ status: "paid" }).eq("id", invoiceId);
+          status = "paid";
+        }
+      }
+    }
+    return { ok: true, status };
   } catch (e) {
     return { ok: false, error: (e && e.message) || String(e) };
   }

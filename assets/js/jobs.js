@@ -1570,7 +1570,7 @@ function jbRenderInvoiceBox(job, invoice, payments) {
     });
     if (res.ok) {
       _jbToast("Invoice updated.");
-      invoice.status = document.getElementById("jbd-inv-status").value;
+      invoice.status = res.status || document.getElementById("jbd-inv-status").value;
       invoice.amount_total = newAmount;
       invoice.discount = newDiscount;
       invoice.additional_charges = newOther;
@@ -1742,7 +1742,7 @@ function jbeRenderInvoiceBox(event, invoice, payments) {
     });
     if (res.ok) {
       _jbToast("Invoice updated.");
-      invoice.status = document.getElementById("jbe-inv-status").value;
+      invoice.status = res.status || document.getElementById("jbe-inv-status").value;
       invoice.amount_total = newAmount;
       invoice.discount = newDiscount;
       invoice.additional_charges = newOther;
