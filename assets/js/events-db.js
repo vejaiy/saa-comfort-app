@@ -196,14 +196,22 @@ const SAA_EVENT_TYPE_DURATION = {
  *  in jobs-db.js — no customer-name suffix (unlike Job/Invoice/Quote
  *  numbers), matching the plain "EVT-YYYY-####" format used throughout
  *  the Round 42 migration/backfill. */
-async function _saaEventsNextEventNumber() {
+async function _saaEventsNextEventNumber(bump) {
+  // Round 116: highest existing number + 1 (NOT a row count -- deleted events
+  // leave gaps, and count+1 then landed on a number already in use, giving
+  // "duplicate key value violates unique constraint events_event_number_key").
+  // `bump` lets the caller step past a number that was taken in the meantime.
   const year = new Date().getFullYear();
-  const { count, error } = await _saaClient
+  const prefix = `EVT-${year}-`;
+  const { data, error } = await _saaClient
     .from("events")
-    .select("id", { count: "exact", head: true })
-    .like("event_number", `EVT-${year}-%`);
+    .select("event_number")
+    .like("event_number", `${prefix}%`)
+    .order("event_number", { ascending: false })
+    .limit(1);
   if (error) throw error;
-  return `EVT-${year}-${String((count || 0) + 1).padStart(4, "0")}`;
+  const top = data && data[0] && data[0].event_number ? parseInt(String(data[0].event_number).slice(prefix.length), 10) : 0;
+  return `${prefix}${String((isNaN(top) ? 0 : top) + 1 + (bump || 0)).padStart(4, "0")}`;
 }
 
 async function saaEventsFetchTechnicians() {
@@ -409,11 +417,8 @@ async function saaEventsCreateForJob(jobId, fields) {
     if (jErr) throw jErr;
     if (!job) return { ok: false, error: "That job no longer exists." };
 
-    const eventNumber = await _saaEventsNextEventNumber();
-    const { data: event, error: eErr } = await _saaClient
-      .from("events")
-      .insert({
-        event_number: eventNumber,
+    const _row = {
+        event_number: null,
         job_id: job.id,
         customer_id: job.customer_id,
         system_id: job.system_id,
@@ -437,9 +442,16 @@ async function saaEventsCreateForJob(jobId, fields) {
         service_city: fields.serviceCity || null,
         service_state: fields.serviceState || null,
         service_zip: fields.serviceZip || null,
-      })
-      .select("id")
-      .single();
+    };
+    // Round 116: retry with the next number if another event grabbed this one first.
+    let event = null, eErr = null, eventNumber = null;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      eventNumber = await _saaEventsNextEventNumber(attempt);
+      _row.event_number = eventNumber;
+      const r = await _saaClient.from("events").insert(_row).select("id").single();
+      event = r.data; eErr = r.error;
+      if (!eErr || !(eErr.code === "23505" || /events_event_number_key/.test(eErr.message || ""))) break;
+    }
     if (eErr) throw eErr;
     await _saaEventsSyncJobFromCurrentEvent(job.id);
     return { ok: true, eventId: event.id, eventNumber };
