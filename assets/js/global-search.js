@@ -42,7 +42,9 @@
       ]);
       var custById = {}; res[0].forEach(function (c) { custById[c.id] = c; });
       var jobById = {}; res[2].forEach(function (j) { jobById[j.id] = j; });
-      _data = { customers: res[0], systems: res[1], jobs: res[2], events: res[3], invoices: res[4], quotes: res[5], custById: custById, jobById: jobById };
+      // Round 113: old "converted to event" stub jobs are hidden everywhere
+      var liveJobs = res[2].filter(function (j) { return j.status !== "converted_to_event" && j.is_current !== false; });
+      _data = { customers: res[0], systems: res[1], jobs: liveJobs, events: res[3], invoices: res[4], quotes: res[5], custById: custById, jobById: jobById };
       _loadedAt = Date.now();
       return _data;
     })();

@@ -216,8 +216,9 @@ async function _saaCalNextJobNumber(firstName) {
 }
 
 /**
- * "+ Schedule" popup save, New Job tab: resolves/creates the Customer,
- * then either attaches a brand-new Job to an EXISTING System
+ * "+ Schedule" popup save, New Event tab (Round 113: every instance is an
+ * Event; the Job is only the Customer+System placeholder): resolves/creates
+ * the Customer, then either adds the Event under the EXISTING System's Job
  * (payload.systemId set — no new System row) or creates a new System AND
  * its Job together via saaSystemsCreateWithJob (systems-db.js), then
  * creates that Job's first Event via saaEventsCreateForJob (events-db.js).
@@ -242,19 +243,14 @@ async function saaCalScheduleNewJob(payload) {
     let jobId, systemId;
 
     if (payload.systemId) {
-      // Existing System picked -- Round 43: for a given Customer+System
-      // there's only ever ONE current Job, so this now goes through
-      // saaJobsCreateForExistingSystem (events-db.js) instead of a bare
-      // insert -- if that System already has a current Job (the normal
-      // case for a repeat visit), it gets automatically converted into a
-      // historical Event first, atomically, rather than silently sitting
-      // side-by-side with a second "current" job for the same equipment.
-      // The office already saw and confirmed this via the "+ Schedule"
-      // popup's own pre-save confirmation (see calendar.js's ns-save-btn
-      // handler) before this call is ever made.
+      // Existing System picked -- Round 113: one Job per Customer+System,
+      // every visit is an Event under it (saaJobsCreateForExistingSystem finds
+      // that Job, or creates it as the placeholder if this is its first
+      // Event). Nothing is converted and no Event is ever renumbered.
       const [startDate, startTime] = (payload.startDatetime || "").split("T");
       const res = await saaJobsCreateForExistingSystem(customerId, payload.systemId, {
         jobType: payload.jobType,
+        eventType: payload.eventType || null,
         status: "new",
         title: payload.title || "",
         priority: payload.priority || "normal",
@@ -269,14 +265,9 @@ async function saaCalScheduleNewJob(payload) {
         customerFirstName: firstNameForNumber,
       });
       if (!res.ok) return res;
-      // saaJobsCreateForExistingSystem already creates the new Job's own
-      // starter Event (mirroring every other Job-creation path) -- return
-      // straight from here instead of falling through to the shared
-      // saaEventsCreateForJob call below, which would otherwise create a
-      // SECOND Event for this same brand-new Job.
       return {
-        ok: true, jobId: res.jobId, systemId: payload.systemId, eventId: res.starterEventId,
-        hadCurrentJob: res.hadCurrentJob, convertedFromJobNumber: res.convertedFromJobNumber,
+        ok: true, jobId: res.jobId, systemId: payload.systemId, eventId: res.eventId,
+        jobCreated: res.jobCreated, jobNumber: res.jobNumber, eventNumber: res.eventNumber,
       };
     } else {
       // New System (an office-typed name, or just "System" as a
@@ -303,6 +294,11 @@ async function saaCalScheduleNewJob(payload) {
       scheduledEnd: payload.endDatetime || null,
       technicianId: payload.technicianId || null,
       reason: payload.title || null,
+      priority: payload.priority || "normal",
+      serviceAddress: payload.jobAddress || null,
+      serviceCity: payload.jobCity || null,
+      serviceState: payload.jobAddress ? "TX" : null,
+      serviceZip: payload.jobZip || null,
     });
     if (!evRes.ok) return evRes;
 
@@ -315,7 +311,7 @@ async function saaCalScheduleNewJob(payload) {
     // row itself, so a Calendar-created job's own Jobs-List "Scheduled"/
     // "Technician" columns stayed blank even though mileage looked right.
 
-    return { ok: true, jobId, systemId, eventId: evRes.eventId };
+    return { ok: true, jobId, systemId, eventId: evRes.eventId, jobCreated: true, eventNumber: evRes.eventNumber };
   } catch (e) {
     return { ok: false, error: (e && e.message) || String(e) };
   }

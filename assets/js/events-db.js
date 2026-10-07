@@ -964,97 +964,115 @@ async function saaSystemsFindCurrentJobForSystem(customerId, systemId) {
   }
 }
 
-/** The Round 43 "+ New Job" entry point for an ALREADY-EXISTING System --
- *  used by the Calendar's "+ Schedule -> New Job" tab (when an existing
- *  System is picked, not "+ Add New System") and by the Job Card's own
- *  "Start Next Job" action (Customer+System pre-filled from the Job
- *  that's about to become historical). If this Customer+System has no
- *  current Job yet (a brand-new System, or one whose only prior Job was
- *  already converted/closed out some other way), this is exactly
- *  equivalent to a plain Job insert -- the conversion only fires when one
- *  is actually found, all inside the one saa_create_job_with_conversion()
- *  transaction (never a partial "new job exists but old one wasn't
- *  converted" state). jobFields takes the same shape saaSystemsCreateWithJob's
- *  jobFields does. Also creates the new Job's own starter Event
- *  (saaEventsCreateForJob), same as every other Job-creation path in the
- *  app, so it shows up on the Dispatch Calendar immediately. Returns
- *  { ok:true, jobId, hadCurrentJob, convertedFromJobNumber,
- *  convertedToEventId, convertedToEventNumber } | { ok:false, error }. */
+/* ============================== Round 113: Job = placeholder, everything is an Event ==============================
+ * Per Vijayan (2026-10-07): "Creating jobs and converting to event is very
+ * confusing and hard to track. Going forward all instances will be recorded
+ * as events. Job numbers will be just used as placeholder for a customer and
+ * their system. Unique systems + customer will have unique job. When creating
+ * events if a new customer and new system is selected a job will be created
+ * as placeholder and an event will be created for that instance. After that
+ * any instance for that job will be created under event such that event
+ * number will not be changed at any time."
+ *
+ * So: one Job per Customer+System, forever. Every visit/instance is an Event
+ * under it (EVT-YYYY-####, never renumbered, never converted). The Round 43
+ * "convert the current Job into a historical Event" behaviour is retired --
+ * saa_create_job_with_conversion() is left in the database but nothing calls
+ * it any more. */
+
+/** The one Job for this Customer+System (null if there isn't one yet).
+ *  Old "converted_to_event" stub rows (Round 43 leftovers, no events of
+ *  their own) are ignored; if more than one live Job somehow exists the
+ *  current one / oldest wins so history keeps landing in the same place. */
+async function saaFindJobForCustomerSystem(customerId, systemId) {
+  if (!customerId || !systemId) return null;
+  const { data, error } = await _saaClient
+    .from("jobs")
+    .select("id,job_number,status,job_type,is_current,created_at,customer_id,system_id")
+    .eq("customer_id", customerId)
+    .eq("system_id", systemId);
+  if (error) throw error;
+  const live = (data || []).filter((j) => j.status !== "converted_to_event" && j.is_current !== false);
+  live.sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+  return live[0] || null;
+}
+
+/** Kept under its old name so every existing caller (Jobs "+ New Event",
+ *  Calendar "+ Schedule", Job Card) keeps working: creates ONE Event for an
+ *  EXISTING System. If that Customer+System already has its Job, the Event
+ *  goes under it; if not, the Job is created first as the placeholder. No
+ *  conversion, no renumbering. `f` takes the same shape as before
+ *  (jobType/title/priority/address/technician(s)/start+end/notes/quote) plus
+ *  optional eventType. Returns { ok:true, jobId, jobNumber, jobCreated,
+ *  eventId, eventNumber, starterEventId (= eventId, legacy name),
+ *  hadCurrentJob:false } | { ok:false, error }. */
 async function saaJobsCreateForExistingSystem(customerId, systemId, jobFields) {
   try {
     if (!customerId) return { ok: false, error: "A customer is required." };
     if (!systemId) return { ok: false, error: "A system is required." };
     const f = jobFields || {};
 
-    const firstName = f.customerFirstName || (await _saaCustomerFirstName(customerId));
-    const jobNumber = await _saaJobsNextJobNumber(firstName);
+    let job = await saaFindJobForCustomerSystem(customerId, systemId);
+    let jobCreated = false;
+    if (!job) {
+      const firstName = f.customerFirstName || (await _saaCustomerFirstName(customerId));
+      const jobNumber = await _saaJobsNextJobNumber(firstName);
+      const { data: newJob, error: jErr } = await _saaClient
+        .from("jobs")
+        .insert({
+          job_number: jobNumber,
+          customer_id: customerId,
+          system_id: systemId,
+          job_type: f.jobType || "service_call",
+          status: "new",
+          title: f.title || "",
+          job_address: f.jobAddress || null,
+          job_city: f.jobCity || null,
+          job_state: f.jobState || "TX",
+          job_zip: f.jobZip || null,
+          priority: f.priority || "normal",
+          is_current: true,
+        })
+        .select("id,job_number")
+        .single();
+      if (jErr) {
+        // two people creating the first event for the same Customer+System at
+        // once: the unique index (Round 113) rejects the 2nd job -- use the 1st.
+        if (jErr.code === "23505") job = await saaFindJobForCustomerSystem(customerId, systemId);
+        if (!job) throw jErr;
+      } else {
+        job = newJob;
+        jobCreated = true;
+      }
+    }
 
-    // The old current Job's own type/status decide the mapped Event
-    // Type/Status it gets converted into (resolved here in JS, reusing
-    // the existing maps, rather than duplicating them a third time inside
-    // the Postgres function).
-    const currentRes = await saaSystemsFindCurrentJobForSystem(customerId, systemId);
-    if (!currentRes.ok) return { ok: false, error: currentRes.error };
-    const oldJob = currentRes.job;
-    const eventNumber = oldJob ? await _saaEventsNextEventNumber() : null;
-    const eventType = oldJob ? (SAA_JOBTYPE_TO_EVENTTYPE[oldJob.job_type] || "other") : null;
-    const eventStatus = oldJob ? (SAA_JOBSTATUS_TO_EVENTSTATUS[oldJob.status] || "completed") : null;
-
-    const { data: rpcData, error: rpcErr } = await _saaClient.rpc("saa_create_job_with_conversion", {
-      p_customer_id: customerId,
-      p_system_id: systemId,
-      p_new_job: {
-        job_number: jobNumber,
-        job_type: f.jobType || "service_call",
-        status: f.status || "new",
-        title: f.title || "",
-        job_address: f.jobAddress || null,
-        job_city: f.jobCity || null,
-        job_state: f.jobState || "TX",
-        job_zip: f.jobZip || null,
-        priority: f.priority || "normal",
-        assigned_technician_id: f.technicianId || null,
-        assigned_technician_id_2: f.technicianId2 || null,
-        assigned_technician_id_3: f.technicianId3 || null,
-        scheduled_date: f.scheduledDate || null,
-        scheduled_time: f.scheduledTime || null,
-        notes: f.notes || null,
-        linked_quote_id: f.linkedQuoteId || null,
-        quoted_amount: f.quotedAmount != null ? f.quotedAmount : null,
-      },
-      p_event_number: eventNumber,
-      p_event_type: eventType,
-      p_event_status: eventStatus,
-    });
-    if (rpcErr) throw rpcErr;
-
-    const evRes = await saaEventsCreateForJob(rpcData.newJobId, {
-      eventType: SAA_JOBTYPE_TO_EVENTTYPE[f.jobType] || "service_call",
-      eventStatus: "scheduled",
+    const evRes = await saaEventsCreateForJob(job.id, {
+      eventType: f.eventType || SAA_JOBTYPE_TO_EVENTTYPE[f.jobType] || "service_call",
+      eventStatus: f.eventStatus || "scheduled",
       scheduledStart: f.startDatetime || null,
       scheduledEnd: f.endDatetime || null,
       technicianId: f.technicianId || null,
       technicianId2: f.technicianId2 || null,
       technicianId3: f.technicianId3 || null,
       reason: f.title || null,
+      description: f.notes || null,
+      priority: f.priority || "normal",
+      serviceAddress: f.jobAddress || null,
+      serviceCity: f.jobCity || null,
+      serviceState: f.jobState || (f.jobAddress ? "TX" : null),
+      serviceZip: f.jobZip || null,
     });
-    if (!evRes.ok) {
-      return {
-        ok: true, jobId: rpcData.newJobId, hadCurrentJob: rpcData.hadCurrentJob,
-        convertedFromJobId: rpcData.convertedFromJobId, convertedFromJobNumber: rpcData.convertedFromJobNumber,
-        convertedToEventId: rpcData.convertedToEventId,
-        warning: "Job created, but its own starter Event couldn't be scheduled: " + evRes.error,
-      };
+    if (!evRes.ok) return { ok: false, error: evRes.error };
+
+    let warning = null;
+    if (f.linkedQuoteId) {
+      const lq = await saaEventsLinkQuote(evRes.eventId, f.linkedQuoteId);
+      if (lq && lq.ok === false) warning = "Event created, but the quote couldn't be linked: " + lq.error;
     }
     return {
-      ok: true,
-      jobId: rpcData.newJobId,
-      starterEventId: evRes.eventId,
-      hadCurrentJob: rpcData.hadCurrentJob,
-      convertedFromJobId: rpcData.convertedFromJobId,
-      convertedFromJobNumber: rpcData.convertedFromJobNumber,
-      convertedToEventId: rpcData.convertedToEventId,
-      convertedToEventNumber: eventNumber,
+      ok: true, jobId: job.id, jobNumber: job.job_number, jobCreated,
+      eventId: evRes.eventId, starterEventId: evRes.eventId, eventNumber: evRes.eventNumber,
+      hadCurrentJob: false, convertedFromJobNumber: null, warning,
     };
   } catch (e) {
     return { ok: false, error: _saaEventsFriendlyDbError(e) };

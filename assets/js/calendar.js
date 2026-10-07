@@ -1125,7 +1125,7 @@ async function saaCalRenderSystemPicker(customerId) {
   saaCalCustomerSystems = customerId ? await saaSystemsFetchByCustomerWithJobs(customerId) : [];
   const select = document.getElementById("ns-system-select");
   select.innerHTML = `<option value="">+ Add New System</option>` + saaCalCustomerSystems.map((s) => {
-    const jobBit = s.job ? ` — Job ${s.job.job_number} (${s.job.status})` : "";
+    const jobBit = s.job ? ` — Job ${s.job.job_number}` : "";
     return `<option value="${s.id}">${_saaCalEsc(s.system_name || "System")}${_saaCalEsc(jobBit)}</option>`;
   }).join("");
   // Round 55: same auto-default as jbRenderSystemPicker in jobs.js -- a
@@ -1152,16 +1152,12 @@ async function saaCalOnSystemChange() {
   document.getElementById("ns-newsystem-fields").hidden = !!systemId;
   warn.textContent = "";
   if (!systemId || !saaCalSelectedCustomer || saaCalSelectedCustomer.isNew) return;
-  // Round 43: "one current Job per Customer+System" -- this system already
-  // has a current Job, so saving here will convert it into a historical
-  // Event (confirmed again, with full detail, at Save time -- see the
-  // ns-save-btn handler). This replaces the old plain "possible duplicate"
-  // wording, which suggested creating a second side-by-side job was a
-  // normal option; under the new rule it never is.
-  const cur = await saaSystemsFindCurrentJobForSystem(saaCalSelectedCustomer.customer.id, systemId);
-  if (cur.ok && cur.job) {
-    warn.textContent = `⚠️ This system's current job is ${cur.job.job_number} (${(Object.fromEntries(SAA_JOBS_STATUS_OPTIONS)[cur.job.status]) || cur.job.status}). Creating a new job here will convert it into a historical Event.`;
-  }
+  // Round 113: one Job per Customer+System, every instance is an Event under it
+  // -- just tell the office where the new Event will land (no conversion).
+  try {
+    const job = await saaFindJobForCustomerSystem(saaCalSelectedCustomer.customer.id, systemId);
+    if (job) warn.textContent = `\u2139\uFE0F This system already has job ${job.job_number}. The new event will be added under it.`;
+  } catch (e) { /* informational only */ }
 }
 
 function saaCalSelectCustomer(result) {
@@ -1246,7 +1242,7 @@ function saaCalUseNewCustomer() {
 function saaCalRenderJobResults(jobs, query) {
   const box = document.getElementById("ns-job-results");
   if (!jobs.length) {
-    box.innerHTML = `<div class="cal-cust-result muted">No matching jobs. Try the New Job tab instead.</div>`;
+    box.innerHTML = `<div class="cal-cust-result muted">No matching jobs. Try the New Event tab instead.</div>`;
     box.hidden = false;
     return;
   }
@@ -1591,23 +1587,8 @@ function saaCalWireStaticHandlers() {
       }
       const jobType = document.getElementById("nsx-job-type").value || "service_call";
 
-      // Round 43: "Existing Job" no longer adds a 2nd Event under
-      // foundJob -- it starts a brand-new current Job for foundJob's own
-      // Customer+System, which converts whichever Job is CURRENTLY active
-      // there (not necessarily foundJob itself, if an older/historical
-      // Job was what search happened to match) into a historical Event.
-      // Same confirmation as the New Job tab's existing-System branch.
-      const cur = await saaSystemsFindCurrentJobForSystem(foundJob.customer_id, foundJob.system_id);
-      if (cur.ok && cur.job) {
-        const lastVisit = cur.job.scheduled_date ? saaCalFormatShortDate(cur.job.scheduled_date) : "no date on file";
-        const statusLabel = (Object.fromEntries(SAA_JOBS_STATUS_OPTIONS)[cur.job.status]) || cur.job.status;
-        const proceed = await saaConfirm(
-          `CURRENT JOB FOUND\n\n${cur.job.job_number}\nLast Visit: ${lastVisit}\nStatus: ${statusLabel}\n\nCreating this new Job will convert the current Job into a historical Event. Continue?`,
-          { title: "New Job", okLabel: "Create New Job & Convert Previous Job", cancelLabel: "Cancel" }
-        );
-        if (!proceed) { status.textContent = "Not created."; return; }
-      }
-
+      // Round 113: the new instance is just another Event under this job's
+      // Customer+System job -- no conversion, no confirmation needed.
       let startDatetime = null, endDatetime = null;
       if (techId && timeVal) {
         const [hh, mm] = timeVal.split(":").map(Number);
@@ -1629,7 +1610,7 @@ function saaCalWireStaticHandlers() {
       if (res.ok) {
         document.getElementById("cal-newsvc-modal").hidden = true;
         await saaCalLoadAndRender();
-        saaCalShowToast(res.convertedFromJobNumber ? `New Job created -- ${res.convertedFromJobNumber} is now a historical Event.` : "New Job created.");
+        saaCalShowToast(res.eventNumber ? `Event ${res.eventNumber} created.` : "Event created.");
       } else {
         status.textContent = "Error: " + res.error;
       }
@@ -1650,26 +1631,6 @@ function saaCalWireStaticHandlers() {
     }
     const sc = saaCalSelectedCustomer;
     const systemId = document.getElementById("ns-system-select").value || null;
-
-    // Round 43: "one current Job per Customer+System" -- picking an
-    // EXISTING System that already has a current Job means saving here
-    // will convert it into a historical Event (see
-    // saaJobsCreateForExistingSystem, events-db.js). Confirm before doing
-    // that irreversible-feeling thing, per spec item 18/19, rather than
-    // just the softer inline warning saaCalOnSystemChange already shows
-    // once a System is picked.
-    if (systemId && !sc.isNew) {
-      const cur = await saaSystemsFindCurrentJobForSystem(sc.customer.id, systemId);
-      if (cur.ok && cur.job) {
-        const lastVisit = cur.job.scheduled_date ? saaCalFormatShortDate(cur.job.scheduled_date) : "no date on file";
-        const statusLabel = (Object.fromEntries(SAA_JOBS_STATUS_OPTIONS)[cur.job.status]) || cur.job.status;
-        const proceed = await saaConfirm(
-          `CURRENT JOB FOUND\n\n${cur.job.job_number}\nLast Visit: ${lastVisit}\nStatus: ${statusLabel}\n\nCreating this new Job will convert the current Job into a historical Event. Continue?`,
-          { title: "New Job", okLabel: "Create New Job & Convert Previous Job", cancelLabel: "Cancel" }
-        );
-        if (!proceed) { status.textContent = "Not created."; return; }
-      }
-    }
 
     status.textContent = "Saving…";
     const res = await saaCalScheduleNewJob({
@@ -1696,7 +1657,7 @@ function saaCalWireStaticHandlers() {
     if (res.ok) {
       document.getElementById("cal-newsvc-modal").hidden = true;
       await saaCalLoadAndRender();
-      saaCalShowToast(techId && startDatetime ? "Job scheduled." : "Added to Unscheduled Jobs.");
+      saaCalShowToast((res.eventNumber ? `Event ${res.eventNumber} ` : "Event ") + (techId && startDatetime ? "scheduled." : "added to Unscheduled."));
     } else {
       status.textContent = "Error: " + res.error;
     }

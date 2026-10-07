@@ -293,6 +293,9 @@ function _jbTechDisplayNames(j) {
 // the truth about what the job is really for, so it now wins over the
 // frozen quoted_amount/linked-quote total.
 function _jbQuoteAmount(j) {
+  // Round 113: a Job row is a placeholder -- its amount is the sum of its
+  // events' own amounts (the same numbers the expanded event rows show).
+  if (j.events && j.events.length) return j.events.reduce((t, e) => t + Number(_jbEventQuoteAmount(e) || 0), 0);
   if (j.invoice) return saaJobsInvoiceTotalDue(j.invoice);
   if (j.quoted_amount != null && j.quoted_amount !== "") return j.quoted_amount;
   if (j.linkedQuote && j.linkedQuote.total != null) return j.linkedQuote.total;
@@ -309,7 +312,7 @@ function _jbQuoteCellHtml(j) {
   // straight into the Job Card, no saved quote behind it) -- show the
   // number but don't make it a dead link. Repair-worksheet quotes save
   // with quote_type "repair" and live on repair.html, not quotation.html.
-  if (!j.linked_quote_id) return fmtMoney(amt);
+  if (!j.linked_quote_id || (j.events && j.events.length)) return fmtMoney(amt);
   const page = (j.linkedQuote && j.linkedQuote.quote_type === "repair") ? "repair.html" : "quotation.html";
   return `<button type="button" class="jb-quote-link" data-quote-id="${j.linked_quote_id}" data-quote-page="${page}">${fmtMoney(amt)}</button>`;
 }
@@ -782,7 +785,7 @@ async function jbRenderSystemPicker(customerId) {
   _jbNewJobCustomerSystems = customerId ? await saaSystemsFetchByCustomerWithJobs(customerId) : [];
   const select = document.getElementById("jbn-system-select");
   select.innerHTML = `<option value="">+ Add New System</option>` + _jbNewJobCustomerSystems.map((s) => {
-    const jobBit = s.job ? ` — Job ${s.job.job_number} (${s.job.status})` : "";
+    const jobBit = s.job ? ` — Job ${s.job.job_number}` : "";
     return `<option value="${s.id}">${_jbEsc(s.system_name || "System")}${_jbEsc(jobBit)}</option>`;
   }).join("");
   // Round 55: "current customer with one system will have only one job" --
@@ -801,22 +804,21 @@ async function jbRenderSystemPicker(customerId) {
   }
 }
 
-/** New Job popup's System <select> change handler -- mirrors
+/** New Event popup's System <select> change handler -- mirrors
  *  saaCalOnSystemChange in calendar.js. Reveals the "+ Add New System"
- *  fields only when that option is picked, and otherwise warns (same
- *  Round 43 "one current Job per Customer+System" rule) that picking a
- *  System that already has a current Job will convert that Job into a
- *  historical Event when this popup is saved. */
+ *  fields only when that option is picked; otherwise (Round 113) says which
+ *  job the new Event will be filed under -- one Job per Customer + System,
+ *  nothing is converted. */
 async function jbOnSystemChange() {
   const systemId = document.getElementById("jbn-system-select").value;
   const warn = document.getElementById("jbn-system-warning");
   document.getElementById("jbn-newsystem-fields").hidden = !!systemId;
   warn.textContent = "";
   if (!systemId || !_jbSelectedCust || _jbSelectedCust.isNew) return;
-  const cur = await saaSystemsFindCurrentJobForSystem(_jbSelectedCust.id, systemId);
-  if (cur.ok && cur.job) {
-    warn.textContent = `⚠️ This system's current job is ${cur.job.job_number} (${(Object.fromEntries(SAA_JOBS_STATUS_OPTIONS)[cur.job.status]) || cur.job.status}). Creating a new job here will convert it into a historical Event.`;
-  }
+  try {
+    const job = await saaFindJobForCustomerSystem(_jbSelectedCust.id, systemId);
+    if (job) warn.textContent = `\u2139\uFE0F This system already has job ${job.job_number}. The new event will be added under it.`;
+  } catch (e) { /* informational only */ }
 }
 
 function jbUseNewCustomer() {
@@ -963,32 +965,10 @@ async function jbSaveNewJob() {
       customerId = await saaJobsFindOrCreateCustomer({ firstName: c.first_name, lastName: c.last_name, phone: c.phone, address: c.billing_address, city: c.billing_city, zip: c.billing_zip });
     } else {
       customerId = _jbSelectedCust.id;
-      const dup = await saaJobsFindDuplicateJobs({ customerId: _jbSelectedCust.id, phone: _jbSelectedCust.customer && _jbSelectedCust.customer.phone, jobType });
-      if (dup.ok && dup.jobs.length) {
-        const nums = dup.jobs.map((j) => j.job_number || "unnumbered").join(", ");
-        const proceed = await saaConfirm(`This customer already has an open ${saaJobTypeLabel(jobType)} job (${nums}). Create another job anyway?`, { title: "Possible duplicate job", okLabel: "Create Anyway" });
-        if (!proceed) { statusEl.textContent = "Not created."; return; }
-      }
     }
   } catch (e) {
     statusEl.textContent = "Error: " + ((e && e.message) || String(e));
     return;
-  }
-
-  // Round 43 "one current Job per Customer+System" -- picking an EXISTING
-  // System that already has a current Job means saving here will convert
-  // it into a historical Event (saaJobsCreateForExistingSystem below).
-  // Confirm before doing that, same as the Calendar's own New Job tab.
-  if (systemId && !_jbSelectedCust.isNew) {
-    const cur = await saaSystemsFindCurrentJobForSystem(customerId, systemId);
-    if (cur.ok && cur.job) {
-      const statusLabel = (Object.fromEntries(SAA_JOBS_STATUS_OPTIONS)[cur.job.status]) || cur.job.status;
-      const proceed = await saaConfirm(
-        `CURRENT JOB FOUND\n\n${cur.job.job_number}\nStatus: ${statusLabel}\n\nCreating this new Job will convert the current Job into a historical Event. Continue?`,
-        { title: "New Job", okLabel: "Create New Job & Convert Previous Job", cancelLabel: "Cancel" }
-      );
-      if (!proceed) { statusEl.textContent = "Not created."; return; }
-    }
   }
 
   let startDatetime = null, endDatetime = null;
@@ -1002,58 +982,47 @@ async function jbSaveNewJob() {
 
   statusEl.textContent = "Saving…";
 
-  let newJobId;
+  // Round 113: everything created here is an EVENT. The Job is only the
+  // Customer + System placeholder -- found automatically when that System
+  // already has one, created here (with the System) when it is new.
+  const notes = document.getElementById("jbn-notes").value.trim();
+  const priority = _jbNewPriority;
+  let res;
   if (systemId) {
-    // Existing System picked -- attach this new Job directly to it
-    // instead of forking off a duplicate blank System (Round 54).
-    const jobRes = await saaJobsCreateForExistingSystem(customerId, systemId, {
+    res = await saaJobsCreateForExistingSystem(customerId, systemId, {
       jobType, status: "new", title, jobAddress, jobCity, jobState, jobZip,
-      priority: _jbNewPriority,
-      technicianId, technicianId2, technicianId3,
-      scheduledDate, scheduledTime, startDatetime, endDatetime,
-      notes: document.getElementById("jbn-notes").value.trim(),
+      priority, technicianId, technicianId2, technicianId3,
+      scheduledDate, scheduledTime, startDatetime, endDatetime, notes,
       linkedQuoteId: _jbConvertingQuote ? _jbConvertingQuote.id : null,
-      quotedAmount: _jbConvertingQuote ? _jbConvertingQuote.total || 0 : null,
     });
-    if (!jobRes.ok) { statusEl.textContent = jobRes.error; return; }
-    newJobId = jobRes.jobId;
-    // saaJobsCreateForExistingSystem already creates the new Job's own
-    // starter Event -- nothing more to do here.
+    if (!res.ok) { statusEl.textContent = res.error; return; }
   } else {
-    let status = "new";
-    if (technicianId && scheduledDate) status = "scheduled";
-    else if (technicianId) status = "assigned";
-
     const sysRes = await saaSystemsCreateWithJob(
       customerId,
       { systemName: document.getElementById("jbn-sys-name").value.trim() || null, manufacturer: document.getElementById("jbn-sys-manufacturer").value.trim() || null },
-      {
-        jobType, status, title, jobAddress, jobCity, jobState, jobZip,
-        priority: _jbNewPriority,
-        technicianId, technicianId2, technicianId3,
-        scheduledDate, scheduledTime,
-        notes: document.getElementById("jbn-notes").value.trim(),
-        linkedQuoteId: _jbConvertingQuote ? _jbConvertingQuote.id : null,
-        quotedAmount: _jbConvertingQuote ? _jbConvertingQuote.total || 0 : null,
-      }
+      { jobType, status: "new", title, jobAddress, jobCity, jobState, jobZip, priority }
     );
     if (!sysRes.ok) { statusEl.textContent = sysRes.error; return; }
-    newJobId = sysRes.jobId;
-
-    const evRes = await saaEventsCreateForJob(newJobId, {
+    const evRes = await saaEventsCreateForJob(sysRes.jobId, {
       eventType: SAA_JOBTYPE_TO_EVENTTYPE[jobType] || "service_call",
       eventStatus: "scheduled",
       scheduledStart: startDatetime,
       scheduledEnd: endDatetime,
       technicianId, technicianId2, technicianId3,
       reason: title || null,
+      description: notes || null,
+      priority,
+      serviceAddress: jobAddress || null, serviceCity: jobCity || null,
+      serviceState: jobAddress ? jobState : null, serviceZip: jobZip || null,
     });
-    if (!evRes.ok) { statusEl.textContent = "Job created, but its first Event couldn't be scheduled: " + evRes.error; return; }
+    if (!evRes.ok) { statusEl.textContent = "Job placeholder created, but the event couldn't be saved: " + evRes.error; return; }
+    res = { ok: true, jobId: sysRes.jobId, jobCreated: true, eventId: evRes.eventId, eventNumber: evRes.eventNumber };
+    if (_jbConvertingQuote) await saaEventsLinkQuote(evRes.eventId, _jbConvertingQuote.id);
   }
 
   document.getElementById("jb-new-modal").hidden = true;
   await jbLoadAll();
-  _jbToast("Job created.");
+  _jbToast(res.eventNumber ? `Event ${res.eventNumber} created.` : "Event created.");
 }
 
 /* ============================== Job Detail modal ============================== */
@@ -2816,9 +2785,53 @@ function _jbEventTimeLabel(iso) {
   return wc.local.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+/** Round 113: the Job Card's roll-up of everything on this Customer + System
+ *  across ALL its events -- visits, first/last visit, invoiced, paid, balance,
+ *  costs (from each event's Financials) and profit. Fresh queries every time
+ *  (called whenever the event list re-renders) so it never goes stale after an
+ *  event is edited. */
+async function jbRenderJobSummary(job) {
+  const box = document.getElementById("jbd-summary");
+  if (!box) return;
+  const events = _jbEvents || [];
+  const evIds = events.map((e) => e.id);
+  let invoices = [], payments = [];
+  try {
+    const [byJob, byEvent] = await Promise.all([
+      _saaClient.from("invoices").select("id,event_id,job_id,amount_total,discount,additional_charges,status").eq("job_id", job.id),
+      evIds.length ? _saaClient.from("invoices").select("id,event_id,job_id,amount_total,discount,additional_charges,status").in("event_id", evIds) : { data: [] },
+    ]);
+    const seen = {};
+    [].concat((byJob && byJob.data) || [], (byEvent && byEvent.data) || []).forEach((i) => { seen[i.id] = i; });
+    invoices = Object.values(seen).filter((i) => i.status !== "void");
+    if (invoices.length) {
+      const pr = await _saaClient.from("payments").select("invoice_id,amount").in("invoice_id", invoices.map((i) => i.id));
+      payments = (pr && pr.data) || [];
+    }
+  } catch (e) { /* summary is best-effort */ }
+  const invoiced = invoices.reduce((t, i) => t + saaJobsInvoiceTotalDue(i), 0);
+  const paid = payments.reduce((t, p) => t + Number(p.amount || 0), 0);
+  const balance = Math.max(0, invoiced - paid);
+  const costs = events.reduce((t, e) => t + Number(e.actual_material_cost || 0) + Number(e.actual_labor_cost || 0) + Number(e.other_cost || 0), 0);
+  const profit = invoiced - costs;
+  const completed = events.filter((e) => e.event_status === "completed").length;
+  const dates = events.map((e) => (e.scheduled_start || e.created_at || "").slice(0, 10)).filter(Boolean).sort();
+  const tile = (label, value, cls) => `<div class="jb-sum-tile${cls ? " " + cls : ""}"><div class="jb-sum-v">${value}</div><div class="jb-sum-l">${label}</div></div>`;
+  box.innerHTML =
+    tile("Events", `${events.length}<span class="jb-sum-sub"> · ${completed} completed</span>`) +
+    tile("First event", dates.length ? _jbFormatDate(dates[0]) : "—") +
+    tile("Latest event", dates.length ? _jbFormatDate(dates[dates.length - 1]) : "—") +
+    tile("Invoiced", fmtMoney(invoiced)) +
+    tile("Paid", fmtMoney(paid)) +
+    tile("Balance due", fmtMoney(balance), balance > 0.005 ? "is-due" : "") +
+    tile("Costs", fmtMoney(costs)) +
+    tile("Profit", fmtMoney(profit), profit < 0 ? "is-due" : "");
+}
+
 async function jbRenderEventTimeline(job) {
   _jbEvents = await saaEventsFetchForJob(job.id);
   const list = document.getElementById("jbd-event-list");
+  jbRenderJobSummary(job);
 
   // Round 43 (2026-09-22): "Start Next Job" only makes sense from the
   // CURRENT Job for a Customer+System -- a historical Job's own banner
@@ -2835,7 +2848,7 @@ async function jbRenderEventTimeline(job) {
   if (!_jbEvents.length) {
     list.innerHTML = isHistorical
       ? `<li class="jb-event-empty" style="cursor:default;border:none;padding:4px 2px">This Job is historical — see the linked Event above for its ongoing history.</li>`
-      : `<li class="jb-event-empty" style="cursor:default;border:none;padding:4px 2px">No events yet — use "Start Next Job" above once this Job's first visit is done.</li>`;
+      : `<li class="jb-event-empty" style="cursor:default;border:none;padding:4px 2px">No events yet — use "+ New Event" above.</li>`;
     return;
   }
   list.innerHTML = _jbEvents.map((e) => {
@@ -3623,6 +3636,14 @@ async function jbOpenDetail(jobId) {
 
   jbRenderCustomerBox(job);
   await jbRenderSystemSection(job);
+  // Round 113: the Job is the Customer + System placeholder, so that is its title.
+  try {
+    const sysRow = job.system_id ? await saaSystemsFetchById(job.system_id) : null;
+    const sysName = sysRow ? (sysRow.system_name || sysRow.manufacturer || "") : "";
+    const custName = job.customer ? _jbCustName(job.customer) : "";
+    const combined = [custName && custName !== "—" ? custName : "", sysName].filter(Boolean).join(" \u2014 ");
+    if (combined) document.getElementById("jbd-title").textContent = combined;
+  } catch (e) { /* keep the fallback title */ }
   await jbRenderEventTimeline(job);
 
   document.getElementById("jbd-type").innerHTML = _jbOptionsHtml(SAA_JOBS_TYPE_OPTIONS, job.job_type);
@@ -3989,36 +4010,13 @@ function jbScheduleAutosave(delayMs) {
  *  itself is embedded on several other pages (Calendar, and per the
  *  spec eventually Customer/System/Employee dashboard too) where that
  *  modal's markup isn't present. */
-async function jbStartNextJob() {
+async function jbStartNextJob(defaultType) {
+  // Round 113 (kept under its old name): "+ New Event" on the Job Card. The
+  // Job is just the Customer + System placeholder -- a new instance is another
+  // Event under it (EVT number assigned on save, never changed), not a new Job.
   const job = _jbCurrentJob;
-  if (!job || job.is_current === false) return; // buttons are hidden in this case; belt-and-suspenders
-  const statusMsg = document.getElementById("jbd-status-msg");
-  if (!job.system_id) {
-    _jbToast("This job has no System on file yet -- add one (System section above) before starting the next job.", true);
-    return;
-  }
-  const proceed = await saaConfirm(
-    `Starting a new Job for this Customer + System will convert the current Job (${job.job_number || ""}) into a historical Event, and its full record (financials, photos, invoice, notes, etc.) is carried over. Continue?`,
-    { title: "Start Next Job", okLabel: "Create New Job & Convert Previous Job", cancelLabel: "Cancel" }
-  );
-  if (!proceed) return;
-
-  if (statusMsg) statusMsg.textContent = "Creating next job…";
-  const res = await saaJobsCreateForExistingSystem(job.customer_id, job.system_id, {
-    jobType: job.job_type, status: "new", title: job.title || "", priority: job.priority || "normal",
-    jobAddress: job.job_address || null, jobCity: job.job_city || null, jobState: job.job_state || "TX", jobZip: job.job_zip || null,
-    technicianId: job.assigned_technician_id || null, technicianId2: job.assigned_technician_id_2 || null, technicianId3: job.assigned_technician_id_3 || null,
-    customerFirstName: job.customer ? job.customer.first_name : undefined,
-  });
-  if (!res.ok) {
-    if (statusMsg) statusMsg.textContent = res.error;
-    _jbToast(res.error, true);
-    return;
-  }
-  _jbToast(res.convertedFromJobNumber ? `New Job created -- ${res.convertedFromJobNumber} is now a historical Event.` : "New Job created.");
-  await jbLoadAll();
-  await jbOpenDetail(res.jobId);
-  if (typeof saaCalLoadAndRender === "function") await saaCalLoadAndRender(); // Job Card can be an overlay on the Calendar (Round 6 item 7) -- refresh the grid behind it
+  if (!job) return;
+  await jbOpenEventModal(null, typeof defaultType === "string" ? defaultType : undefined);
 }
 
 /** Save-and-exit: used by the Close (X) button, the Close button, and a
@@ -4295,8 +4293,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Round 43: both buttons now drive the same "Start Next Job" flow (see
   // jbStartNextJob) -- the old "add a 2nd/3rd Event under this same still-
   // open Job" behavior is retired now that a Job is a single visit.
-  document.getElementById("jbd-schedule-followup-btn").addEventListener("click", jbStartNextJob);
-  document.getElementById("jbd-schedule-event-btn").addEventListener("click", jbStartNextJob);
+  document.getElementById("jbd-schedule-followup-btn").addEventListener("click", () => jbStartNextJob("follow_up"));
+  document.getElementById("jbd-schedule-event-btn").addEventListener("click", () => jbStartNextJob());
   document.getElementById("jb-event-save-btn").addEventListener("click", jbSaveEventModal);
   document.getElementById("jb-event-close-btn").addEventListener("click", jbCloseEventModalWithSave);
   // Round 63: pinned header's (x) and live summary line.

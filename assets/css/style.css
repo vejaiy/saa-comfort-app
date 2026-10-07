@@ -1707,3 +1707,16 @@ html.gs-open { overflow: hidden; }
 .gs-row mark { background: #ffe58a; color: inherit; border-radius: 2px; padding: 0 1px; }
 @media (max-width: 640px) { #gs-overlay { padding: 10px 8px; } .gs-box { max-height: calc(100vh - 20px); } .gs-head input { font-size: 1rem; } .gs-s { white-space: normal; } }
 @media print { #gs-overlay, .emp-search-btn { display: none !important; } }
+
+/* ---- Round 113: the Job Card is a summary (Job = placeholder for Customer + System; all work lives on Events) ---- */
+#jb-detail-modal .jb-detail-card .drawer-section:not(.jb-keep) { display: none; }
+#jb-detail-modal .jb-quick-actions { display: none !important; }
+#jb-detail-modal .jb-detail-grid { grid-template-columns: 1fr !important; }
+.jb-summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.jb-sum-tile { background: #f4f8fb; border: 1px solid #dbe5ec; border-radius: 10px; padding: 9px 10px; }
+.jb-sum-tile.is-due { background: #fdf0ee; border-color: #f0c7c0; }
+.jb-sum-tile.is-due .jb-sum-v { color: #b3261e; }
+.jb-sum-v { font-weight: 800; font-size: 1.02rem; color: var(--navy, #12304d); }
+.jb-sum-sub { font-weight: 500; font-size: .74rem; color: var(--muted, #5b6b7a); }
+.jb-sum-l { font-size: .72rem; text-transform: uppercase; letter-spacing: .4px; color: var(--muted, #5b6b7a); margin-top: 2px; }
+@media (max-width: 640px) { .jb-summary-grid { grid-template-columns: repeat(2, 1fr); } }

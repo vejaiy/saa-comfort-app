@@ -312,10 +312,33 @@ async function saaJobsFetchAll() {
     if (belongsToJobItself && !invoiceByJob[inv.job_id]) invoiceByJob[inv.job_id] = inv;
   });
 
+  // Round 113: a Job is only the Customer + System placeholder, so its
+  // payment status is the roll-up over ALL its events' invoices (non-void),
+  // not just the latest invoice. Answers the Round 104 open question.
+  const rollupByJob = {};
+  const eventJobById = {};
+  (allEvents || []).forEach((e) => { eventJobById[e.id] = e.job_id; });
+  (invoices || []).forEach((inv) => {
+    if (inv.status === "void") return;
+    // an invoice belongs to whichever job its EVENT is under now (older rows can still carry a stub job id)
+    const effJob = (inv.event_id && eventJobById[inv.event_id]) || inv.job_id;
+    const r = rollupByJob[effJob] || (rollupByJob[effJob] = { due: 0, paid: 0, hasPayment: false, n: 0 });
+    r.due += saaJobsInvoiceTotalDue(inv);
+    r.paid += paidByInvoice[inv.id] || 0;
+    r.hasPayment = r.hasPayment || !!hasPaymentByInvoice[inv.id];
+    r.n += 1;
+  });
+
   return (jobs || []).map((j) => {
     const invoice = invoiceByJob[j.id] || null;
     const paid = invoice ? paidByInvoice[invoice.id] || 0 : 0;
     const hasPayment = invoice ? !!hasPaymentByInvoice[invoice.id] : false;
+    const roll = rollupByJob[j.id];
+    const hasEvents = (eventsByJob[j.id] || []).length > 0;
+    const rolledStatus = !roll ? "unpaid"
+      : roll.due <= 0.005 ? (roll.hasPayment ? "paid" : "unpaid")
+      : roll.paid >= roll.due - 0.005 ? "paid"
+      : roll.paid > 0 ? "partial" : "unpaid";
     return Object.assign({}, j, {
       customer: custById[j.customer_id] || null,
       technician: techById[j.assigned_technician_id] || null,
@@ -326,8 +349,8 @@ async function saaJobsFetchAll() {
       technician3: j.assigned_technician_id_3 ? techById[j.assigned_technician_id_3] || null : null,
       linkedQuote: j.linked_quote_id ? quoteById[j.linked_quote_id] || null : null,
       invoice,
-      amountPaid: paid,
-      paymentStatus: saaJobsPaymentStatus(invoice, paid, hasPayment),
+      amountPaid: hasEvents && roll ? roll.paid : paid,
+      paymentStatus: hasEvents ? rolledStatus : saaJobsPaymentStatus(invoice, paid, hasPayment),
       // Round 44: this Job's own Events, newest first, each with its
       // technician(s) resolved the same way the parent Job's are above —
       // backs the Jobs List's expand-row (see jbRenderTable/_jbEventRowHtml
@@ -902,6 +925,18 @@ async function saaJobsDeleteJob(jobId) {
       };
     }
     const eventIds = (events || []).map((e) => e.id);
+
+    // Round 113: a Job is the placeholder for one Customer + System and holds
+    // that equipment's whole event history -- never wipe it in one click.
+    // Only a job that was created by mistake (one event, nothing billed) can go.
+    const { data: invCheck, error: invCheckErr } = await _saaClient.from("invoices").select("id").eq("job_id", jobId);
+    if (invCheckErr) throw invCheckErr;
+    if ((events || []).length > 1 || (invCheck || []).length > 0) {
+      return {
+        ok: false,
+        error: "This job holds the history for this customer's system (" + (events || []).length + " event" + ((events || []).length === 1 ? "" : "s") + (invCheck && invCheck.length ? ", " + invCheck.length + " invoice" + (invCheck.length === 1 ? "" : "s") : "") + "), so it can't be deleted in one step. Delete its events one at a time from the Event window if they really should go.",
+      };
+    }
 
     // Quotes can point directly at one of this job's Events as well as at
     // the Job itself -- unlink both so nothing dangles once the Events (and

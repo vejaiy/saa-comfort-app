@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch Calendar | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20261019a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261020a">
 <script>
 if (new URLSearchParams(location.search).get('embed') === '1') {
   document.documentElement.classList.add('saa-embed');
@@ -15,9 +15,9 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20261019a"></script>
-<script src="../assets/js/supabase-config.js?v=20261019a"></script>
-<script src="../assets/js/auth.js?v=20261019a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261020a"></script>
+<script src="../assets/js/supabase-config.js?v=20261020a"></script>
+<script src="../assets/js/auth.js?v=20261020a"></script>
 <script>saaRequireAuth();</script>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="ic-dashboard" viewBox="0 0 80 60"><g fill="none" stroke="#27425f" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><ellipse cx="40" cy="56" rx="26" ry="2.6" fill="#27425f" opacity=".08" stroke="none"/>
 <rect x="52" y="12" width="6" height="12" fill="#c0634a"/>
@@ -261,7 +261,7 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
   q.addEventListener('keydown',function(e){ if(e.key==='Enter'){ var a=panel.querySelector('.emp-app:not([hidden])'); if(a) a.click(); } });
 })();
 </script>
-<script src="../assets/js/global-search.js?v=20261019a"></script>
+<script src="../assets/js/global-search.js?v=20261020a"></script>
 <main class="container" style="padding:26px 20px 60px">
 
 <div class="breadcrumb"><a href="dashboard.html">Employee</a> &rsaquo; Dispatch Calendar</div>
@@ -300,7 +300,7 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 </div><!-- /.cal-hero -->
 
 <div class="cal-unscheduled">
-  <h3>Unscheduled Jobs (<span id="cal-unscheduled-count">0</span>) — drag onto a technician to schedule</h3>
+  <h3>Unscheduled Events (<span id="cal-unscheduled-count">0</span>) — drag onto a technician to schedule</h3>
   <div class="cal-unscheduled-row" id="cal-unscheduled-row"></div>
 </div>
 
@@ -355,14 +355,18 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
      identify a Customer + System, then starts a brand-new current Job for
      that same System, converting whichever Job is currently active there
      into a historical Event (identical rule/confirmation as the New Job
-     tab's own existing-System branch). ============ -->
+     tab's own existing-System branch).
+     Round 113 (2026-10-07), per Vijayan: a Job is only the placeholder for a
+     Customer + System; every instance is an Event. Both tabs now just create
+     an Event (the Job is found, or created once as the placeholder) -- no
+     conversion. Tabs renamed "New Event" / "Find by Job #". ============ -->
 <div class="modal-overlay" id="cal-newsvc-modal" hidden>
   <div class="modal-card cal-newsvc-card">
-    <h3>Schedule Service</h3>
+    <h3>Schedule Event</h3>
 
     <div class="cal-view-toggle" id="ns-tab-toggle" style="margin-bottom:12px">
-      <button type="button" class="cal-view-btn active" data-tab="new">New Job</button>
-      <button type="button" class="cal-view-btn" data-tab="existing">Existing Job</button>
+      <button type="button" class="cal-view-btn active" data-tab="new">New Event</button>
+      <button type="button" class="cal-view-btn" data-tab="existing">Find by Job #</button>
     </div>
 
     <div id="ns-tab-new">
@@ -412,7 +416,7 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
             <div class="field"><label>Manufacturer</label><input type="text" id="ns-sys-manufacturer"></div>
           </div>
         </div>
-        <div class="muted" id="ns-system-warning" style="font-size:.8rem;color:#b3261e;margin-top:6px"></div>
+        <div class="muted" id="ns-system-warning" style="font-size:.8rem;color:#1f5a8a;margin-top:6px"></div>
       </div>
 
       <div class="field" style="margin-top:10px">
@@ -592,9 +596,20 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
     <div class="jb-detail-grid">
       <div>
-        <div class="drawer-section">
+        <div class="drawer-section jb-keep">
           <h4>Customer</h4>
           <div id="jbd-customer"></div>
+        </div>
+
+        <!-- Round 113 (2026-10-07), per Vijayan: a Job is only the placeholder
+             for one Customer + System; every instance is an Event. The Job Card
+             is now a summary -- Customer, System & Equipment, this roll-up, and
+             the Event History. Quote, financials, invoice, photos, mileage,
+             receipts, checklist and BOM all live on the Event (class jb-keep
+             marks what stays visible; see style.css Round 113). -->
+        <div class="drawer-section jb-keep" id="jbd-summary-section">
+          <h4>Job Summary <span class="muted" style="font-weight:400;font-size:.8rem">(all events)</span></h4>
+          <div id="jbd-summary" class="jb-summary-grid"></div>
         </div>
 
         <!-- Round 69 (2026-09-29), per Vijayan ("Equipment section and System
@@ -608,7 +623,7 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
              entered once. The System's manufacturer / tonnage / refrigerant
              / model columns are mirrored from those cards on save (see
              jbMirrorEquipmentToSystem in jobs.js), never typed twice. -->
-        <div class="drawer-section jb-syseq-section">
+        <div class="drawer-section jb-syseq-section jb-keep">
           <h4>
             System &amp; Equipment
             <a class="btn btn-ghost btn-sm" id="jbd-eq-bom-btn" href="#" target="_blank" rel="noopener">🧰 Bill of Material</a>
@@ -702,7 +717,7 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
              "Current Event" per the spec is just the top of this same list
              when it isn't Completed/Cancelled, so it isn't duplicated as a
              separate box. -->
-        <div class="drawer-section">
+        <div class="drawer-section jb-keep">
           <h4>Event History</h4>
           <!-- Round 43 (2026-09-22): a Job is now a single visit -- there is
                ONE current Job per Customer+System, so a follow-up visit is
@@ -712,8 +727,8 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
                Job" flow; kept as two buttons/ids since some callers still
                distinguish "follow-up" wording, but they behave identically. -->
           <div class="jb-event-actions">
-            <button type="button" class="btn btn-ghost btn-sm" id="jbd-schedule-followup-btn">&#128222; Start Next Job (Follow-Up)</button>
-            <button type="button" class="btn btn-ghost btn-sm" id="jbd-schedule-event-btn">&#10133; Start Next Job</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="jbd-schedule-followup-btn">&#128222; + Follow-Up Event</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="jbd-schedule-event-btn">&#10133; New Event</button>
           </div>
           <ul class="jb-event-list" id="jbd-event-list"></ul>
         </div>
@@ -1229,22 +1244,22 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
 
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20261019a"></script>
-<script src="../assets/js/worksheet.js?v=20261019a"></script>
-<script src="../assets/js/xlsx-export.js?v=20261019a"></script>
-<script src="../assets/js/systems-db.js?v=20261019a"></script>
-<script src="../assets/js/events-db.js?v=20261019a"></script>
-<script src="../assets/js/calendar-db.js?v=20261019a"></script>
-<script src="../assets/js/jobs-db.js?v=20261019a"></script>
-<script src="../assets/js/job-photos-db.js?v=20261019a"></script>
-<script src="../assets/js/warranty-files-db.js?v=20261019a"></script>
-<script src="../assets/js/camera-capture.js?v=20261019a"></script>
-<script src="../assets/js/print-invoice.js?v=20261019a"></script>
-<script src="../assets/js/maps-config.js?v=20261019a"></script>
-<script src="../assets/js/mileage-db.js?v=20261019a"></script>
-<script src="../assets/js/jobs.js?v=20261019a"></script>
-<script src="../assets/js/print-service-checklist.js?v=20261019a"></script>
-<script src="../assets/js/service-checklist.js?v=20261019a"></script>
-<script src="../assets/js/calendar.js?v=20261019a"></script>
+<script src="../assets/js/pricing-data.js?v=20261020a"></script>
+<script src="../assets/js/worksheet.js?v=20261020a"></script>
+<script src="../assets/js/xlsx-export.js?v=20261020a"></script>
+<script src="../assets/js/systems-db.js?v=20261020a"></script>
+<script src="../assets/js/events-db.js?v=20261020a"></script>
+<script src="../assets/js/calendar-db.js?v=20261020a"></script>
+<script src="../assets/js/jobs-db.js?v=20261020a"></script>
+<script src="../assets/js/job-photos-db.js?v=20261020a"></script>
+<script src="../assets/js/warranty-files-db.js?v=20261020a"></script>
+<script src="../assets/js/camera-capture.js?v=20261020a"></script>
+<script src="../assets/js/print-invoice.js?v=20261020a"></script>
+<script src="../assets/js/maps-config.js?v=20261020a"></script>
+<script src="../assets/js/mileage-db.js?v=20261020a"></script>
+<script src="../assets/js/jobs.js?v=20261020a"></script>
+<script src="../assets/js/print-service-checklist.js?v=20261020a"></script>
+<script src="../assets/js/service-checklist.js?v=20261020a"></script>
+<script src="../assets/js/calendar.js?v=20261020a"></script>
 </body>
 </html>
