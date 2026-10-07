@@ -1637,3 +1637,19 @@ html.emp-menu-open .emp-fab { opacity: 0; visibility: hidden; pointer-events: no
 /* Round 105 (2026-10-07): Receipts "By Project" tab */
 #pc-tbody td.num, #pc-tfoot td.num, #rc-panel-projects th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .pc-kind { font-size: .75rem; font-style: italic; }
+
+/* Round 106 (2026-10-07): Accounts clickable cards, project P&L, per-tab download bars; Invoices unpaid filter chip */
+.inv-range-chip { display: inline-flex; align-items: center; gap: 6px; background: #e8f1fb; border: 1px solid #b9d3ea; color: #1d4f7a; border-radius: 999px; padding: 4px 6px 4px 12px; font-size: .82rem; font-weight: 600; }
+.inv-range-chip[hidden] { display: none; }
+.inv-range-chip button { border: 0; background: transparent; color: inherit; font-size: 1.05rem; line-height: 1; cursor: pointer; padding: 0 6px; border-radius: 50%; }
+.inv-range-chip button:hover { background: rgba(0,0,0,.08); }
+.acct-dlbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+.acct-dlbar .muted { font-size: .85rem; margin-right: 2px; }
+#acct-cards button.rc-summary-btn .rc-sc-value.acct-neg { color: #b3261e; }
+#acct-cards button.rc-summary-btn .rc-sc-value.acct-pos { color: #1f7a4d; }
+.acct-proj-note { margin: 0 0 8px; font-size: .84rem; }
+.acct-table tr.acct-proj-off td { color: var(--muted); font-style: italic; }
+.acct-table td .acct-open { font-size: .78rem; }
+a.rc-summary-btn { display: block; color: inherit; text-decoration: none; cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .1s; }
+a.rc-summary-btn:hover { border-color: #1a6b5a; box-shadow: 0 4px 14px rgba(15,36,57,.14); transform: translateY(-1px); }
+a.rc-summary-btn:focus-visible { outline: 3px solid #1a6b5a; outline-offset: 2px; }

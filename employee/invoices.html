@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Invoices | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20261017a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261017b">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20261017a"></script>
-<script src="../assets/js/supabase-config.js?v=20261017a"></script>
-<script src="../assets/js/auth.js?v=20261017a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261017b"></script>
+<script src="../assets/js/supabase-config.js?v=20261017b"></script>
+<script src="../assets/js/auth.js?v=20261017b"></script>
 <script>saaRequireAuth();</script>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="ic-dashboard" viewBox="0 0 80 60"><g fill="none" stroke="#27425f" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><ellipse cx="40" cy="56" rx="26" ry="2.6" fill="#27425f" opacity=".08" stroke="none"/>
 <rect x="52" y="12" width="6" height="12" fill="#c0634a"/>
@@ -263,7 +263,9 @@
 
 <div class="jobs-toolbar">
   <select id="inv-status-filter"><option value="">All Statuses</option><option value="draft">Draft</option><option value="sent">Sent</option><option value="paid">Paid</option><option value="void">Void</option></select>
-  <select id="inv-pay-filter"><option value="">All Payment Status</option><option value="unpaid">Unpaid</option><option value="partial">Partially Paid</option><option value="paid">Paid</option></select>
+  <select id="inv-pay-filter"><option value="">All Payment Status</option><option value="unpaid">Unpaid</option><option value="partial">Partially Paid</option><option value="paid">Paid</option><option value="due">Balance due (unpaid + partial)</option></select>
+  <button type="button" class="btn btn-ghost btn-sm" id="inv-unpaid-btn" aria-pressed="false" title="Show only invoices that still have a balance due">Unpaid invoices only</button>
+  <span class="inv-range-chip" id="inv-range-chip" hidden><span id="inv-range-text"></span> <button type="button" id="inv-range-clear" aria-label="Remove date range">&times;</button></span>
   <input type="text" id="inv-search" placeholder="Invoice #, job/event #, customer, or phone&hellip;" style="min-width:240px">
   <button type="button" class="btn btn-ghost btn-sm" id="inv-clear-btn">Clear Filters</button>
   <button type="button" class="btn btn-ghost btn-sm" id="inv-download-btn">⬇️ Download (Excel)</button>
@@ -286,12 +288,12 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20261017a"></script>
-<script src="../assets/js/worksheet.js?v=20261017a"></script>
-<script src="../assets/js/xlsx-export.js?v=20261017a"></script>
-<script src="../assets/js/jobs-db.js?v=20261017a"></script>
-<script src="../assets/js/events-db.js?v=20261017a"></script>
-<script src="../assets/js/invoices-db.js?v=20261017a"></script>
+<script src="../assets/js/pricing-data.js?v=20261017b"></script>
+<script src="../assets/js/worksheet.js?v=20261017b"></script>
+<script src="../assets/js/xlsx-export.js?v=20261017b"></script>
+<script src="../assets/js/jobs-db.js?v=20261017b"></script>
+<script src="../assets/js/events-db.js?v=20261017b"></script>
+<script src="../assets/js/invoices-db.js?v=20261017b"></script>
 <script>
   // Same document-status labels the Job Card's own Invoice Status select
   // uses (_jbInvoiceLabel in jobs.js) -- kept as a local copy here rather
@@ -317,11 +319,27 @@
     return "&mdash;";
   }
 
+  // Round 106: optional issue-date range (?from=YYYY-MM-DD&to=YYYY-MM-DD), set by the Accounts
+  // page's Revenue card; shown as a removable chip.
+  let _invRange = { from: "", to: "" };
+  function _invSyncUi() {
+    const due = document.getElementById("inv-pay-filter").value === "due";
+    const btn = document.getElementById("inv-unpaid-btn");
+    btn.classList.toggle("btn-navy", due);
+    btn.classList.toggle("btn-ghost", !due);
+    btn.setAttribute("aria-pressed", String(due));
+    btn.textContent = due ? "Showing unpaid only ✓" : "Unpaid invoices only";
+    const chip = document.getElementById("inv-range-chip");
+    chip.hidden = !(_invRange.from || _invRange.to);
+    document.getElementById("inv-range-text").textContent = "Issued " + (_invRange.from || "…") + " → " + (_invRange.to || "…");
+  }
   function _invFilters() {
     return {
       status: document.getElementById("inv-status-filter").value || undefined,
       paymentStatus: document.getElementById("inv-pay-filter").value || undefined,
       search: document.getElementById("inv-search").value || undefined,
+      dateFrom: _invRange.from || undefined,
+      dateTo: _invRange.to || undefined,
     };
   }
 
@@ -332,14 +350,17 @@
   let _invLastRows = [];
 
   async function renderInvoices() {
+    _invSyncUi();
     const rows = await saaInvoicesFetchAll(_invFilters());
     _invLastRows = rows;
     const tbody = document.getElementById("inv-tbody");
     document.getElementById("inv-empty").hidden = rows.length > 0;
     const totalDue = rows.reduce((sum, r) => sum + (Number(r.totalDue) || 0), 0);
     const totalPaid = rows.reduce((sum, r) => sum + (Number(r.amountPaid) || 0), 0);
+    // Round 106: balance due = what the Accounts page calls Unpaid invoices (A/R): non-void invoices only
+    const balanceDue = rows.filter((r) => r.status !== "void").reduce((sum, r) => sum + Math.max(0, (Number(r.totalDue) || 0) - (Number(r.amountPaid) || 0)), 0);
     document.getElementById("inv-summary").textContent = rows.length
-      ? `${rows.length} invoice${rows.length === 1 ? "" : "s"} &middot; ${fmtMoney(totalDue)} billed &middot; ${fmtMoney(totalPaid)} collected`.replace(/&middot;/g, "\u00b7")
+      ? `${rows.length} invoice${rows.length === 1 ? "" : "s"} &middot; ${fmtMoney(totalDue)} billed &middot; ${fmtMoney(totalPaid)} collected &middot; ${fmtMoney(balanceDue)} balance due`.replace(/&middot;/g, "\u00b7")
       : "";
 
     tbody.innerHTML = rows.map((r) => {
@@ -389,8 +410,24 @@
     document.getElementById("inv-status-filter").value = "";
     document.getElementById("inv-pay-filter").value = "";
     document.getElementById("inv-search").value = "";
+    _invRange = { from: "", to: "" };
     renderInvoices();
   });
+  // Round 106: one-tap "unpaid only" toggle (also what the Accounts page's Unpaid invoices card opens)
+  document.getElementById("inv-unpaid-btn").addEventListener("click", () => {
+    const sel = document.getElementById("inv-pay-filter");
+    sel.value = sel.value === "due" ? "" : "due";
+    renderInvoices();
+  });
+  document.getElementById("inv-range-clear").addEventListener("click", () => { _invRange = { from: "", to: "" }; renderInvoices(); });
+  (function applyUrlFilters() {
+    const q = new URLSearchParams(location.search);
+    const pay = q.get("pay"), status = q.get("status");
+    if (pay && [...document.getElementById("inv-pay-filter").options].some((o) => o.value === pay)) document.getElementById("inv-pay-filter").value = pay;
+    if (status && [...document.getElementById("inv-status-filter").options].some((o) => o.value === status)) document.getElementById("inv-status-filter").value = status;
+    const ok = (d) => /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(d || "") ? d : "";
+    _invRange = { from: ok(q.get("from")), to: ok(q.get("to")) };
+  })();
 
   // Same CSV-via-Blob approach as the Tool List / Mileage / Jobs pages --
   // opens straight into Excel, no extra library needed.

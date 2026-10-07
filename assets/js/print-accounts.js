@@ -74,11 +74,44 @@ function printAccountsPackage(opts) {
   if (at.draftInvoices.count) notes.push(`${at.draftInvoices.count} invoice(s) in Draft status (${_acctPrintMoney(at.draftInvoices.amount)}) are included in accrual revenue.`);
   notes.push(`<i>These figures are estimates prepared from the company's own records for review by a tax professional. They are not tax advice and are not a filed return.</i>`);
 
+  // Round 106: the package is built from named sections so each Accounts tab can print just its own.
+  // opts.only = ["pnl","months","projects","form","l20","cogs","mileage","nec","salestax","notes"] (default: all)
+  const pj = m.projects || [], pt = m.projectTotals || {};
+  const pcols = (r, cls) => (c ? `<td class="num">${_acctPrintMoney(r.revCash)}</td>` : "") + (a ? `<td class="num">${_acctPrintMoney(r.revAccrual)}</td>` : "")
+    + `<td class="num">${_acctPrintMoney(r.cogs)}</td><td class="num">${_acctPrintMoney(r.opex)}</td>`
+    + (c ? `<td class="num">${_acctPrintMoney(r.profitCash)}</td>` : "") + (a ? `<td class="num">${_acctPrintMoney(r.profitAccrual)}</td>` : "")
+    + `<td class="num">${(() => { const mg = c ? r.marginCash : r.marginAccrual; return mg == null ? "—" : (mg * 100).toFixed(1) + "%"; })()}</td>`;
+  const projRows = pj.length
+    ? pj.map((r) => `<tr><td>${_acctPrintEsc(r.label)}${r.customer && r.kind === "job" ? ` <span class="muted">— ${_acctPrintEsc(r.customer)}</span>` : ""}</td>${pcols(r)}</tr>`).join("")
+      + `<tr class="sub"><td>Total (${pj.length} line${pj.length === 1 ? "" : "s"})</td>${pcols({ revCash: pt.revCash, revAccrual: pt.revAccrual, cogs: pt.cogs, opex: pt.opex, profitCash: pt.profitCash, profitAccrual: pt.profitAccrual, marginCash: pt.revCash > 0 ? pt.profitCash / pt.revCash : null, marginAccrual: pt.revAccrual > 0 ? pt.profitAccrual / pt.revAccrual : null })}</tr>`
+    : `<tr><td colspan="9" class="muted">No activity in this period.</td></tr>`;
+  const SECTIONS = {
+    pnl: { title: "Profit &amp; Loss statement", html: `<table><thead><tr><th>${_acctPrintEsc(m.period.label)}</th>${th}</tr></thead><tbody>${pnl}</tbody></table>` },
+    months: { title: "Monthly summary", html: `<table><thead><tr><th>Month</th>${c ? '<th class="num">Revenue (cash)</th>' : ""}${a ? '<th class="num">Revenue (accrual)</th>' : ""}<th class="num">COGS</th><th class="num">Operating</th>${c ? '<th class="num">Net (cash)</th>' : ""}${a ? '<th class="num">Net (accrual)</th>' : ""}</tr></thead><tbody>${monthRows}</tbody></table>` },
+    projects: { title: "Profit &amp; loss by project", html: `<p class="muted" style="margin:0 0 6px">Each job's revenue and costs. Receipts and expenses tied to a job count under it; shop, mileage and other overhead are listed separately so the total matches the statement above. Margin is on the ${c ? "cash" : "accrual"} basis.</p><table><thead><tr><th>Project</th>${c ? '<th class="num">Revenue (cash)</th>' : ""}${a ? '<th class="num">Revenue (accrual)</th>' : ""}<th class="num">COGS</th><th class="num">Operating</th>${c ? '<th class="num">Profit (cash)</th>' : ""}${a ? '<th class="num">Profit (accrual)</th>' : ""}<th class="num">Margin</th></tr></thead><tbody>${projRows}</tbody></table>` },
+    form: { title: "Form 1065 summary (page 1 lines)", pb: true, html: `<table><thead><tr><th>Line</th><th>Description</th>${th}</tr></thead><tbody>${form}</tbody></table>
+  <p class="muted" style="margin:6px 0 0">Reconciliation: book net profit + non-deductible meals (${_acctPrintMoney(t.mealsNonDeductible)}) = ordinary business income. Unpaid invoices (accounts receivable) as of today: ${_acctPrintMoney(m.revenue.arOutstanding)}.</p>` },
+    l20: { title: "Other deductions statement (line 20)", html: `<table><thead><tr><th>Category</th><th class="num">Entries</th><th class="num">Book amount</th><th class="num">Deductible</th></tr></thead><tbody>${l20}</tbody></table>` },
+    cogs: { title: "Cost of goods sold (Form 1125-A)", html: `<table><thead><tr><th>Category</th><th class="num">Entries</th><th class="num">Amount</th></tr></thead><tbody>${cogs}</tbody></table>` },
+    mileage: { title: "Vehicle mileage", html: `<table><thead><tr><th>Technician</th><th class="num">Trips / legs</th><th class="num">Miles</th><th class="num">Deduction</th></tr></thead><tbody>${mileage}</tbody></table>` },
+    nec: { title: "1099-NEC contractor payments", html: `<p class="muted">Threshold $${nec.threshold.toLocaleString("en-US")} of non-card payments per payee; card and PayPal payments are reported on a 1099-K. ${nec.formsNeeded} 1099-NEC form(s) needed.</p>
+  <table><thead><tr><th>Payee</th><th class="num">Payments</th><th class="num">Total paid</th><th class="num">Card / PayPal</th><th class="num">Reportable</th><th>1099-NEC?</th></tr></thead><tbody>${necRows}</tbody></table>` },
+    salestax: { title: "Sales tax paid on purchases", html: `<table><thead><tr><th>Vendor</th><th class="num">Lines</th><th class="num">Purchases</th><th class="num">Tax paid</th></tr></thead><tbody>${stRows}</tbody></table>` },
+    notes: { title: "Notes &amp; assumptions", html: `<ul class="notes">${notes.map((n) => `<li>${n}</li>`).join("")}</ul>` },
+  };
+  const ORDER = ["pnl", "months", "projects", "form", "l20", "cogs", "mileage", "nec", "salestax", "notes"];
+  const wanted = (opts.only && opts.only.length ? ORDER.filter((k) => opts.only.includes(k)) : ORDER);
+  const bodyHtml = wanted.map((k, i) => {
+    const sec = SECTIONS[k];
+    const pb = sec.pb && i > 0;
+    return `<h3 class="sec${pb ? " pb" : ""}"${i === 0 ? ' style="margin-top:4px"' : ""}>${i + 1}. ${sec.title}</h3>\n  ${sec.html}`;
+  }).join("\n\n  ");
+
   const html = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Tax Package — ${_acctPrintEsc(m.period.label)} — ${info.name}</title>
+<title>${String(opts.title || "Tax Package").replace(/&amp;/g, "&")} — ${_acctPrintEsc(m.period.label)} — ${info.name}</title>
 <style>
   @page { size: letter portrait; margin: 0.6in 0.65in; }
   * { box-sizing: border-box; }
@@ -116,40 +149,13 @@ function printAccountsPackage(opts) {
   </div>
   <div class="rule"></div>
   <div class="title-row">
-    <h2>Profit &amp; Loss and Tax Summary</h2>
+    <h2>${opts.title || "Profit &amp; Loss and Tax Summary"}</h2>
     <div class="sub">${_acctPrintEsc(m.period.label)} &mdash; ${_acctPrintEsc(opts.basisLabel)} &mdash; Generated ${_acctPrintEsc(opts.generatedOn)}</div>
   </div>
 
-  <h3 class="sec" style="margin-top:4px">1. Profit &amp; Loss statement</h3>
-  <table><thead><tr><th>${_acctPrintEsc(m.period.label)}</th>${th}</tr></thead><tbody>${pnl}</tbody></table>
+  ${bodyHtml}
 
-  <h3 class="sec">2. Monthly summary</h3>
-  <table><thead><tr><th>Month</th>${c ? '<th class="num">Revenue (cash)</th>' : ""}${a ? '<th class="num">Revenue (accrual)</th>' : ""}<th class="num">COGS</th><th class="num">Operating</th>${c ? '<th class="num">Net (cash)</th>' : ""}${a ? '<th class="num">Net (accrual)</th>' : ""}</tr></thead><tbody>${monthRows}</tbody></table>
-
-  <h3 class="sec pb" style="margin-top:0">3. Form 1065 summary (page 1 lines)</h3>
-  <table><thead><tr><th>Line</th><th>Description</th>${th}</tr></thead><tbody>${form}</tbody></table>
-  <p class="muted" style="margin:6px 0 0">Reconciliation: book net profit + non-deductible meals (${_acctPrintMoney(t.mealsNonDeductible)}) = ordinary business income. Unpaid invoices (accounts receivable) as of today: ${_acctPrintMoney(m.revenue.arOutstanding)}.</p>
-
-  <h3 class="sec">4. Other deductions statement (line 20)</h3>
-  <table><thead><tr><th>Category</th><th class="num">Entries</th><th class="num">Book amount</th><th class="num">Deductible</th></tr></thead><tbody>${l20}</tbody></table>
-
-  <h3 class="sec">5. Cost of goods sold (Form 1125-A)</h3>
-  <table><thead><tr><th>Category</th><th class="num">Entries</th><th class="num">Amount</th></tr></thead><tbody>${cogs}</tbody></table>
-
-  <h3 class="sec">6. Vehicle mileage</h3>
-  <table><thead><tr><th>Technician</th><th class="num">Trips / legs</th><th class="num">Miles</th><th class="num">Deduction</th></tr></thead><tbody>${mileage}</tbody></table>
-
-  <h3 class="sec">7. 1099-NEC contractor payments</h3>
-  <p class="muted">Threshold $${nec.threshold.toLocaleString("en-US")} of non-card payments per payee; card and PayPal payments are reported on a 1099-K. ${nec.formsNeeded} 1099-NEC form(s) needed.</p>
-  <table><thead><tr><th>Payee</th><th class="num">Payments</th><th class="num">Total paid</th><th class="num">Card / PayPal</th><th class="num">Reportable</th><th>1099-NEC?</th></tr></thead><tbody>${necRows}</tbody></table>
-
-  <h3 class="sec">8. Sales tax paid on purchases</h3>
-  <table><thead><tr><th>Vendor</th><th class="num">Lines</th><th class="num">Purchases</th><th class="num">Tax paid</th></tr></thead><tbody>${stRows}</tbody></table>
-
-  <h3 class="sec">9. Notes &amp; assumptions</h3>
-  <ul class="notes">${notes.map((n) => `<li>${n}</li>`).join("")}</ul>
-
-  <div class="footer"><div>${info.name} &mdash; Profit &amp; Loss and Tax Summary, ${_acctPrintEsc(m.period.label)}</div><div>${info.address}</div></div>
+  <div class="footer"><div>${info.name} &mdash; ${opts.title || "Profit &amp; Loss and Tax Summary"}, ${_acctPrintEsc(m.period.label)}</div><div>${info.address}</div></div>
 
 <script>window.onload = function () { setTimeout(function () { window.print(); }, 150); };</script>
 </body>

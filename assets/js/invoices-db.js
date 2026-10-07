@@ -10,7 +10,7 @@
    Card and the Jobs Master List already show for the same invoice.
    ============================================================ */
 
-/** filters: { status, paymentStatus, search } — all optional.
+/** filters: { status, paymentStatus (unpaid|partial|paid|due), search, dateFrom, dateTo } — all optional.
  *  Returns invoices newest-first, each augmented with its job, event (when
  *  the invoice is tied to one specific visit), customer, amountPaid,
  *  totalDue, and derived paymentStatus.
@@ -68,7 +68,17 @@ async function saaInvoicesFetchAll(filters) {
   });
 
   if (filters.status) rows = rows.filter((r) => r.status === filters.status);
-  if (filters.paymentStatus) rows = rows.filter((r) => r.paymentStatus === filters.paymentStatus);
+  // Round 106: "due" = every non-void invoice that still has a balance (Unpaid + Partially Paid) --
+  // exactly the set the Accounts page adds up as "Unpaid invoices (A/R)".
+  if (filters.paymentStatus === "due") rows = rows.filter((r) => r.status !== "void" && (Number(r.totalDue) || 0) - (Number(r.amountPaid) || 0) > 0.005);
+  else if (filters.paymentStatus) rows = rows.filter((r) => r.paymentStatus === filters.paymentStatus);
+  // Round 106: optional issue-date range (Accounts "Revenue" card links here with the period chosen there).
+  if (filters.dateFrom || filters.dateTo) {
+    rows = rows.filter((r) => {
+      const d = String(r.issue_date || r.created_at || "").slice(0, 10);
+      return (!filters.dateFrom || d >= filters.dateFrom) && (!filters.dateTo || d <= filters.dateTo);
+    });
+  }
   if (filters.search) {
     const q = filters.search.trim().toLowerCase();
     rows = rows.filter((r) => {

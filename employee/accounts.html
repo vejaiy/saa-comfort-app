@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Accounts | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20261017a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261017b">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20261017a"></script>
-<script src="../assets/js/supabase-config.js?v=20261017a"></script>
-<script src="../assets/js/auth.js?v=20261017a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261017b"></script>
+<script src="../assets/js/supabase-config.js?v=20261017b"></script>
+<script src="../assets/js/auth.js?v=20261017b"></script>
 <script>saaRequireAuth();</script>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="ic-dashboard" viewBox="0 0 80 60"><g fill="none" stroke="#27425f" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><ellipse cx="40" cy="56" rx="26" ry="2.6" fill="#27425f" opacity=".08" stroke="none"/>
 <rect x="52" y="12" width="6" height="12" fill="#c0634a"/>
@@ -292,8 +292,14 @@
 </div>
 
 <div class="acct-panel" data-tab="pl">
+  <div class="acct-dlbar"><span class="muted">Download</span><button type="button" class="btn btn-ghost btn-sm" data-bar-xlsx="pl" title="Excel: Profit &amp; Loss, By Month and P&amp;L by Project sheets">&#11015;&#65039; Excel</button><button type="button" class="btn btn-ghost btn-sm" data-bar-pdf="pl" title="PDF: Profit &amp; Loss, monthly summary and P&amp;L by project">&#128438; PDF</button></div>
   <div class="card acct-card">
     <div class="jobs-table-wrap"><table class="jobs-table acct-table"><thead id="acct-pnl-head"></thead><tbody id="acct-pnl-body"></tbody></table></div>
+  </div>
+  <div class="card acct-card" style="margin-top:16px" id="acct-proj-card">
+    <h3 style="margin:0 0 4px">Profit &amp; loss by project</h3>
+    <p class="muted acct-proj-note">Each job's revenue and costs (receipts and expenses tied to the job). Shop tools, general expenses and mileage are shown as overhead so the totals match the statement above.</p>
+    <div class="jobs-table-wrap"><table class="jobs-table acct-table"><thead id="acct-proj-head"></thead><tbody id="acct-proj-body"></tbody><tfoot id="acct-proj-foot"></tfoot></table></div>
   </div>
   <div class="card acct-card" style="margin-top:16px">
     <h3 style="margin:0 0 8px">By month</h3>
@@ -303,6 +309,7 @@
 </div>
 
 <div class="acct-panel" data-tab="tax" hidden>
+  <div class="acct-dlbar"><span class="muted">Download</span><button type="button" class="btn btn-ghost btn-sm" data-bar-xlsx="tax" title="Excel: Form 1065 summary, line 20, COGS, mileage, 1099-NEC and sales-tax sheets">&#11015;&#65039; Excel</button><button type="button" class="btn btn-ghost btn-sm" data-bar-pdf="tax" title="PDF: Form 1065 summary with supporting statements">&#128438; PDF</button></div>
   <div class="note-box">Form 1065 is the partnership return: no income tax is paid by the LLC itself &mdash; the ordinary business income flows to the partners on Schedule K-1. Meals are limited to 50%; tools are treated as small equipment; mileage uses the IRS standard rate.</div>
   <div class="card acct-card">
     <div class="jobs-table-wrap"><table class="jobs-table acct-table"><thead id="acct-tax-head"></thead><tbody id="acct-tax-body"></tbody></table></div>
@@ -334,6 +341,7 @@
 </div>
 
 <div class="acct-panel" data-tab="ledger" hidden>
+  <div class="acct-dlbar"><span class="muted">Download</span><button type="button" class="btn btn-ghost btn-sm" data-bar-xlsx="ledger" title="Excel: expenses &amp; receipts, payments and invoices ledgers">&#11015;&#65039; Excel</button><button type="button" class="btn btn-ghost btn-sm" data-bar-pdf="ledger" title="PDF: the ledger view selected below">&#128438; PDF</button></div>
   <div class="note-box">Every transaction behind the numbers, with the sales tax you paid on purchases. Flagged rows (yellow) need a look on the Receipts page.</div>
   <div id="acct-ledger-toggle" style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px">
     <button type="button" class="cal-view-btn active" data-view="expenses">Expenses &amp; receipts</button>
@@ -344,6 +352,7 @@
 </div>
 
 <div class="acct-panel" data-tab="docs" hidden>
+  <div class="acct-dlbar"><span class="muted">Download</span><button type="button" class="btn btn-ghost btn-sm" data-bar-xlsx="docs" title="Excel: the complete tax workbook">&#11015;&#65039; Excel</button><button type="button" class="btn btn-ghost btn-sm" data-bar-pdf="docs" title="PDF: the complete printable tax package">&#128438; PDF</button></div>
   <div class="note-box">Documents for the period and basis chosen above. Hand the PDF or the complete workbook to your tax preparer.</div>
   <div class="acct-docs">
     <div class="card acct-doc"><h3>Profit &amp; Loss statement</h3><p class="muted">Revenue, cost of goods sold, operating expenses and net profit, plus a month-by-month sheet. Excel.</p><button type="button" class="btn btn-navy" data-acct-dl="pnl" id="acct-dl-pnl">&#11015;&#65039; Download P&amp;L (Excel)</button></div>
@@ -357,18 +366,19 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20261017a"></script>
-<script src="../assets/js/worksheet.js?v=20261017a"></script>
-<script src="../assets/js/xlsx-export.js?v=20261017a"></script>
-<script src="../assets/js/jobs-db.js?v=20261017a"></script>
-<script src="../assets/js/maps-config.js?v=20261017a"></script>
-<script src="../assets/js/invoices-db.js?v=20261017a"></script>
-<script src="../assets/js/payments-db.js?v=20261017a"></script>
-<script src="../assets/js/receipts-db.js?v=20261017a"></script>
-<script src="../assets/js/expenses-db.js?v=20261017a"></script>
-<script src="../assets/js/mileage-db.js?v=20261017a"></script>
-<script src="../assets/js/accounts-db.js?v=20261017a"></script>
-<script src="../assets/js/print-accounts.js?v=20261017a"></script>
-<script src="../assets/js/accounts-page.js?v=20261017a"></script>
+<script src="../assets/js/pricing-data.js?v=20261017b"></script>
+<script src="../assets/js/worksheet.js?v=20261017b"></script>
+<script src="../assets/js/xlsx-export.js?v=20261017b"></script>
+<script src="../assets/js/jobs-db.js?v=20261017b"></script>
+<script src="../assets/js/maps-config.js?v=20261017b"></script>
+<script src="../assets/js/invoices-db.js?v=20261017b"></script>
+<script src="../assets/js/payments-db.js?v=20261017b"></script>
+<script src="../assets/js/receipts-db.js?v=20261017b"></script>
+<script src="../assets/js/expenses-db.js?v=20261017b"></script>
+<script src="../assets/js/mileage-db.js?v=20261017b"></script>
+<script src="../assets/js/accounts-db.js?v=20261017b"></script>
+<script src="../assets/js/print-accounts.js?v=20261017b"></script>
+<script src="../assets/js/print-receipts.js?v=20261017b"></script>
+<script src="../assets/js/accounts-page.js?v=20261017b"></script>
 </body>
 </html>

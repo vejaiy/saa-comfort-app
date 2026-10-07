@@ -102,14 +102,17 @@ function _acctIn(period, dateStr) { return !!dateStr && dateStr >= period.from &
 /* ---------- loaders ---------- */
 /** Everything the Accounts page needs, fetched once. */
 async function saaAcctLoadAll() {
-  const [invoices, payments, receiptLines, expenses, mileage] = await Promise.all([
+  const [invoices, payments, receiptLines, expenses, mileage, events, jobOptions] = await Promise.all([
     saaInvoicesFetchAll().catch((e) => { console.error(e); return []; }),
     saaPaymentsFetchAll().catch((e) => { console.error(e); return []; }),
     saaLineItemsFetchAll().catch((e) => { console.error(e); return []; }),
     saaExpensesFetchAll().catch((e) => { console.error(e); return []; }),
     saaMileageFetchAll().catch((e) => { console.error(e); return []; }),
+    // Round 106 (project P&L): event -> its CURRENT job, and every job's number + customer name
+    (async () => { const r = await _saaClient.from("events").select("id,job_id"); return r.data || []; })().catch((e) => { console.error(e); return []; }),
+    (typeof saaReceiptsFetchJobPickerOptions === "function" ? saaReceiptsFetchJobPickerOptions() : Promise.resolve([])).catch((e) => { console.error(e); return []; }),
   ]);
-  return { invoices, payments, receiptLines, expenses, mileage };
+  return { invoices, payments, receiptLines, expenses, mileage, events, jobOptions };
 }
 
 /** Years that have any data (plus the current year), newest first. */
@@ -185,6 +188,7 @@ function saaAcctBuild(data, period, opts) {
       date, source: "Receipt", vendor: li.r_vendor || "", description: li.item_description || "",
       category: li.category || "", key: cls.key, bucket: li.bucket,
       project: (li.job && li.job.job_number) || li.project_label || "",
+      jobId: (li.event && li.event.job_id) || li.job_id || null, customerId: li.customer_id || null, customerName: _acctCust(li.customer), projectLabel: li.project_label || "",
       ref: li.r_receipt_number || "", payment: li.r_payment_method || "",
       subtotal: sub, salesTax: tax, amount: _acctRound(sub + tax),
       flag: !hasAmt ? "No amount" : li.auto_tagged ? "Needs review" : "",
@@ -201,6 +205,7 @@ function saaAcctBuild(data, period, opts) {
       date, source: "Expense", vendor: e.vendor || "", description: e.description || "",
       category: e.category || "", key: cls.key, bucket: e.scope || "",
       project: e.scope === "job" ? "Job / project" : e.scope === "tools" ? "SAA - Tools" : "SAA",
+      jobId: e.scope === "job" ? (e.job_id || null) : null, customerId: null, projectLabel: e.scope === "tools" ? "SAA - Tools" : e.scope === "job" ? "" : "SAA (general)",
       ref: "", payment: e.payment_method || "",
       subtotal: amt, salesTax: 0, amount: _acctRound(amt),
       flag: cls.note || (e.reimbursable && !e.reimbursed ? "Owed back to payer" : ""),
@@ -342,6 +347,56 @@ function saaAcctBuild(data, period, opts) {
     return { key, label: SAA_ACCT_MONTHS[mo - 1], cash, accrual: acc, cogs: cg, opex: ox, netCash: _acctRound(cash - cg - ox), netAccrual: _acctRound(acc - cg - ox) };
   });
 
+  /* ---- Profit & loss by project (Round 106) ----
+     A project is a job. Revenue: payments (cash) and invoices (accrual) go to the job the invoice
+     belongs to -- an invoice / payment raised against an Event counts under that Event's CURRENT job,
+     the same rule the Receipts "By Project" tab uses for costs. Costs: receipt lines, job-scope
+     expenses. Everything with no job (shop tools, general expenses, mileage, ...) is listed as
+     overhead so the project rows always add up to the P&L above. */
+  const optByJob = {}; (data.jobOptions || []).forEach((o) => { optByJob[o.job_id] = o; });
+  const eventJob = {}; (data.events || []).forEach((ev) => { eventJob[ev.id] = ev.job_id; });
+  const invById = {}; (data.invoices || []).forEach((i) => { invById[i.id] = i; });
+  const pGroups = {};
+  const pgroup = (key, kind, label, customer, jobId) => pGroups[key] || (pGroups[key] = { key, kind, label, customer: customer || "", job_id: jobId || null, revCash: 0, revAccrual: 0, cogs: 0, opex: 0, count: 0 });
+  const jobGroup = (jobId, fallbackLabel) => {
+    const o = optByJob[jobId], parts = o ? String(o.label).split(" — ") : [];
+    return pgroup("job:" + jobId, "job", o ? parts[0] : (fallbackLabel || "Job"), o ? parts.slice(1).join(" — ") : "", jobId);
+  };
+  const noJobGroup = (c) => {
+    if (c && c.customerId) { const name = c.customerName || "Customer"; return pgroup("cust:" + c.customerId, "customer", name + " (no job)", name, null); }
+    if (c && c.synthetic) return pgroup("lbl:mileage", "shop", "Mileage (not tied to a job)", "", null);
+    if (c && c.projectLabel) return pgroup("lbl:" + c.projectLabel, "shop", c.projectLabel, "", null);
+    return pgroup("none", "none", "Unassigned (no job)", "", null);
+  };
+  payments.forEach((p) => {
+    const inv = invById[p.invoice_id] || null;
+    const jid = (p.event_id && eventJob[p.event_id]) || (inv && inv.event_id && eventJob[inv.event_id]) || (inv && inv.job_id) || p.job_id || null;
+    const g = jid ? jobGroup(jid, (p.job && p.job.job_number) || "") : noJobGroup(null);
+    g.revCash += _acctNum(p.amount);
+  });
+  invoices.forEach((i) => {
+    const jid = (i.event_id && eventJob[i.event_id]) || i.job_id || null;
+    const g = jid ? jobGroup(jid, (i.job && i.job.job_number) || "") : noJobGroup(null);
+    g.revAccrual += invTotal(i);
+  });
+  costs.forEach((c) => {
+    const g = c.jobId ? jobGroup(c.jobId, c.project) : noJobGroup(c);
+    if (SAA_ACCT_CATEGORIES[c.key].section === "cogs") g.cogs += c.amount; else g.opex += c.amount;
+    g.count += 1;
+  });
+  const projects = Object.values(pGroups).map((g) => {
+    const r = { key: g.key, kind: g.kind, label: g.label, customer: g.customer, job_id: g.job_id, count: g.count,
+      revCash: _acctRound(g.revCash), revAccrual: _acctRound(g.revAccrual), cogs: _acctRound(g.cogs), opex: _acctRound(g.opex) };
+    r.cost = _acctRound(r.cogs + r.opex);
+    r.profitCash = _acctRound(r.revCash - r.cost); r.profitAccrual = _acctRound(r.revAccrual - r.cost);
+    r.marginCash = r.revCash > 0 ? r.profitCash / r.revCash : null; r.marginAccrual = r.revAccrual > 0 ? r.profitAccrual / r.revAccrual : null;
+    return r;
+  }).sort((a, b) => (a.kind === "job" || a.kind === "customer" ? 0 : 1) - (b.kind === "job" || b.kind === "customer" ? 0 : 1)
+    || Math.max(b.revCash, b.revAccrual) - Math.max(a.revCash, a.revAccrual) || b.cost - a.cost || a.label.localeCompare(b.label));
+  const pSum = (f) => _acctRound(projects.reduce((s, r) => s + r[f], 0));
+  const projectTotals = { revCash: pSum("revCash"), revAccrual: pSum("revAccrual"), cogs: pSum("cogs"), opex: pSum("opex"), cost: pSum("cost"), profitCash: pSum("profitCash"), profitAccrual: pSum("profitAccrual"),
+    jobCount: projects.filter((r) => r.kind === "job" || r.kind === "customer").length };
+
   costs.sort((a, b) => b.date.localeCompare(a.date) || a.vendor.localeCompare(b.vendor));
   const incomeLedger = payments.map((p) => ({
     date: _acctDay(p.payment_date), customer: _acctCust(p.customer), job: (p.job && p.job.job_number) || "",
@@ -359,7 +414,7 @@ function saaAcctBuild(data, period, opts) {
     cogs, opex, cogsTotal, opexTotal, gross, net, salesTaxPaid,
     tax: { form1065, otherDeductions, mealsFull, mealsNonDeductible, totalDeductions: totalDeductionsTax, taxable },
     mileage: { miles, amount: mileageAmount, rate, trips: logs.length, byTech: mileageByTech },
-    months, costs, incomeLedger, invoiceLedger, nec, salesTaxSummary,
+    months, costs, incomeLedger, invoiceLedger, nec, salesTaxSummary, projects, projectTotals,
     attention: {
       noAmount, needsReview, excluded, noTaxCat, noTaxCatAmount: _acctRound(noTaxCatAmount),
       draftInvoices: { count: draftInvoices.length, amount: _acctRound(draftInvoices.reduce((s, i) => s + invTotal(i), 0)) },

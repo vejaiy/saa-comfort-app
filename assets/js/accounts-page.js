@@ -48,16 +48,26 @@
   function cell(v, show, cls) { return show ? `<td class="num ${cls || ""}">${money(v)}</td>` : ""; }
 
   function renderCards() {
-    const m = MODEL, b = basis();
+    const m = MODEL, b = basis(), per = m.period;
     const rev = b === "accrual" ? m.revenue.accrual : m.revenue.cash;
     const net = b === "accrual" ? m.net.accrual : m.net.cash;
     const lab = b === "accrual" ? "invoiced" : "received";
-    const card = (label, value, sub, cls) => `<div class="rc-summary-card"><div class="rc-sc-label">${label}</div><div class="rc-sc-value ${cls || ""}">${value}</div><div class="rc-sc-sub">${sub || ""}</div></div>`;
+    // Round 106: every summary card is a link -- Revenue -> Invoices (issued in this period),
+    // Costs & expenses -> Receipts, Net profit -> the Profit & Loss tab, Unpaid -> Invoices, unpaid only.
+    const card = (label, value, sub, cls, href, go) =>
+      `<a class="rc-summary-card rc-summary-btn" href="${href}" data-go="${esc(go)}"><div class="rc-sc-label">${label}</div><div class="rc-sc-value ${cls || ""}">${value}</div><div class="rc-sc-sub">${sub || ""}</div><div class="rc-sc-go">${esc(go)} &rarr;</div></a>`;
     $("acct-cards").innerHTML =
-      card("Revenue", money(rev), `${b === "accrual" ? m.revenue.invoiceCount + " invoices" : m.revenue.paymentCount + " payments"} ${lab}` + (b === "both" ? ` &middot; accrual ${money(m.revenue.accrual)}` : "")) +
-      card("Costs & expenses", money(m.cogsTotal + m.opexTotal), `COGS ${money(m.cogsTotal)} &middot; operating ${money(m.opexTotal)}`) +
-      card("Net profit", money(net), `${margin(net, rev)} margin` + (b === "both" ? ` &middot; accrual ${money(m.net.accrual)}` : ""), net < 0 ? "acct-neg" : "acct-pos") +
-      card("Unpaid invoices (A/R)", money(m.revenue.arOutstanding), "all invoices, as of today");
+      card("Revenue", money(rev), `${b === "accrual" ? m.revenue.invoiceCount + " invoices" : m.revenue.paymentCount + " payments"} ${lab}` + (b === "both" ? ` &middot; accrual ${money(m.revenue.accrual)}` : ""), "",
+        `invoices.html?from=${per.from}&to=${per.to}`, "Open invoices") +
+      card("Costs & expenses", money(m.cogsTotal + m.opexTotal), `COGS ${money(m.cogsTotal)} &middot; operating ${money(m.opexTotal)}`, "", "receipts.html", "Open receipts") +
+      card("Net profit", money(net), `${margin(net, rev)} margin` + (b === "both" ? ` &middot; accrual ${money(m.net.accrual)}` : ""), net < 0 ? "acct-neg" : "acct-pos", "#pl", "See Profit & Loss") +
+      card("Unpaid invoices (A/R)", money(m.revenue.arOutstanding), "all invoices, as of today", "", "invoices.html?pay=due", "Show unpaid invoices");
+    $("acct-cards").querySelectorAll("a[href='#pl']").forEach((a) => a.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      showTab("pl");
+      try { history.replaceState(null, "", "#pl"); } catch (e) { /* ignore */ }
+      const t = $("acct-pnl-body"); if (t) t.closest(".card").scrollIntoView({ behavior: "smooth", block: "start" });
+    }));
   }
 
   function renderPnl() {
@@ -79,7 +89,25 @@
     $("acct-month-head").innerHTML = `<tr><th>Month</th>${c ? '<th class="num">Revenue (cash)</th>' : ""}${a ? '<th class="num">Revenue (accrual)</th>' : ""}<th class="num">COGS</th><th class="num">Operating</th>${c ? '<th class="num">Net (cash)</th>' : ""}${a ? '<th class="num">Net (accrual)</th>' : ""}</tr>`;
     $("acct-month-foot").innerHTML = `<tr class="acct-sub"><td>Total</td>${cell(T("cash"), c)}${cell(T("accrual"), a)}${cell(T("cogs"), true)}${cell(T("opex"), true)}${cell(T("netCash"), c)}${cell(T("netAccrual"), a)}</tr>`;
 
+    renderProjects();
     renderAttention();
+  }
+
+  /* ---------- Profit & loss by project (Round 106) ---------- */
+  function projMargin(r) { const mg = showCash() ? r.marginCash : r.marginAccrual; return mg == null ? "—" : (mg * 100).toFixed(1) + "%"; }
+  function renderProjects() {
+    const m = MODEL, c = showCash(), a = showAccrual(), pj = m.projects, pt = m.projectTotals;
+    $("acct-proj-head").innerHTML = `<tr><th>Project</th>${c ? '<th class="num">Revenue (cash)</th>' : ""}${a ? '<th class="num">Revenue (accrual)</th>' : ""}<th class="num">COGS</th><th class="num">Operating</th>${c ? '<th class="num">Profit (cash)</th>' : ""}${a ? '<th class="num">Profit (accrual)</th>' : ""}<th class="num">Margin</th><th></th></tr>`;
+    const cols = 4 + (c ? 2 : 0) + (a ? 2 : 0) - 1 + 1;
+    const rowHtml = (r) => {
+      const off = r.kind !== "job" && r.kind !== "customer";
+      const label = `<strong>${esc(r.label)}</strong>${r.customer && r.kind === "job" ? ` <span class="muted">&mdash; ${esc(r.customer)}</span>` : ""}${off ? ' <span class="muted acct-n">overhead / not a job</span>' : ""}`;
+      return `<tr class="${off ? "acct-proj-off" : ""}"><td>${label}</td>${cell(r.revCash, c)}${cell(r.revAccrual, a)}${cell(r.cogs, true)}${cell(r.opex, true)}${cell(r.profitCash, c, r.profitCash < 0 ? "acct-neg" : "")}${cell(r.profitAccrual, a, r.profitAccrual < 0 ? "acct-neg" : "")}<td class="num">${projMargin(r)}</td><td>${r.job_id ? `<a class="btn btn-ghost btn-sm acct-open" href="jobs.html?job=${encodeURIComponent(r.job_id)}">Open</a>` : ""}</td></tr>`;
+    };
+    $("acct-proj-body").innerHTML = pj.length ? pj.map(rowHtml).join("")
+      : `<tr><td colspan="${cols}" class="muted" style="text-align:center;padding:20px">No jobs with revenue or costs in this period.</td></tr>`;
+    $("acct-proj-foot").innerHTML = pj.length
+      ? `<tr class="acct-sub"><td>Total</td>${cell(pt.revCash, c)}${cell(pt.revAccrual, a)}${cell(pt.cogs, true)}${cell(pt.opex, true)}${cell(pt.profitCash, c, pt.profitCash < 0 ? "acct-neg" : "")}${cell(pt.profitAccrual, a, pt.profitAccrual < 0 ? "acct-neg" : "")}<td class="num">${projMargin({ marginCash: pt.revCash > 0 ? pt.profitCash / pt.revCash : null, marginAccrual: pt.revAccrual > 0 ? pt.profitAccrual / pt.revAccrual : null })}</td><td></td></tr>` : "";
   }
 
   function renderAttention() {
@@ -196,6 +224,28 @@
     return { name: "By Month", title: TITLE("Monthly Profit & Loss"), subtitle: subtitle(), tabColor: "2F5496", columns: cols, rows: MODEL.months.map(rowsOf), totals: true,
       flags: MODEL.months.map((mo) => (mo.netCash < 0 && showCash()) || (mo.netAccrual < 0 && !showCash()) ? "neg" : null) };
   }
+  function sheetProjects() {
+    const c = showCash(), a = showAccrual(), pj = MODEL.projects;
+    const cols = [{ header: "Project", width: 22 }, { header: "Customer", width: 24 }, { header: "Kind", width: 17 }];
+    if (c) cols.push({ header: "Revenue (cash)", width: 16, type: "money", total: true });
+    if (a) cols.push({ header: "Revenue (accrual)", width: 17, type: "money", total: true });
+    cols.push({ header: "Cost of goods sold", width: 17, type: "money", total: true }, { header: "Operating expenses", width: 18, type: "money", total: true });
+    if (c) cols.push({ header: "Profit (cash)", width: 15, type: "money", total: true });
+    if (a) cols.push({ header: "Profit (accrual)", width: 16, type: "money", total: true });
+    cols.push({ header: "Margin", width: 10, type: "center" });
+    const kindLabel = (r) => (r.kind === "job" ? "Job" : r.kind === "customer" ? "Customer (no job)" : r.kind === "shop" ? "Overhead" : "Unassigned");
+    const rows = pj.map((r) => {
+      const o = [r.label, r.customer, kindLabel(r)];
+      if (c) o.push(r.revCash); if (a) o.push(r.revAccrual);
+      o.push(r.cogs, r.opex);
+      if (c) o.push(r.profitCash); if (a) o.push(r.profitAccrual);
+      const mg = c ? r.marginCash : r.marginAccrual; o.push(mg == null ? "" : (mg * 100).toFixed(1) + "%");
+      return o;
+    });
+    return { name: "P&L by Project", title: TITLE("Profit & Loss by Project"), subtitle: subtitle(pj.length + " line" + (pj.length === 1 ? "" : "s") + "   |   red = loss   |   overhead = costs not tied to a job (shop tools, general expenses, mileage), so totals match the P&L"),
+      tabColor: "1A6B5A", freezeCols: 1, totals: true, emptyText: "No activity in this period.", columns: cols, rows,
+      flags: pj.map((r) => ((c ? r.profitCash : r.profitAccrual) < 0 ? "neg" : null)) };
+  }
   function sheetForm1065() {
     const t = MODEL.tax;
     return { name: "Form 1065 Summary", title: TITLE("Form 1065 Tax Summary (estimate for CPA review)"), subtitle: subtitle("grey = subtotals, yellow = ordinary business income"), tabColor: "548235",
@@ -262,16 +312,50 @@
 
   function fname(kind) { return `SAA-${kind}-${MODEL.period.label.replace(/[^A-Za-z0-9]+/g, "-")}-${saaXlsxStamp()}`; }
   const DOWNLOADS = {
-    pnl: () => saaXlsxDownload(fname("Profit-and-Loss"), [sheetPnl(), sheetMonths()]),
+    pnl: () => saaXlsxDownload(fname("Profit-and-Loss"), [sheetPnl(), sheetMonths(), sheetProjects()]),
+    projects: () => saaXlsxDownload(fname("Profit-and-Loss-by-Project"), [sheetProjects()]),
+    taxtab: () => saaXlsxDownload(fname("Tax-Summary-1065"), [sheetForm1065(), sheetL20(), sheetCogs(), sheetMileage(), sheetNec(), sheetSalesTax(), sheetSalesTaxMonths()]),
     tax: () => saaXlsxDownload(fname("Tax-Summary-1065"), [sheetForm1065(), sheetL20(), sheetCogs(), sheetMileage()]),
     nec: () => saaXlsxDownload(fname("1099-NEC-Report"), [sheetNec()]),
     salestax: () => saaXlsxDownload(fname("Sales-Tax-Summary"), [sheetSalesTax(), sheetSalesTaxMonths()]),
     ledger: () => saaXlsxDownload(fname("Receipts-Ledger"), [sheetExpenses(), sheetPayments(), sheetInvoices()]),
-    all: () => saaXlsxDownload(fname("Complete-Tax-Workbook"), [sheetPnl(), sheetMonths(), sheetForm1065(), sheetL20(), sheetCogs(), sheetMileage(), sheetNec(), sheetSalesTax(), sheetSalesTaxMonths(), sheetExpenses(), sheetPayments(), sheetInvoices()]),
-    pdf: () => printAccountsPackage({ model: MODEL, rows: pnlRows(MODEL), cash: showCash(), accrual: showAccrual(), basisLabel: basisLabel(), generatedOn: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) }),
+    all: () => saaXlsxDownload(fname("Complete-Tax-Workbook"), [sheetPnl(), sheetMonths(), sheetProjects(), sheetForm1065(), sheetL20(), sheetCogs(), sheetMileage(), sheetNec(), sheetSalesTax(), sheetSalesTaxMonths(), sheetExpenses(), sheetPayments(), sheetInvoices()]),
+    pdf: () => printAccountsPackage(pdfOpts()),
+  };
+  const todayLabel = () => new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  function pdfOpts(extra) { return Object.assign({ model: MODEL, rows: pnlRows(MODEL), cash: showCash(), accrual: showAccrual(), basisLabel: basisLabel(), generatedOn: todayLabel() }, extra || {}); }
+
+  // Round 106: a download bar (Excel + PDF) at the top of every tab.
+  function ledgerPdf() {
+    const m = MODEL, mm = (n) => money(n), v = LEDGER_VIEW;
+    const base = { periodLabel: m.period.label + " \u00b7 " + basisLabel(), generatedOn: todayLabel() };
+    if (v === "payments") {
+      printReceiptSections(Object.assign(base, { title: "Income Ledger &mdash; Payments", sections: [{ heading: "Payments received (cash basis)",
+        columns: [{ h: "Date" }, { h: "Customer" }, { h: "Job" }, { h: "Invoice #" }, { h: "Method" }, { h: "Reference #" }, { h: "Amount", num: 1 }],
+        rows: m.incomeLedger.map((p) => [p.date, p.customer, p.job, p.invoice, p.method, p.ref, mm(p.amount)]), total: ["Total received", "", "", "", "", "", mm(m.revenue.cash)] }] }));
+    } else if (v === "invoices") {
+      printReceiptSections(Object.assign(base, { title: "Income Ledger &mdash; Invoices", sections: [{ heading: "Invoices issued (accrual basis)",
+        columns: [{ h: "Issued" }, { h: "Invoice #" }, { h: "Customer" }, { h: "Job" }, { h: "Status" }, { h: "Total", num: 1 }, { h: "Paid", num: 1 }, { h: "Balance", num: 1 }],
+        rows: m.invoiceLedger.map((i) => [i.date, i.invoice, i.customer, i.job, i.status, mm(i.total), mm(i.paid), mm(i.due)]),
+        total: ["Total invoiced", "", "", "", "", mm(m.revenue.accrual), mm(m.invoiceLedger.reduce((x, i) => x + i.paid, 0)), mm(m.invoiceLedger.reduce((x, i) => x + i.due, 0))] }] }));
+    } else {
+      printReceiptSections(Object.assign(base, { title: "Expenses &amp; Receipts Ledger", sections: [{ heading: "Expenses and receipt lines (sales tax shown separately)",
+        columns: [{ h: "Date" }, { h: "Source" }, { h: "Vendor" }, { h: "Description" }, { h: "P&L category" }, { h: "Job / project" }, { h: "Subtotal", num: 1 }, { h: "Sales tax", num: 1 }, { h: "Total", num: 1 }],
+        rows: m.costs.map((c) => [c.date, c.source, c.vendor, c.description, SAA_ACCT_CATEGORIES[c.key].label, c.project, mm(c.subtotal), mm(c.salesTax), mm(c.amount)]),
+        total: ["Total", "", "", "", "", "", mm(m.costs.reduce((x, c) => x + c.subtotal, 0)), mm(m.salesTaxPaid), mm(m.cogsTotal + m.opexTotal)] }] }));
+    }
+  }
+  const TAB_XLSX = {
+    pl: () => DOWNLOADS.pnl(), tax: () => DOWNLOADS.taxtab(), ledger: () => DOWNLOADS.ledger(), docs: () => DOWNLOADS.all(),
+  };
+  const TAB_PDF = {
+    pl: () => printAccountsPackage(pdfOpts({ title: "Profit &amp; Loss", only: ["pnl", "months", "projects", "notes"] })),
+    tax: () => printAccountsPackage(pdfOpts({ title: "Tax Summary (Form 1065)", only: ["form", "l20", "cogs", "mileage", "nec", "salestax", "notes"] })),
+    ledger: () => ledgerPdf(),
+    docs: () => DOWNLOADS.pdf(),
   };
   // exposed for tests
-  window._saaAcctTest = { sheets: () => ({ pnl: sheetPnl(), months: sheetMonths(), form1065: sheetForm1065(), l20: sheetL20(), cogs: sheetCogs(), mileage: sheetMileage(), nec: sheetNec(), salestax: sheetSalesTax(), salestaxMonths: sheetSalesTaxMonths(), expenses: sheetExpenses(), payments: sheetPayments(), invoices: sheetInvoices() }), model: () => MODEL };
+  window._saaAcctTest = { sheets: () => ({ projects: sheetProjects(), pnl: sheetPnl(), months: sheetMonths(), form1065: sheetForm1065(), l20: sheetL20(), cogs: sheetCogs(), mileage: sheetMileage(), nec: sheetNec(), salestax: sheetSalesTax(), salestaxMonths: sheetSalesTaxMonths(), expenses: sheetExpenses(), payments: sheetPayments(), invoices: sheetInvoices() }), model: () => MODEL };
 
   /* ---------- wiring ---------- */
   function recompute() {
@@ -309,6 +393,8 @@
     showTab(tabFromHash());
     document.querySelectorAll("#acct-ledger-toggle button").forEach((b) => b.addEventListener("click", () => { LEDGER_VIEW = b.dataset.view; renderLedger(); }));
     document.querySelectorAll("[data-acct-dl]").forEach((b) => b.addEventListener("click", () => { if (MODEL) DOWNLOADS[b.dataset.acctDl](); }));
+    document.querySelectorAll("[data-bar-xlsx]").forEach((b) => b.addEventListener("click", () => { if (MODEL) TAB_XLSX[b.dataset.barXlsx](); }));
+    document.querySelectorAll("[data-bar-pdf]").forEach((b) => b.addEventListener("click", () => { if (MODEL) TAB_PDF[b.dataset.barPdf](); }));
 
     DATA = await saaAcctLoadAll();
     fillYears();
