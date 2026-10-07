@@ -438,8 +438,12 @@ function saaCalRenderMonthView(scheduled) {
       const type = saaCalEventTypeInfo(a);
       return `<div class="cal-month-chip st-${a.event_status}" data-event-id="${a.id}" title="${_saaCalEsc(saaCalEventCaption(a))}">${type.icon || ""} ${_saaCalEsc(saaCalCustName(a.customer))}</div>`;
     }).join("") + (moreCount > 0 ? `<div class="cal-month-more">+${moreCount} more</div>` : "");
-    html += `<div class="cal-month-cell${inMonth ? "" : " is-outside"}${dateStr === todayStr ? " is-today" : ""}" data-date="${dateStr}">
-      <div class="cal-month-daynum">${d.getDate()}</div>
+    // Round 117: weekday name in every cell (phones hide the Sun..Sat header row) + weekend tint
+    const dowNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+    const monAbbr = inMonth ? "" : " " + d.toLocaleString("en-US", { month: "short" });
+    html += `<div class="cal-month-cell${inMonth ? "" : " is-outside"}${dateStr === todayStr ? " is-today" : ""}${isWeekend ? " is-weekend" : ""}" data-date="${dateStr}">
+      <div class="cal-month-daynum"><span class="cal-month-num">${d.getDate()}</span><span class="cal-month-dow">${dowNames[d.getDay()]}${monAbbr}</span></div>
       <div class="cal-month-chips">${chips}</div>
     </div>`;
   }

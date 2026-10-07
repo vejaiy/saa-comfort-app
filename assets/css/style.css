@@ -1720,3 +1720,15 @@ html.gs-open { overflow: hidden; }
 .jb-sum-sub { font-weight: 500; font-size: .74rem; color: var(--muted, #5b6b7a); }
 .jb-sum-l { font-size: .72rem; text-transform: uppercase; letter-spacing: .4px; color: var(--muted, #5b6b7a); margin-top: 2px; }
 @media (max-width: 640px) { .jb-summary-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* ===== Round 117: month view shows the weekday on every day + tinted weekends ===== */
+.cal-month-daynum { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.cal-month-dow { display: none; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--muted); }
+.cal-month-cell.is-weekend { background: #fff6ec; border-color: #f3d9b8; }
+.cal-month-cell.is-weekend .cal-month-dow { color: #b45f06; }
+.cal-month-cell.is-weekend.is-outside { background: #fbf3ea; }
+.cal-month-head > div:first-child, .cal-month-head > div:last-child { color: #b45f06; }
+@media (max-width: 860px) {
+  .cal-month-dow { display: inline; }
+  .cal-month-num { font-size: 1.05rem; }
+}
