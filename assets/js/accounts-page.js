@@ -59,7 +59,7 @@
     $("acct-cards").innerHTML =
       card("Revenue", money(rev), `${b === "accrual" ? m.revenue.invoiceCount + " invoices" : m.revenue.paymentCount + " payments"} ${lab}` + (b === "both" ? ` &middot; accrual ${money(m.revenue.accrual)}` : ""), "",
         `invoices.html?from=${per.from}&to=${per.to}`, "Open invoices") +
-      card("Costs & expenses", money(m.cogsTotal + m.opexTotal), `COGS ${money(m.cogsTotal)} &middot; operating ${money(m.opexTotal)}`, "", "receipts.html", "Open receipts") +
+      card("Costs & expenses", money(m.cogsTotal + m.opexTotal), `Receipts ${money(m.costBySource.receipts)} &middot; expenses ${money(m.costBySource.expenses)} &middot; mileage ${money(m.costBySource.mileage)}`, "", "receipts.html", "Open receipts") +
       card("Net profit", money(net), `${margin(net, rev)} margin` + (b === "both" ? ` &middot; accrual ${money(m.net.accrual)}` : ""), net < 0 ? "acct-neg" : "acct-pos", "#pl", "See Profit & Loss") +
       card("Unpaid invoices (A/R)", money(m.revenue.arOutstanding), "all invoices, as of today", "", "invoices.html?pay=due", "Show unpaid invoices");
     $("acct-cards").querySelectorAll("a[href='#pl']").forEach((a) => a.addEventListener("click", (ev) => {

@@ -381,7 +381,7 @@ function _rcRenderOverview() {
   // unconfirmed line items. Total Spend is informational (plain tile).
   const reviewBucket = SAA_RECEIPT_BUCKETS.find((b) => rows.some((r) => r.auto_tagged && (r.bucket || "receipts") === b)) || "receipts";
   const cards = [
-    { label: "Total Spend", value: _rcMoney(s.grandTotal), sub: `${s.count} line item${s.count === 1 ? "" : "s"}` },
+    { label: "Total Spend", value: _rcMoney(s.grandTotal), sub: `${s.count} line item${s.count === 1 ? "" : "s"} \u00b7 receipts + tools + supplies (expenses separate)` },
     { label: "Receipts", value: _rcMoney(s.byBucket.receipts.total), sub: `${s.byBucket.receipts.count} line items`, tab: "receipts" },
     { label: "Tools", value: _rcMoney(s.byBucket.tools.total), sub: `${s.byBucket.tools.count} line items`, tab: "tools" },
     { label: "Supplies", value: _rcMoney(s.byBucket.supplies.total), sub: `${s.byBucket.supplies.count} line items`, tab: "supplies" },

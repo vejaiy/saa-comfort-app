@@ -412,6 +412,8 @@ function saaAcctBuild(data, period, opts) {
     period, rate,
     revenue: { cash: cashRevenue, accrual: accrualRevenue, arOutstanding, paymentCount: payments.length, invoiceCount: invoices.length },
     cogs, opex, cogsTotal, opexTotal, gross, net, salesTaxPaid,
+    // Round 107: where the total cost comes from, so the card ties to the Receipts page tiles
+    costBySource: (() => { const o = { receipts: 0, expenses: 0, mileage: 0 }; costs.forEach((c) => { o[c.source === "Receipt" ? "receipts" : c.source === "Expense" ? "expenses" : "mileage"] += c.amount; }); Object.keys(o).forEach((k) => { o[k] = _acctRound(o[k]); }); return o; })(),
     tax: { form1065, otherDeductions, mealsFull, mealsNonDeductible, totalDeductions: totalDeductionsTax, taxable },
     mileage: { miles, amount: mileageAmount, rate, trips: logs.length, byTech: mileageByTech },
     months, costs, incomeLedger, invoiceLedger, nec, salesTaxSummary, projects, projectTotals,
