@@ -548,7 +548,7 @@ function jbRenderTable() {
       <td><span class="jb-badge jb-pri-${j.priority}">${_jbPriorityLabel[j.priority] || j.priority}</span></td>
       <td>${_jbTechDisplayNames(j)}</td>
       <td><span class="jb-badge jb-status-${j.status}">${_jbJobStatusLabel(j)}</span></td>
-      <td><span class="jb-badge jb-pay-${j.paymentStatus}">${_jbPaymentLabel[j.paymentStatus]}</span></td>
+      <td>${j.paymentStatus ? `<span class="jb-badge jb-pay-${j.paymentStatus}">${_jbPaymentLabel[j.paymentStatus]}</span>` : '<span class="muted" title="No invoice yet">—</span>'}</td>
       <td>${_jbQuoteCellHtml(j)}</td>
     </tr>`;
     const eventRows = expanded ? events.map((e) => _jbEventRowHtml(j, e)).join("") : "";
@@ -639,7 +639,7 @@ function _jbJobSheet(rows) {
       j.customer && j.customer.phone ? saaFormatPhone(j.customer.phone) : "",
       [j.job_address, j.job_city].filter(Boolean).join(", "),
       saaJobTypeLabel(j.job_type), _jbPriorityLabel[j.priority] || j.priority || "",
-      _jbTechDisplayNames(j), _jbJobStatusLabel(j), _jbPaymentLabel[j.paymentStatus] || "",
+      _jbTechDisplayNames(j), _jbJobStatusLabel(j), j.paymentStatus ? (_jbPaymentLabel[j.paymentStatus] || "") : "No invoice",
       _jbQuoteNum(amt != null ? amt : 0),
     ];
   });

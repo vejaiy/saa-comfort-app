@@ -335,7 +335,9 @@ async function saaJobsFetchAll() {
     const hasPayment = invoice ? !!hasPaymentByInvoice[invoice.id] : false;
     const roll = rollupByJob[j.id];
     const hasEvents = (eventsByJob[j.id] || []).length > 0;
-    const rolledStatus = !roll ? "unpaid"
+    // Round 123: no (non-void) invoice on any of its events yet => no payment status at all
+    // (shown as "—", same as an event row), NOT "Unpaid" -- nothing has been billed.
+    const rolledStatus = !roll ? null
       : roll.due <= 0.005 ? (roll.hasPayment ? "paid" : "unpaid")
       : roll.paid >= roll.due - 0.005 ? "paid"
       : roll.paid > 0 ? "partial" : "unpaid";
