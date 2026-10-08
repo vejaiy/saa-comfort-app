@@ -502,7 +502,7 @@ function _jbEventRowHtml(job, e) {
       <td class="jb-expand-cell"></td>
       <td class="jb-event-subrow-num">${_jbEsc(e.event_number || "—")}</td>
       <td>${_jbFormatDate(_jbEventReceivedAt(e, job))}</td>
-      <td>${_jbEventTimeLabel(e.scheduled_start)}</td>
+      <td>${_jbEventTimeLabel(e.scheduled_start, true)}</td>
       <td>${_jbCustName(job.customer)}</td>
       <td>${job.customer && job.customer.phone ? saaFormatPhone(job.customer.phone) : "—"}</td>
       <td>${eventAddress || [job.job_address, job.job_city].filter(Boolean).join(", ") || "—"}</td>
@@ -2779,9 +2779,11 @@ async function jbReloadEquipment() {
   jbRenderSystemSummary();
 }
 
-function _jbEventTimeLabel(iso) {
+function _jbEventTimeLabel(iso, futureTimeOnly) {
   const wc = saaEventsWallClock(iso); // Round 58: naive wall-clock, not a UTC instant
   if (!wc || isNaN(wc.local.getTime())) return "Unscheduled";
+  // Round 124: in the Jobs list, only visits that haven't happened yet show a time; past visits show the date only.
+  if (futureTimeOnly && wc.local.getTime() < Date.now()) return wc.local.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   return wc.local.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
