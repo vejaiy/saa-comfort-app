@@ -74,16 +74,30 @@ async function saaSystemsFetchById(systemId) {
  *  saaSystemsCreateWithJob below, which always creates both together)
  *  comes back with job: null. */
 async function saaSystemsFetchByCustomerWithJobs(customerId) {
-  const systems = await saaSystemsFetchByCustomer(customerId);
+  let systems = await saaSystemsFetchByCustomer(customerId);
   if (!systems.length) return [];
   const systemIds = systems.map((s) => s.id);
   const { data: jobs, error: jErr } = await _saaClient
     .from("jobs")
-    .select("id,job_number,status,job_type,system_id")
+    .select("id,job_number,status,job_type,system_id,is_current,created_at")
     .in("system_id", systemIds);
   if (jErr) throw jErr;
-  const jobBySystem = Object.fromEntries((jobs || []).map((j) => [j.system_id, j]));
-  const jobIds = (jobs || []).map((j) => j.id);
+  // Round 118: ONE entry per system, showing its LIVE job. Old "converted_to_event"
+  // stub jobs (is_current=false) used to be able to win this lookup, and empty
+  // leftover blank "System" rows (no live job, no equipment details) cluttered the
+  // picker -- those are skipped, same rule as the Customer page's active systems.
+  const jobBySystem = {};
+  (jobs || []).slice().sort((x, y) => String(y.created_at || "").localeCompare(String(x.created_at || ""))).forEach((j) => {
+    if (j.is_current === false || j.status === "converted_to_event") return;
+    if (!jobBySystem[j.system_id]) jobBySystem[j.system_id] = j;
+  });
+  systems = systems.filter((s) => {
+    if (jobBySystem[s.id]) return true;
+    // No live job: only worth listing if the office actually filled in equipment details
+    return !!(s.manufacturer || s.model_number || s.serial_number || s.tonnage || s.outdoor_unit || s.indoor_unit || s.coil || s.furnace_air_handler);
+  });
+  if (!systems.length) return [];
+  const jobIds = Object.values(jobBySystem).map((j) => j.id);
   const { data: events, error: eErr } = jobIds.length
     ? await _saaClient.from("events").select("job_id,scheduled_start").in("job_id", jobIds).order("scheduled_start", { ascending: false })
     : { data: [], error: null };
