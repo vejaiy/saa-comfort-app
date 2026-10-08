@@ -387,7 +387,8 @@ function saaCalRenderWeekView(scheduled) {
         <span class="tech">${_saaCalEsc([a.technician, a.technician2, a.technician3].filter(Boolean).map((t) => t.name).join(", ") || "None")}</span>
       </div>`;
     }).join("") : '<div class="cal-week-empty">Nothing scheduled</div>';
-    html += `<div class="cal-week-day${dateStr === todayStr ? " is-today" : ""}" data-date="${dateStr}">
+    // Round 120: text size follows how crowded the day is (see .cnt-N in style.css; print uses one fixed size)
+    html += `<div class="cal-week-day cnt-${Math.min(dayEvents.length, 5)}${dateStr === todayStr ? " is-today" : ""}" data-date="${dateStr}">
       <div class="cal-week-daylabel" data-date="${dateStr}">${d.toLocaleDateString("en-US", { weekday: "short" })} <span>${d.getDate()}</span></div>
       <div class="cal-week-daybody">${cardsHtml}</div>
     </div>`;
@@ -442,7 +443,7 @@ function saaCalRenderMonthView(scheduled) {
     const dowNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const isWeekend = d.getDay() === 0 || d.getDay() === 6;
     const monAbbr = inMonth ? "" : " " + d.toLocaleString("en-US", { month: "short" });
-    html += `<div class="cal-month-cell${inMonth ? "" : " is-outside"}${dateStr === todayStr ? " is-today" : ""}${isWeekend ? " is-weekend" : ""}" data-date="${dateStr}">
+    html += `<div class="cal-month-cell cnt-${Math.min(dayEvents.length, 4)}${inMonth ? "" : " is-outside"}${dateStr === todayStr ? " is-today" : ""}${isWeekend ? " is-weekend" : ""}" data-date="${dateStr}">
       <div class="cal-month-daynum"><span class="cal-month-num">${d.getDate()}</span><span class="cal-month-dow">${dowNames[d.getDay()]}${monAbbr}</span></div>
       <div class="cal-month-chips">${chips}</div>
     </div>`;
