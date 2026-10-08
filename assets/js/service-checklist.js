@@ -38,6 +38,9 @@ const _SVC_ORIENT = [["upflow", "Upflow"], ["downflow", "Downflow"], ["horizonta
 const _SVC_TUBE_S = ['3/8"', '1/2"', '5/8"', '3/4"', '7/8"', '1"', '1 1/8"', '1 3/8"', '1.5"'].map((v) => [v, v]);
 const _SVC_TUBE_L = ['1/4"', '3/8"', '5/8"', '3/4"'].map((v) => [v, v]);
 
+// Round 122: circuit breaker sizes for the condenser (amps).
+const _SVC_BREAKER = ["15", "20", "25", "30", "35", "40", "45", "50", "60", "70"].map((v) => [v, v + " A"]);
+
 /** Drain / lineset / filter questions shared by the Coil and the Fan Coil. */
 function _svcAirSide(p) {
   return [
@@ -61,6 +64,8 @@ const SAA_SVC_SECTIONS = [
       _svcText("cond.model", "Model #", { sys: "outdoor_unit", ph: "Condenser model number", caps: true }),
       _svcYn("cond.disc", "Disconnect OK, wires tight?"),
       _svcYn("cond.whip", "Whip OK & sized for amps?"),
+      // Round 122: breaker size, picked from a wheel like the tube sizes (standard 2-pole sizes)
+      _svcSel("cond.breaker", "Circuit breaker size", _SVC_BREAKER),
       _svcYn("cond.temps", "Suction & liquid line temps checked?"),
       _svcSlider("cond.psi_s", "Suction pressure", 0, 670, 130, "psi", { big: true }),
       _svcSlider("cond.psi_l", "Liquid pressure", 0, 670, 350, "psi", { big: true }),
