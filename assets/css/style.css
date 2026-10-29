@@ -1780,3 +1780,6 @@ html.saa-embed:not(.cal-mobile) .cal-summary-strip { margin-bottom: 10px; }
 .dash-calendar-head { margin-bottom: 8px; align-items: center; }
 .dash-calendar-card { padding: 12px 16px 14px; }
 html.saa-embed:not(.cal-mobile):not(.saa-embed-full) .cal-datebar .cal-view-toggle { margin-left: 10px; }
+/* Round 130: while the All-pages menu is open, embedded frames (the Dashboard's calendar preview) must not swallow
+   clicks -- the click goes to the page instead, so clicking anywhere outside the menu closes it. */
+html.emp-menu-open iframe { pointer-events: none; }
