@@ -474,8 +474,8 @@ function saaCalRenderSummaryStrip() {
     ["in_progress", counts.in_progress, "In Progress"],
     ["completed", counts.completed, "Completed"],
   ];
-  let html = items.map(([k, n, label]) => `<div class="cal-stat"><span class="dot" style="background:var(--evt-${k})"></span>${n} ${label}</div>`).join("");
-  html += `<div class="cal-stat"><span class="dot" style="background:#9aa7b2"></span>${saaCalUnscheduled.length} Unassigned</div>`;
+  let html = items.map(([k, n, label]) => `<div class="cal-stat st-${k}">${n} ${label}</div>`).join("");
+  html += `<div class="cal-stat st-unassigned">${saaCalUnscheduled.length} Unassigned</div>`;
   document.getElementById("cal-summary-strip").innerHTML = html;
 }
 

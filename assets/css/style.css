@@ -1759,3 +1759,24 @@ html.gs-open { overflow: hidden; }
 .emp-apps-group.c-orange .emp-app-name { background: rgba(255,255,255,.7); border-radius: 6px; padding: 1px 5px; font-weight: 700; text-shadow: 0 0 3px rgba(255,255,255,.9); }
 .emp-apps-group.c-orange .emp-app:hover, .emp-apps-group.c-orange .emp-app:focus-visible { background: rgba(255,255,255,.88); }
 .emp-apps-group.c-orange .emp-app.is-current { background: #fff; }
+
+/* Round 128: status chips are filled with the status colour (no dot) -- saves width; Dashboard preview drops the
+   duplicate "Dispatch Calendar" title/breadcrumb/description (the Dashboard card already says it) and keeps just the
+   Schedule button, moved into the date row. */
+.cal-stat { border-color: transparent; color: #fff; padding: 5px 13px; }
+.cal-stat.st-scheduled { background: var(--evt-scheduled); color: #3a2c00; }
+.cal-stat.st-confirmed { background: var(--evt-confirmed); }
+.cal-stat.st-en_route { background: var(--evt-en_route); }
+.cal-stat.st-in_progress { background: var(--evt-in_progress); }
+.cal-stat.st-completed { background: var(--evt-completed); }
+.cal-stat.st-unassigned { background: #6c7a89; }
+html.saa-embed .breadcrumb { display: none; }
+html.saa-embed:not(.saa-embed-full) .cal-page-head { display: none; }
+html.saa-embed.saa-embed-full .cal-page-head p.muted { display: none; }
+html.saa-embed:not(.cal-mobile):not(.saa-embed-full) .cal-add-btn-m { display: inline-flex; width: auto; height: auto; border-radius: 8px; padding: 8px 14px; font-size: .9rem; font-weight: 700; margin-left: auto; box-shadow: none; }
+html.saa-embed:not(.cal-mobile):not(.saa-embed-full) .cal-add-btn-m::after { content: " Schedule"; white-space: pre; }
+html.saa-embed:not(.cal-mobile):not(.saa-embed-full) .cal-datebar { margin-bottom: 8px !important; }
+html.saa-embed:not(.cal-mobile) .cal-summary-strip { margin-bottom: 10px; }
+.dash-calendar-head { margin-bottom: 8px; align-items: center; }
+.dash-calendar-card { padding: 12px 16px 14px; }
+html.saa-embed:not(.cal-mobile):not(.saa-embed-full) .cal-datebar .cal-view-toggle { margin-left: 10px; }

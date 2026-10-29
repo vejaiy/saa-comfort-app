@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dashboard | Employee | SAA Comfort Air LLC</title>
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../assets/css/style.css?v=20261030a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261030d">
 
 <style>body.emp-shell{visibility:hidden}</style>
 </head>
 <body class="emp-shell">
-<script src="../assets/js/vendor/supabase.js?v=20261030a"></script>
-<script src="../assets/js/supabase-config.js?v=20261030a"></script>
-<script src="../assets/js/auth.js?v=20261030a"></script>
+<script src="../assets/js/vendor/supabase.js?v=20261030d"></script>
+<script src="../assets/js/supabase-config.js?v=20261030d"></script>
+<script src="../assets/js/auth.js?v=20261030d"></script>
 <script>saaRequireAuth();</script>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="ic-dashboard" viewBox="0 0 80 60"><g fill="none" stroke="#27425f" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><ellipse cx="40" cy="56" rx="26" ry="2.6" fill="#27425f" opacity=".08" stroke="none"/>
 <rect x="52" y="12" width="6" height="12" fill="#c0634a"/>
@@ -256,7 +256,7 @@
   q.addEventListener('keydown',function(e){ if(e.key==='Enter'){ var a=panel.querySelector('.emp-app:not([hidden])'); if(a) a.click(); } });
 })();
 </script>
-<script src="../assets/js/global-search.js?v=20261030a"></script>
+<script src="../assets/js/global-search.js?v=20261030d"></script>
 <main class="container" style="padding:26px 20px 60px">
 
 <div class="dash-banner">
@@ -288,9 +288,9 @@
 </div>
 
 </main>
-<script src="../assets/js/pricing-data.js?v=20261030a"></script>
-<script src="../assets/js/worksheet.js?v=20261030a"></script>
-<script src="../assets/js/xlsx-export.js?v=20261030a"></script>
+<script src="../assets/js/pricing-data.js?v=20261030d"></script>
+<script src="../assets/js/worksheet.js?v=20261030d"></script>
+<script src="../assets/js/xlsx-export.js?v=20261030d"></script>
 <script>
 (function () {
   var overlay = document.getElementById('dash-cal-fullscreen');
@@ -318,7 +318,28 @@
 })();
 (function () {
   var h = new Date().getHours();
-  document.getElementById('dash-greet').textContent = (h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening');
+  var greetBase = (h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening');
+  var greetEl = document.getElementById('dash-greet');
+  greetEl.textContent = greetBase;
+  // Round 126: show the signed-in user's first name — technicians.name (linked by user_id),
+  // else auth metadata name, else the email's local part.
+  (async function () {
+    try {
+      var r = await _saaClient.auth.getUser();
+      var u = r && r.data && r.data.user;
+      if (!u) return;
+      var nm = '';
+      try {
+        var t = await _saaClient.from('technicians').select('name').eq('user_id', u.id).limit(1);
+        if (t && t.data && t.data[0]) nm = t.data[0].name || '';
+      } catch (e) { /* fall through */ }
+      var md = u.user_metadata || {};
+      if (!nm) nm = md.full_name || md.name || '';
+      if (!nm && u.email) nm = u.email.split('@')[0].replace(/[._-]+/g, ' ');
+      var first = String(nm).trim().split(/\s+/)[0] || '';
+      if (first) greetEl.textContent = greetBase + ', ' + first.charAt(0).toUpperCase() + first.slice(1);
+    } catch (e) { /* keep plain greeting */ }
+  })();
   document.getElementById('dash-date').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   var hdrBtn = document.getElementById('emp-apps-btn');
   var panel = document.getElementById('emp-apps');

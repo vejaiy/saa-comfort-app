@@ -120,6 +120,62 @@ function _tlFilterNote() {
   return search ? `filtered: matching "${search}"` : "";
 }
 
+/* Round 127: Category is a drop-down (was free text) on every add form.
+   Lists follow the categories already in use; "Other…" reveals a text box for a new one.
+   The <select> keeps the original input's id and a .value getter/setter, so the existing
+   form code (read value, reset to "", fill when editing) keeps working unchanged. */
+const TL_CATEGORIES = {
+  tools: ["Tools & Equipment", "Hand Tools", "Power Tools", "Test & Measurement", "Safety & PPE", "SAA tools"],
+  supplies: ["Adhesives & Sealants", "Cleaning Supplies", "Electrical Parts", "Fasteners", "Hardware / Clamps",
+    "HVAC Equipment", "Lubricants & Penetrants", "Plumbing / PVC Fittings", "Refrigerant", "Refrigeration",
+    "Safety Switches", "Shop Supplies"],
+};
+const _TL_OTHER = "__other__";
+
+function _tlCategoryDropdown(inputId, getType, typeSelectId) {
+  const old = document.getElementById(inputId);
+  if (!old) return;
+  const sel = document.createElement("select");
+  sel.id = inputId;
+  const other = document.createElement("input");
+  other.type = "text";
+  other.placeholder = "New category";
+  other.hidden = true;
+  other.style.marginTop = "6px";
+  let extra = null;   // value from an existing record that isn't in the list
+  function build(keep) {
+    const list = (TL_CATEGORIES[getType()] || []).slice();
+    if (extra && !list.includes(extra)) list.push(extra);
+    sel.innerHTML = "";
+    const mk = (v, t) => { const o = document.createElement("option"); o.value = v; o.textContent = t; sel.appendChild(o); };
+    mk("", "Select category…");
+    list.forEach((c) => mk(c, c));
+    mk(_TL_OTHER, "Other…");
+    sel.value = keep != null && [...sel.options].some((o) => o.value === keep) ? keep : "";
+    other.hidden = sel.value !== _TL_OTHER;
+  }
+  Object.defineProperty(sel, "value", {
+    get() { return sel.selectedOptions[0] ? (sel.selectedOptions[0].value === _TL_OTHER ? other.value : sel.selectedOptions[0].value) : ""; },
+    set(v) {
+      v = v == null ? "" : String(v);
+      other.value = "";
+      if (v && ![...sel.options].some((o) => o.value === v)) { extra = v; build(v); return; }
+      sel.selectedIndex = [...sel.options].findIndex((o) => o.value === v);
+      if (sel.selectedIndex < 0) sel.selectedIndex = 0;
+      other.hidden = true;
+    },
+  });
+  sel.addEventListener("change", () => { other.hidden = sel.selectedOptions[0].value !== _TL_OTHER; if (!other.hidden) other.focus(); });
+  old.replaceWith(sel);
+  sel.after(other);
+  build("");
+  if (typeSelectId) document.getElementById(typeSelectId).addEventListener("change", () => { extra = null; build(""); });
+}
+_tlCategoryDropdown("tl-inv-add-category-tools", () => "tools");
+_tlCategoryDropdown("tl-inv-add-category-supplies", () => "supplies");
+_tlCategoryDropdown("tl-purch-add-category", () => document.getElementById("tl-purch-add-type").value, "tl-purch-add-type");
+_tlCategoryDropdown("tl-shop-add-category", () => document.getElementById("tl-shop-add-type").value, "tl-shop-add-type");
+
 Object.keys(TL_KINDS).forEach((kind) => {
   const K = TL_KINDS[kind];
   const el = (id) => document.getElementById(`${id}-${kind}`);
@@ -367,6 +423,7 @@ function _tlShopResetForm() {
     if (el) el.value = f === "qty" ? "1" : "";
   });
   document.getElementById("tl-shop-add-type").value = "tools";
+  document.getElementById("tl-shop-add-type").dispatchEvent(new Event("change"));
   document.getElementById("tl-shop-add-priority").value = "";
   document.getElementById("tl-shop-form-title").textContent = "Add to Shopping List";
   document.getElementById("tl-shop-add-btn").textContent = "Add to List";
@@ -379,12 +436,13 @@ function _tlShopStartEdit(id) {
   const row = _tlShopRows.find((r) => r.id === id);
   if (!row) return;
   _tlShopEditingId = id;
-  Object.entries(_TL_SHOP_FIELDS).forEach(([f, col]) => {
+  Object.entries(_TL_SHOP_FIELDS).sort((x, y) => (y[0] === "type") - (x[0] === "type")).forEach(([f, col]) => {
     const el = document.getElementById(`tl-shop-add-${f}`);
     if (!el) return;
     let v = row[col];
     if (f === "type") v = v || "tools";
     el.value = v == null ? "" : v;
+    if (f === "type") el.dispatchEvent(new Event("change"));   // rebuild Category list for this type
   });
   document.getElementById("tl-shop-form-title").textContent = `Edit: ${row.item_name || "item"}`;
   document.getElementById("tl-shop-add-btn").textContent = "Save Changes";
